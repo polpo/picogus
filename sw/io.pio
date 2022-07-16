@@ -1,0 +1,143 @@
+.define public AD0_PIN 6
+.define public IRQ_PIN 19
+.define public IOW_PIN 20  ; eventually move to 0
+.define public IOR_PIN 21  ; eventually move to 1
+.define public IOCHDRY_PIN 26
+.define public ADS_PIN 27
+.define public BUSOE_PIN 28
+
+.program iow
+; .side_set 1 opt
+; - interrupt
+    set pins, 0
+    wait 1 gpio IOW_PIN
+.wrap_target
+    ; IOW falling edge:
+    wait 0 gpio IOW_PIN
+    ; future - set iochrdry?
+    ; gaadddd I wish I could do basic address decoding here
+    ; Read address
+    in pins, 10
+    ; Set muxes to data. Wait 24 cycles (yikes) for mux to switch
+    set pins, 1 [24]
+    ; Read data
+    in pins, 8
+    ; Set muxes back to address
+    set pins, 0
+    ; - Push to cpu -- autopush
+    ; push
+    ; IOW rising edge
+    wait 1 gpio IOW_PIN
+.wrap
+
+% c-sdk {
+static inline void iow_program_init(PIO pio, uint sm, uint offset) {
+    pio_sm_config c = iow_program_get_default_config(offset);
+
+    sm_config_set_in_pins(&c, AD0_PIN);
+    // Autoshift at 18 bits (10 addr + 8 data)
+    sm_config_set_in_shift(&c, false, true, 18);
+    sm_config_set_set_pins(&c, ADS_PIN, 1);
+
+    // Set the pin direction to input at the PIO
+    pio_sm_set_consecutive_pindirs(pio, sm, IOW_PIN, 18, false);
+
+    // Set ADS as output
+    pio_gpio_init(pio, ADS_PIN);
+    pio_sm_set_consecutive_pindirs(pio, sm, ADS_PIN, 1, true);
+
+    // Load our configuration, and jump to the start of the program
+    pio_sm_init(pio, sm, offset, &c);
+    // Set the state machine running
+    pio_sm_set_enabled(pio, sm, true);
+}
+%}
+
+.program ior_read
+    wait 1 gpio IOR_PIN
+.wrap_target
+    ; IOR falling edge:
+    wait 0 gpio IOR_PIN
+    ; - future - set iochrdy?
+    ; - Read address
+    in pins, 10
+    ; IOR rising edge
+    ; irq 0
+    wait 1 gpio IOR_PIN
+    ; - Read bits
+    ; - Push to CPU --
+    ; - Interrupt
+    ; - Auto-pull, stalling on empty OSR
+    ; - Write bits
+    ; set pins as output - TODO do this 8 bits
+.wrap
+
+% c-sdk {
+static inline void ior_read_program_init(PIO pio, uint sm, uint offset) {
+    pio_sm_config c = ior_read_program_get_default_config(offset);
+
+    // sm_config_set_out_pins(&c, pin, 1);
+    sm_config_set_in_pins(&c, AD0_PIN);
+    sm_config_set_in_shift(&c, false, true, 10);
+
+    // sm_config_set_sideset_pins(&c, in_pin + 12);
+
+    // Set this pin's GPIO function (connect PIO to the pad)
+    // pio_gpio_init(pio, in_pin);
+    // Set the pin direction to input at the PIO
+    pio_sm_set_consecutive_pindirs(pio, sm, AD0_PIN, 16, false);
+    // pio_sm_set_consecutive_pindirs(pio, sm, 16, 2, false);
+    ; pio_set_irq0_source_enabled(pio, pis_interrupt0, true);
+
+    // Load our configuration, and jump to the start of the program
+    pio_sm_init(pio, sm, offset, &c);
+    // Set the state machine running
+    pio_sm_set_enabled(pio, sm, true);
+}
+%}
+
+; Write in other SM:
+.program ior_write
+.side_set 4 opt pindirs
+.wrap_target
+    ; out pindirs, 4
+    ; out pins, 4
+    ; out null, 32
+    out pins, 4
+    ; set pins, 0x0
+    set pindirs, 0xf ;side 0xf
+    ; - wait for IOW rising edge
+    wait 1 gpio IOR_PIN
+    ; set pins as input - TODO do this 8 bits
+    ; set pins, 0xf
+    set pindirs, 0x0 ;side 0x0
+    ; - set data pins back to input 
+    ; wait 0 gpio 16
+    out null, 28
+.wrap
+;    pull
+;    out pins, 1
+
+% c-sdk {
+static inline void ior_write_program_init(PIO pio, uint sm, uint offset) {
+    pio_sm_config c = ior_write_program_get_default_config(offset);
+
+    sm_config_set_out_pins(&c, AD0_PIN, 4);
+    sm_config_set_out_shift(&c, true, true, 32);
+    sm_config_set_out_special(&c, true, false, 0);
+    sm_config_set_set_pins(&c, AD0_PIN, 4);
+    sm_config_set_sideset_pins(&c, AD0_PIN + 4);
+
+    // Set this pin's GPIO function (connect PIO to the pad)
+    for (int i = AD0_PIN; i <= AD0_PIN + 8; i++) {
+        pio_gpio_init(pio, i);
+    }
+    // Set the pin direction to input at the PIO
+    // pio_sm_set_consecutive_pindirs(pio, sm, out_pin, 8, false);
+    // pio_sm_set_consecutive_pindirs(pio, sm, 16, 2, false);
+    // Load our configuration, and jump to the start of the program
+    pio_sm_init(pio, sm, offset, &c);
+    // Set the state machine running
+    pio_sm_set_enabled(pio, sm, true);
+}
+%}
