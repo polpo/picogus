@@ -1,0 +1,4 @@
+(fp_lib_table
+  (lib (name "CM4IO")(type "KiCad")(uri "/Users/ian/Downloads/CM4IO-KiCAD/CM4IO.pretty")(options "")(descr ""))
+  (lib (name "PiGUS library")(type "KiCad")(uri "${KIPRJMOD}/PiGUS library.pretty")(options "")(descr ""))
+)

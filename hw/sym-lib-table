@@ -1,0 +1,4 @@
+(sym_lib_table
+  (lib (name "PiGUS library")(type "KiCad")(uri "${KIPRJMOD}/PiGUS library.kicad_sym")(options "")(descr ""))
+  (lib (name "CM4IO")(type "KiCad")(uri "/Users/ian/Downloads/CM4IO-KiCAD/CM4IO.kicad_sym")(options "")(descr ""))
+)
