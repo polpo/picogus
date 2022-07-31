@@ -74,7 +74,7 @@ enum GUSType {
 #define WCTRL_DECREASING        0x40
 #define WCTRL_IRQPENDING        0x80
 
-#define GUS_RAM_SIZE            (1024u*128u)
+#define GUS_RAM_SIZE            (1024u*180u)
 
 // fixed panning table (avx)
 static uint16_t const pantablePDF[16] = { 0, 13, 26, 41, 57, 72, 94, 116, 141, 169, 203, 244, 297, 372, 500, 4095 };
@@ -171,6 +171,14 @@ struct GFGus {
         if (AutoAmp > masterVolumeMul) AutoAmp = masterVolumeMul;
     }
 } myGUS;
+
+extern uint8_t GUS_activeChannels(void) {
+    return myGUS.ActiveChannels;
+}
+
+extern uint32_t GUS_basefreq(void) {
+    return myGUS.basefreq;
+}
 
 Bitu DEBUG_EnableDebugger(void);
 
@@ -696,7 +704,7 @@ static void GUSReset(void) {
         myGUS.ActiveChannels = 14;
         myGUS.ActiveChannelsUser = 14;
         myGUS.ActiveMask=0xffffffffU >> (32-myGUS.ActiveChannels);
-        myGUS.basefreq = (uint32_t)((float)1000000/(1.619695497*(float)(myGUS.ActiveChannels)));
+        myGUS.basefreq = (uint32_t)(1000000.0/(1.619695497*(float)(myGUS.ActiveChannels)));
 
         /* TODO dbx
         gus_chan->FillUp();
@@ -714,7 +722,9 @@ static void GUSReset(void) {
         myGUS.gDramAddr = 0;
         myGUS.gRegData = 0;
 
+        /* TODO implmeent DMA
         GUS_Update_DMA_Event_transfer();
+        */
     }
 
     /* if the card was just put into reset, or the card WAS in reset, bits 1-2 are cleared */
@@ -1040,19 +1050,23 @@ static void ExecuteGlobRegister(void) {
          *        cards they will not run faster than 44.1KHz. */
         myGUS.ActiveChannels = myGUS.ActiveChannelsUser;
 
+        /* force min channels to 14 - I don't want to subject the poor RP2040 to anything more than 44.1kHz
         if (gus_type < GUS_INTERWAVE) {
             // GUS MAX behavior seen on real hardware
             if(myGUS.ActiveChannels < 3) myGUS.ActiveChannels += 2;
             if(myGUS.ActiveChannels > 32) myGUS.ActiveChannels = 32;
         }
         else {
+        */
             // Interwave PnP behavior seen on real hardware
             if(myGUS.ActiveChannels < 14) myGUS.ActiveChannels = 14;
             if(myGUS.ActiveChannels > 32) myGUS.ActiveChannels = 32;
+        /*
         }
+        */
 
         myGUS.ActiveMask=0xffffffffU >> (32-myGUS.ActiveChannels);
-        myGUS.basefreq = (uint32_t)(0.5 + 1000000.0 / (1.619695497 * (double)(myGUS.ActiveChannels)));
+        myGUS.basefreq = (uint32_t)(1000000.0/(1.619695497*(float)(myGUS.ActiveChannels)));
 
 #if 0 // dbx specific
         if (!myGUS.fixed_sample_rate_output)    gus_chan->SetFreq(myGUS.basefreq);
@@ -1069,7 +1083,9 @@ static void ExecuteGlobRegister(void) {
     case 0x41:  // Dma control register
         myGUS.DMAControl &= ~0xFFu; // FIXME: Does writing DMA Control clear the DMA TC IRQ?
         myGUS.DMAControl |= (uint8_t)(myGUS.gRegData>>8);
+        /* TODO implement DMA
         GUS_Update_DMA_Event_transfer();
+        */
         if (myGUS.DMAControl & 1) GUS_StartDMA();
         else GUS_StopDMA();
         break;
@@ -1485,7 +1501,7 @@ static void write_gus_cs4231(Bitu port,Bitu val,Bitu iolen) {
 }
 #endif // 0 // no fancy stuff
 
-static Bitu read_gus(Bitu port,Bitu iolen) {
+extern Bitu read_gus(Bitu port,Bitu iolen) {
     uint16_t reg16;
 
     (void)iolen;//UNUSED
@@ -1604,7 +1620,7 @@ static Bitu read_gus(Bitu port,Bitu iolen) {
 }
 
 
-static void write_gus(Bitu port,Bitu val,Bitu iolen) {
+extern void write_gus(Bitu port,Bitu val,Bitu iolen) {
 //  LOG_MSG("Write gus port %x val %x",port,val);
 
     /* 12-bit ISA decode (FIXME: Check GUS MAX ISA card to confirm)
@@ -2112,7 +2128,7 @@ static void GUS_DMA_Callback(DmaChannel * chan,DMAEvent event) {
 }
 #endif // 0 // TODO implement DMA
 
-static void GUS_CallBack(Bitu len) {
+extern void GUS_CallBack(Bitu len, int16_t* play_buffer) {
     int32_t buffer[MIXER_BUFSIZE][2];
     memset(buffer, 0, len * sizeof(buffer[0]));
 
@@ -2147,6 +2163,7 @@ static void GUS_CallBack(Bitu len) {
     //
     //        --J.C.
 
+    Bitu play_i = 0;
     for (Bitu i = 0; i < len; i++) {
         buffer[i][0] >>= (VOL_SHIFT * AutoAmp) >> 9;
         buffer[i][1] >>= (VOL_SHIFT * AutoAmp) >> 9;
@@ -2185,6 +2202,8 @@ static void GUS_CallBack(Bitu len) {
         if (AutoAmp < myGUS.masterVolumeMul && !dampenedAutoAmp) {
             AutoAmp++; /* recovery back to 100% normal volume */
         }
+        play_buffer[play_i++] = buffer[i][0];
+        play_buffer[play_i++] = buffer[i][1];
     }
 
     // TODO copy samples to play buffer
@@ -2683,8 +2702,12 @@ public:
     }
 };
 
-#if 0 // dosbox-x specific startup/shutdown
 static GUS* test = NULL;
+void GUS_OnReset() {
+    LOG_MSG("Allocating GUS emulation");
+    test = new GUS();
+}
+#if 0 // dosbox-x specific startup/shutdown
 
 void GUS_DOS_Shutdown() {
     if (test != NULL) test->DOS_Shutdown();

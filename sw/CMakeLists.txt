@@ -42,7 +42,7 @@ target_compile_definitions(sw-pico PRIVATE
 )
 
 if(PROJECT_TYPE STREQUAL "GUS")
-    target_sources(sw-pico PRIVATE gusplay.cpp gus.cpp)
+    target_sources(sw-pico PRIVATE gusplay.cpp gus-x.cpp)
     target_compile_definitions(sw-pico PRIVATE
         SOUND_GUS=1
     )

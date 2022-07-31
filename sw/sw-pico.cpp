@@ -23,12 +23,13 @@ extern "C" void OPL_Pico_PortWrite(opl_port_t, unsigned int);
 #endif
 
 #ifdef SOUND_GUS
-#include "gus.h"
+// #include "gus.h"
+#include "gus-x.h"
 
 constexpr uint16_t GUS_PORT = 0x240u;
 constexpr uint16_t GUS_PORT_TEST = GUS_PORT >> 4 | 0x10;
 void play_gus(void);
-Gus *gus;
+// Gus *gus;
 #endif
 
 constexpr uint LED_PIN = PICO_DEFAULT_LED_PIN;
@@ -50,7 +51,8 @@ inline void handle_iow(void) {
         pio_sm_put(pio0, iow_sm, 0xffffffffu);
         value = iow_read & 0xFF;
         // uint32_t write_begin = time_us_32();
-        gus->WriteToPort(port, value, io_width_t::byte); // 3x4 supports 16-bit transfers but PiGUS doesn't! force byte
+        // gus->WriteToPort(port, value, io_width_t::byte); // 3x4 supports 16-bit transfers but PiGUS doesn't! force byte
+        write_gus(port, value, 1);
         // uint32_t write_elapsed = time_us_32() - write_begin;
         // if (write_elapsed > 1) {
         //     printf("long write to port %x, (sel reg %x), took %d us\n", port, gus->selected_register, write_elapsed);
@@ -96,7 +98,8 @@ inline void handle_ior(void) {
         if (port == 0x242) {
             value = 0xdd;
         } else {
-            value = gus->ReadFromPort(port, io_width_t::byte);
+            //value = gus->ReadFromPort(port, io_width_t::byte);
+            value = read_gus(port, 1);
         }
         // OR with 0x00ffff00 is required to set pindirs in the PIO
         pio_sm_put(pio0, ior_sm, 0x00ffff00u | value);
@@ -241,7 +244,8 @@ int main()
 
 #ifdef SOUND_GUS
     puts("Creating GUS");
-    gus = new Gus(GUS_PORT, nullptr, nullptr);
+    // gus = new Gus(GUS_PORT, nullptr, nullptr);
+    GUS_OnReset();
     multicore_launch_core1(&play_gus);
 #endif
 

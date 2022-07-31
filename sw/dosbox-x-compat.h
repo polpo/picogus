@@ -1,3 +1,5 @@
+#pragma once
+
 #include "pico/platform.h"
 
 #define MIXER_BUFSIZE 1024u

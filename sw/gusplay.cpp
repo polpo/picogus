@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: BSD-3-Clause
  */
 
-// #include <stdio.h>
+#include <stdio.h>
 #include "stdio_async_uart.h"
 #include <math.h>
 
@@ -22,7 +22,8 @@
 bi_decl(bi_3pins_with_names(PICO_AUDIO_I2S_DATA_PIN, "I2S DIN", PICO_AUDIO_I2S_CLOCK_PIN_BASE, "I2S BCK", PICO_AUDIO_I2S_CLOCK_PIN_BASE+1, "I2S LRCK"));
 #endif
 
-#include "gus.h"
+// #include "gus.h"
+#include "gus-x.h"
 
 #define SAMPLES_PER_BUFFER 1024
 
@@ -56,13 +57,13 @@ struct audio_buffer_pool *init_audio() {
     }
 
     //ok = audio_i2s_connect(producer_pool);
-    ok = audio_i2s_connect_extra(producer_pool, false, 0, 0, NULL);
+    ok = audio_i2s_connect_extra(producer_pool, false, 1, 1024, NULL);
     assert(ok);
     audio_i2s_set_enabled(true);
     return producer_pool;
 }
 
-extern Gus *gus;
+// extern Gus *gus;
 
 void play_gus() {
     puts("starting core 1");
@@ -70,25 +71,28 @@ void play_gus() {
 
     struct audio_buffer_pool *ap = init_audio();
     for (;;) {
-        if (gus->active_voices && (ap->format->sample_freq != gus->playback_rate)) {
-            // printf("changing sample rate to %d", gus->playback_rate);
-            // todo hack overwriting const
-            ((struct audio_format *) ap->format)->sample_freq = gus->playback_rate;
-        }
+        uint8_t active_voices = GUS_activeChannels();
+        uint32_t playback_rate = GUS_basefreq();
         struct audio_buffer *buffer = take_audio_buffer(ap, true);
         /* gus->dothangs; */
         int16_t *samples = (int16_t *) buffer->buffer->bytes;
 
         uint32_t gus_audio_begin = time_us_32();
-        gus->AudioCallback(buffer->max_sample_count, samples);
+        // gus->AudioCallback(buffer->max_sample_count, samples);
+        GUS_CallBack(buffer->max_sample_count, samples);
         uint32_t gus_audio_elapsed = time_us_32() - gus_audio_begin;
-        if (gus->active_voices) {
+        if (/*gus->*/active_voices) {
             // printf("%d\n", gus->active_voices);
             // printf("%d us %d samples (tgt 23220)\n", gus_audio_elapsed, buffer->max_sample_count);
             uart_print_hex_u32(gus_audio_elapsed);
         }
         buffer->sample_count = buffer->max_sample_count;
         // if GUS sample rate changed
+        if (/*gus->*/active_voices && (ap->format->sample_freq != /*gus->*/playback_rate)) {
+            printf("changing sample rate to %d", /*gus->*/playback_rate);
+            // todo hack overwriting const
+            ((struct audio_format *) ap->format)->sample_freq = /*gus->*/playback_rate;
+        }
         give_audio_buffer(ap, buffer);
     }
 }
