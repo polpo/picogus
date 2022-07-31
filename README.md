@@ -8,19 +8,19 @@ This is a work in progress in the experimentation phase. It can emulate a GUS an
 
 ## For "big" Raspberry Pi:
 
-![pigus-prototype-v1](https://user-images.githubusercontent.com/1544908/166294538-aceb9f7f-9eb3-485b-9762-11681307179a.png)
+![pigus-prototype](https://user-images.githubusercontent.com/1544908/182006165-61aa58a7-d336-4c86-becf-883b1548bee1.jpg)
 
 ## For Raspberry Pi Pico:
 
-## Credits
+![picogus-prototype](https://user-images.githubusercontent.com/1544908/182006174-71a1792d-ac5b-4c2b-8e61-94a05a0ef55c.jpg)
 
-Common portions:
+## Credits
 
 The Raspberry Pi project uses:
 
 * [circle](https://github.com/rsta2/circle) 
 * [circle-stdlib](https://github.com/smuehlst/circle-stdlib)
-* gus.cpp from [DOSBox-staging](https://github.com/dosbox-staging/dosbox-staging)
+* `gus.cpp` from [DOSBox-staging](https://github.com/dosbox-staging/dosbox-staging)
 * Initial PCB design and AdLib emulation based on [RPiISA](https://github.com/eigenco/RPiISA)
 
 The Raspberry Pi Pico project uses:
@@ -28,11 +28,11 @@ The Raspberry Pi Pico project uses:
 * [Raspberry Pi Pico C/C++ SDK](https://github.com/raspberrypi/pico-sdk)
 * `pico_audio_i2s` from [pico-extras](https://github.com/raspberrypi/pico-extras)
 * `stdio_async_uart` from [PicoCart64](https://github.com/kbeckmann/PicoCart64)
-* gus.cpp from [DOSBox-X](https://github.com/joncampbell123/dosbox-x)
+* `gus.cpp` from [DOSBox-X](https://github.com/joncampbell123/dosbox-x)
 * OPL/AdLib emulation from [rp2040-doom](https://github.com/kilograham/rp2040-doom)
 
 ## License
 
 The hardware portions of this repository (hw/, hw-pico/ directories) are licensed under the CERN OHL version 2, permissive.
 
-The software portions of this repository (sw/, sw-pico/ directory) are licensed under the GNU GPL version 2.
+The software portions of this repository (sw/, sw-pico/, pgusinit/ directories) are licensed under the GNU GPL version 2.
