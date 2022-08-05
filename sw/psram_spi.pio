@@ -1,0 +1,45 @@
+; SPI, customized as the PSRAM chips like to implement it:
+; - Data is always written first, then optionally read
+; - Reads in high speed mode need an extra clock cycle to synchronize
+; - Reads are done on the falling edge of SCK when > 83MHz
+.program spi_fudge
+.side_set 2                        ; sideset bit 1 is SCK, bit 0 is CS
+begin:
+    out x, 32           side 0b01  ; x = number of bits to output. CS deasserted
+    out y, 32           side 0b01  ; y = number of bits to input
+    jmp x--, writeloop  side 0b01  ; Pre-decement x by 1 so loop has correct number of iterations
+writeloop:
+    out pins, 1         side 0b00  ; Write value on pin, lower clock. CS asserted
+    jmp x--, writeloop  side 0b10  ; Raise clock: this is when PSRAM reads the value. Loop if we have more to write
+    jmp !y, begin       side 0b00  ; If this is a write-only operation, jump back to beginning
+    nop                 side 0b10  ; Fudge factor of extra clock cycle; the PSRAM needs 1 extra for output to start appearing
+    jmp readloop_mid    side 0b00  ; Jump to middle of readloop to decrement y and get right clock phase
+readloop:
+    in pins, 1          side 0b00  ; Read value on pin, lower clock. Datasheet says to read on falling edge > 83MHz
+readloop_mid:
+    jmp y--, readloop   side 0b10  ; Raise clock. Loop if we have more to read
+
+% c-sdk {
+#include "hardware/gpio.h"
+static inline void pio_spi_fudge_cs_init(PIO pio, uint sm, uint prog_offs, uint n_bits, float clkdiv, uint pin_cs, uint pin_mosi, uint pin_miso) {
+    pio_sm_config c = spi_fudge_program_get_default_config(prog_offs);
+    sm_config_set_out_pins(&c, pin_mosi, 1);
+    sm_config_set_in_pins(&c, pin_miso);
+    sm_config_set_sideset_pins(&c, pin_cs);
+    sm_config_set_out_shift(&c, false, true, n_bits);
+    sm_config_set_in_shift(&c, false, true, n_bits);
+    sm_config_set_clkdiv(&c, clkdiv);
+
+    pio_sm_set_consecutive_pindirs(pio, sm, pin_cs, 2, true);
+    pio_sm_set_consecutive_pindirs(pio, sm, pin_mosi, 1, true);
+    pio_sm_set_consecutive_pindirs(pio, sm, pin_miso, 1, false);
+    pio_gpio_init(pio, pin_mosi);
+    pio_gpio_init(pio, pin_cs);
+    pio_gpio_init(pio, pin_cs + 1);
+
+    hw_set_bits(&pio->input_sync_bypass, 1u << pin_miso);
+
+    pio_sm_init(pio, sm, prog_offs, &c);
+    pio_sm_set_enabled(pio, sm, true);
+}
+%}

@@ -34,18 +34,21 @@ target_compile_definitions(sw-pico PRIVATE
         USE_AUDIO_I2S=1
         PICO_AUDIO_I2S_DATA_PIN=16
         PICO_AUDIO_I2S_CLOCK_PIN_BASE=17
-        PICO_DEFAULT_UART=0
+        #PICO_DEFAULT_UART=1
+        #PICO_DEFAULT_UART_TX_PIN=20
+        #PICO_DEFAULT_UART_RX_PIN=21
         PICO_AUDIO_I2S_PIO=1
         # USE_IRQ=1
-#            PICO_DEFAULT_UART_TX_PIN=20
-#            PICO_DEFAULT_UART_RX_PIN=21
+        PICO_STDIO_USB_CONNECT_WAIT_TIMEOUT_MS=5000000
 )
 
 if(PROJECT_TYPE STREQUAL "GUS")
     target_sources(sw-pico PRIVATE gusplay.cpp gus-x.cpp)
     target_compile_definitions(sw-pico PRIVATE
         SOUND_GUS=1
+        PSRAM=1
     )
+    pico_generate_pio_header(sw-pico ${CMAKE_CURRENT_LIST_DIR}/psram_spi.pio)
 endif()
 
 if(PROJECT_TYPE STREQUAL "OPL")
@@ -65,7 +68,7 @@ endif()
 pico_set_program_name(sw-pico "sw-pico")
 pico_set_program_version(sw-pico "0.1")
 
-pico_enable_stdio_uart(sw-pico 0)
+pico_enable_stdio_uart(sw-pico 1)
 pico_enable_stdio_usb(sw-pico 0)
 pico_enable_stdio_semihosting(sw-pico 0)
 
@@ -79,8 +82,8 @@ target_link_libraries(
     pico_stdlib
     pico_multicore
     pico_audio_i2s
-    hardware_spi
     hardware_pio
+    hardware_pll
 )
 
 # Add any user requested libraries

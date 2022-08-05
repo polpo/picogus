@@ -5,11 +5,11 @@
 // SPI Defines
 // We are going to use SPI 0, and allocate it to the following GPIO pins
 // Pins can be changed, see the GPIO function select table in the datasheet for information on GPIO assignments
-#define SPI_PORT spi0
-#define PIN_MISO 4
-#define PIN_CS   5
-#define PIN_SCK  2
-#define PIN_MOSI 3
+#define SPI_PORT spi1
+#define PIN_MISO 12
+#define PIN_CS   9
+#define PIN_SCK  10
+#define PIN_MOSI 11
 
 /**
  * Super basic interface to SPI PSRAMs such as Espressif ESP-PSRAM64, apmemory APS6404L, IPUS IPS6404, Lyontek LY68L6400, etc.
@@ -17,15 +17,15 @@
  */
 class Psram {
     public:
-        static void init(void) {
+        static void init(uint32_t baudrate) {
             uint8_t reset_en_cmd = 0x66;
             uint8_t reset_cmd = 0x99;
 
             // SPI initialisation.
             // Let's go nuts and use SPI at 133MHz as that's the max speed of the AP Memory APS6404L!
-            uint32_t baudrate = spi_init(SPI_PORT, 1000*1000*133);
-            hw_write_masked(&spi_get_hw(spi_default)->cr0, (1 - 1) << SPI_SSPCR0_SCR_LSB, SPI_SSPCR0_SCR_BITS);
-            printf("Inited SPI at baud rate %d\n", baudrate);
+            uint32_t achieved_baudrate = spi_init(SPI_PORT, baudrate);
+            // hw_write_masked(&spi_get_hw(spi_default)->cr0, (1 - 1) << SPI_SSPCR0_SCR_LSB, SPI_SSPCR0_SCR_BITS);
+            printf("Inited SPI at baud rate %d\n", achieved_baudrate);
             gpio_set_function(PIN_MISO, GPIO_FUNC_SPI);
             gpio_set_function(PIN_CS,   GPIO_FUNC_SIO);
             gpio_set_function(PIN_SCK,  GPIO_FUNC_SPI);
@@ -44,7 +44,11 @@ class Psram {
             spi_write_blocking(SPI_PORT, &reset_cmd, 1);
             gpio_put(PIN_CS, 1);
             busy_wait_us(100);
+        };
 
+        static void set_baudrate(uint32_t baudrate) {
+            uint32_t achieved_baudrate = spi_set_baudrate(SPI_PORT, baudrate);
+            printf("Set SPI to baud rate %d\n", achieved_baudrate);
         };
 
         inline static void write8(uint32_t addr, uint8_t val) {
@@ -67,19 +71,30 @@ class Psram {
         inline static uint8_t read8(uint32_t addr) {
             uint8_t val; 
             unsigned char* addr_bytes = (unsigned char*)&addr;
-            uint8_t command[4] = {
-                0x3, // read
+            uint8_t command[5] = {
+                0xb, // read fast frequency
                 *(addr_bytes + 2),
                 *(addr_bytes + 1),
-                *addr_bytes
+                *addr_bytes,
+                0,
             };
 
             // Select RAM chip
+            // spi_set_format(SPI_PORT, 8 /*data_bits*/, SPI_CPOL_0 /*cpol*/, SPI_CPHA_1 /*cpha*/, SPI_MSB_FIRST /*order*/);
             gpio_put(PIN_CS, 0);
             spi_write_blocking(SPI_PORT, command, sizeof(command));
             spi_read_blocking(SPI_PORT, 0, &val, 1);
+            /*
+            uint8_t val0[32];
+            spi_read_blocking(SPI_PORT, 0, val0, 32);
+            for(int i = 0; i < 32; ++i) {
+                printf("%x ", val0[i]);
+            }
+            */
+            
             // Deselect
             gpio_put(PIN_CS, 1);
+            // return val0[0];
             return val;
         };
 
@@ -115,7 +130,8 @@ class Psram {
             // Select RAM chip
             gpio_put(PIN_CS, 0);
             spi_write_blocking(SPI_PORT, command, sizeof(command));
-            spi_read_blocking(SPI_PORT, 0, (unsigned char*)&val, 2);
+            spi_read_blocking(SPI_PORT, 0x55, (unsigned char*)&val, 2);
+            // spi_read16_blocking(SPI_PORT, 0, &val, 1);
             // Deselect
             gpio_put(PIN_CS, 1);
             return val;
