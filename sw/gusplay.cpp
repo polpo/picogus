@@ -5,7 +5,7 @@
  */
 
 #include <stdio.h>
-#include "stdio_async_uart.h"
+// #include "stdio_async_uart.h"
 #include <math.h>
 
 #if PICO_ON_DEVICE
@@ -48,7 +48,7 @@ struct audio_buffer_pool *init_audio() {
             .data_pin = PICO_AUDIO_I2S_DATA_PIN,
             .clock_pin_base = PICO_AUDIO_I2S_CLOCK_PIN_BASE,
             .dma_channel = 6,
-            .pio_sm = 0,
+            .pio_sm = 1,
     };
 
     output_format = audio_i2s_setup(&audio_format, &config);
@@ -84,7 +84,10 @@ void play_gus() {
         if (/*gus->*/active_voices) {
             // printf("%d\n", gus->active_voices);
             // printf("%d us %d samples (tgt 23220)\n", gus_audio_elapsed, buffer->max_sample_count);
-            uart_print_hex_u32(gus_audio_elapsed);
+            // uart_print_hex_u32(gus_audio_elapsed);
+            if (gus_audio_elapsed > 23220) {
+                gpio_xor_mask(1u << PICO_DEFAULT_LED_PIN);
+            }
         }
         buffer->sample_count = buffer->max_sample_count;
         // if GUS sample rate changed
@@ -93,6 +96,7 @@ void play_gus() {
             // todo hack overwriting const
             ((struct audio_format *) ap->format)->sample_freq = /*gus->*/playback_rate;
         }
+        gpio_xor_mask(1u << PICO_DEFAULT_LED_PIN);
         give_audio_buffer(ap, buffer);
     }
 }

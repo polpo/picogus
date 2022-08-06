@@ -24,6 +24,12 @@
 
 #include "dosbox-x-compat.h"
 
+#include "hardware/gpio.h"
+#ifdef PSRAM
+#include "psram_spi.h"
+extern pio_spi_inst_t psram_spi;
+#endif
+
 /*
 #include "dosbox.h"
 #include "inout.h"
@@ -74,7 +80,11 @@ enum GUSType {
 #define WCTRL_DECREASING        0x40
 #define WCTRL_IRQPENDING        0x80
 
-#define GUS_RAM_SIZE            (1024u*180u)
+#ifdef PSRAM
+#define GUS_RAM_SIZE            (1024u*1024u)
+#else
+#define GUS_RAM_SIZE            (1024u*128u)
+#endif
 
 // fixed panning table (avx)
 static uint16_t const pantablePDF[16] = { 0, 13, 26, 41, 57, 72, 94, 116, 141, 169, 203, 244, 297, 372, 500, 4095 };
@@ -84,7 +94,9 @@ uint8_t adlib_commandreg;
 // static MixerChannel * gus_chan;
 static uint8_t const irqtable[8] = { 0/*invalid*/, 2, 5, 3, 7, 11, 12, 15 };
 static uint8_t const dmatable[8] = { 0/*NO DMA*/, 1, 3, 5, 6, 7, 0/*invalid*/, 0/*invalid*/ };
+#ifndef PSRAM
 static uint8_t GUSRam[GUS_RAM_SIZE + 16/*safety margin*/]; // 1024K of GUS Ram
+#endif
 static int32_t AutoAmp = 512;
 static bool unmask_irq = false;
 static bool enable_autoamp = false;
@@ -236,12 +248,20 @@ class GUSChannels {
         }
 
         INLINE int32_t LoadSample8(const uint32_t addr/*memory address without fractional bits*/) const {
+#ifdef PSRAM
+            return (int8_t)psram_read8(&psram_spi, addr & 0xFFFFFu/*1MB*/) << int32_t(8);
+#else
             return (int8_t)GUSRam[addr & 0xFFFFFu/*1MB*/] << int32_t(8); /* typecast to sign extend 8-bit value */
+#endif
         }
 
         INLINE int32_t LoadSample16(const uint32_t addr/*memory address without fractional bits*/) const {
             const uint32_t adjaddr = (addr & 0xC0000u/*256KB bank*/) | ((addr & 0x1FFFFu) << 1u/*16-bit sample value within bank*/);
+#ifdef PSRAM
+            return (int16_t)psram_read16(&psram_spi, adjaddr);
+#else
             return (int16_t)host_readw(GUSRam + adjaddr);/* typecast to sign extend 16-bit value */
+#endif
         }
 
         // Returns a single 16-bit sample from the Gravis's RAM
@@ -251,10 +271,13 @@ class GUSChannels {
             {
                 // Interpolate
                 int32_t w1 = LoadSample8(useAddr);
+                return w1;
+                /* can't interpolate yet, too much traffic on PSRAM
                 int32_t w2 = LoadSample8(useAddr + 1u);
                 int32_t diff = w2 - w1;
                 int32_t scale = (int32_t)(WaveAddr & WAVE_FRACT_MASK);
                 return (w1 + ((diff * scale) >> WAVE_FRACT));
+                */
             }
         }
 
@@ -264,10 +287,13 @@ class GUSChannels {
             {
                 // Interpolate
                 int32_t w1 = LoadSample16(useAddr);
+                return w1;
+                /* can't interpolate yet, too much traffic on PSRAM
                 int32_t w2 = LoadSample16(useAddr + 1u);
                 int32_t diff = w2 - w1;
                 int32_t scale = (int32_t)(WaveAddr & WAVE_FRACT_MASK);
                 return (w1 + ((diff * scale) >> WAVE_FRACT));
+                */
             }
         }
 
@@ -637,6 +663,7 @@ void GUS_StartDMA();
 void GUS_Update_DMA_Event_transfer();
 
 static void GUSReset(void) {
+    gpio_xor_mask(1u << PICO_DEFAULT_LED_PIN);
     unsigned char p_GUS_reset_reg = GUS_reset_reg;
 
     /* NTS: From the Ultrasound SDK:
@@ -1594,7 +1621,11 @@ extern Bitu read_gus(Bitu port,Bitu iolen) {
         return reg16;
     case 0x307:
         if((myGUS.gDramAddr & myGUS.gDramAddrMask) < myGUS.memsize) {
+#ifdef PSRAM
+            return psram_read8(&psram_spi, myGUS.gDramAddr & myGUS.gDramAddrMask);
+#else
             return GUSRam[myGUS.gDramAddr & myGUS.gDramAddrMask];
+#endif
         } else {
             return 0;
         }
@@ -1846,8 +1877,13 @@ extern void write_gus(Bitu port,Bitu val,Bitu iolen) {
         ExecuteGlobRegister();
         break;
     case 0x307:
-        if ((myGUS.gDramAddr & myGUS.gDramAddrMask) < myGUS.memsize)
+        if ((myGUS.gDramAddr & myGUS.gDramAddrMask) < myGUS.memsize) {
+#ifdef PSRAM
+            psram_write8(&psram_spi, myGUS.gDramAddr & myGUS.gDramAddrMask, (uint8_t)val);
+#else
             GUSRam[myGUS.gDramAddr & myGUS.gDramAddrMask] = (uint8_t)val;
+#endif
+        }
         break;
     case 0x306:
 #if 0 // no fancy stuff
@@ -2334,7 +2370,9 @@ public:
 
         gus_enable = true;
         memset(&myGUS,0,sizeof(myGUS));
+#ifndef PSRAM
         memset(GUSRam,0,GUS_RAM_SIZE);
+#endif
 
 #if 0 // dbx-specific
         ignore_active_channel_write_while_active = section->Get_bool("ignore channel count while active");
@@ -2626,7 +2664,7 @@ public:
 #endif // 0 // no fancy stuff
 
         // Default to GUS MAX 1MB maximum
-        myGUS.gDramAddrMask = 0xFFFFF;
+        myGUS.gDramAddrMask = 0xFFFFFu;
 
         // if instructed, configure the card as if ULTRINIT had been run
         if (startup_ultrinit) {

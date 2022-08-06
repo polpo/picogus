@@ -2,13 +2,15 @@
 
 #include "hardware/pio.h"
 #include "hardware/gpio.h"
+#include "hardware/timer.h"
+#include "hardware/sync.h"
 #include "stdio.h"
 
 // SPI Defines
-#define PIN_CS   9
-#define PIN_SCK  10
-#define PIN_MOSI 11
-#define PIN_MISO 12
+#define PIN_CS   1
+#define PIN_SCK  2
+#define PIN_MOSI 3
+#define PIN_MISO 0
 
 #include "psram_spi.pio.h"
 
@@ -19,14 +21,16 @@ extern "C" {
 typedef struct pio_spi_inst {
     PIO pio;
     uint sm;
+    spin_lock_t* spinlock;
 } pio_spi_inst_t;
 
 
-__force_inline void __time_critical_func(pio_spi_write_read_blocking)(const pio_spi_inst_t* spi,
+static __force_inline void __time_critical_func(pio_spi_write_read_blocking)(const pio_spi_inst_t* spi,
                                                        const uint8_t* src, const size_t src_len,
                                                        uint8_t* dst, const size_t dst_len) {
     size_t tx_remain = src_len, rx_remain = dst_len;
 
+    uint32_t irq_state = spin_lock_blocking(spi->spinlock);
     // Put bytes to write in X
     pio_sm_put_blocking(spi->pio, spi->sm, src_len * 8);
     // Put bytes to read in Y
@@ -47,6 +51,7 @@ __force_inline void __time_critical_func(pio_spi_write_read_blocking)(const pio_
             --rx_remain;
         }
     }
+    spin_unlock(spi->spinlock, irq_state);
 }
 
 
@@ -55,12 +60,17 @@ __force_inline void __time_critical_func(pio_spi_write_read_blocking)(const pio_
  * NOTE that the read/write functions abuse type punning to avoid shifts and masks to be as fast as possible!
  * I'm open to suggestions that this is really dumb or insane. This is a fixed platform (arm-none-eabi-gcc) so I'm OK with it
  */
-pio_spi_inst_t psram_init(void) {
-    uint spi_offset = pio_add_program(pio0, &spi_fudge_program);
-    uint spi_sm = pio_claim_unused_sm(pio0, true);
+__force_inline pio_spi_inst_t psram_init(void) {
+    printf("add program\n");
+    uint spi_offset = pio_add_program(pio1, &spi_fudge_program);
+    printf("claim unused sm\n");
+    uint spi_sm = pio_claim_unused_sm(pio1, true);
     pio_spi_inst_t spi;
-    spi.pio = pio0;
+    spi.pio = pio1;
     spi.sm = spi_sm;
+    int spin_id = spin_lock_claim_unused(true);
+    spi.spinlock = spin_lock_init(spin_id);
+    printf("sm is %d\n", spi_sm);
 
     gpio_set_drive_strength(PIN_CS, GPIO_DRIVE_STRENGTH_2MA);
     gpio_set_drive_strength(PIN_SCK, GPIO_DRIVE_STRENGTH_2MA);
@@ -69,7 +79,8 @@ pio_spi_inst_t psram_init(void) {
     gpio_set_slew_rate(PIN_SCK, GPIO_SLEW_RATE_FAST);
     gpio_set_slew_rate(PIN_MOSI, GPIO_SLEW_RATE_FAST);
 
-    pio_spi_fudge_cs_init(pio0, spi_sm, spi_offset, 8 /*n_bits*/, 1 /*clkdiv*/, PIN_CS, PIN_MOSI, PIN_MISO);
+    printf("about to init fudge\n", spi_sm);
+    pio_spi_fudge_cs_init(pio1, spi_sm, spi_offset, 8 /*n_bits*/, 1 /*clkdiv*/, PIN_CS, PIN_MOSI, PIN_MISO);
 
     // SPI initialisation.
     printf("Inited SPI PIO... at sm %d\n", spi.sm);

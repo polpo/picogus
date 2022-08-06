@@ -34,9 +34,9 @@ target_compile_definitions(sw-pico PRIVATE
         USE_AUDIO_I2S=1
         PICO_AUDIO_I2S_DATA_PIN=16
         PICO_AUDIO_I2S_CLOCK_PIN_BASE=17
-        #PICO_DEFAULT_UART=1
-        #PICO_DEFAULT_UART_TX_PIN=20
-        #PICO_DEFAULT_UART_RX_PIN=21
+        PICO_DEFAULT_UART=1
+        PICO_DEFAULT_UART_TX_PIN=20
+        PICO_DEFAULT_UART_RX_PIN=21
         PICO_AUDIO_I2S_PIO=1
         # USE_IRQ=1
         PICO_STDIO_USB_CONNECT_WAIT_TIMEOUT_MS=5000000
@@ -47,6 +47,7 @@ if(PROJECT_TYPE STREQUAL "GUS")
     target_compile_definitions(sw-pico PRIVATE
         SOUND_GUS=1
         PSRAM=1
+        TEST_PSRAM=1
     )
     pico_generate_pio_header(sw-pico ${CMAKE_CURRENT_LIST_DIR}/psram_spi.pio)
 endif()
