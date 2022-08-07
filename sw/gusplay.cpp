@@ -25,7 +25,7 @@ bi_decl(bi_3pins_with_names(PICO_AUDIO_I2S_DATA_PIN, "I2S DIN", PICO_AUDIO_I2S_C
 // #include "gus.h"
 #include "gus-x.h"
 
-#define SAMPLES_PER_BUFFER 1024
+#define SAMPLES_PER_BUFFER 256
 
 struct audio_buffer_pool *init_audio() {
 
@@ -57,7 +57,7 @@ struct audio_buffer_pool *init_audio() {
     }
 
     //ok = audio_i2s_connect(producer_pool);
-    ok = audio_i2s_connect_extra(producer_pool, false, 1, 1024, NULL);
+    ok = audio_i2s_connect_extra(producer_pool, false, 1, SAMPLES_PER_BUFFER, NULL);
     assert(ok);
     audio_i2s_set_enabled(true);
     return producer_pool;

@@ -264,20 +264,58 @@ class GUSChannels {
 #endif
         }
 
+#ifdef PSRAM
+        union uint8_t_pair {
+            uint16_t data16;
+            uint8_t data8[2];
+        };
+
+        union uint16_t_pair {
+            uint32_t data32;
+            uint16_t data16[2];
+        };
+
+        struct sample32_pair {
+            int32_t low;
+            int32_t high;
+        };
+
+        INLINE sample32_pair LoadSamples8(const uint32_t addr/*memory address without fractional bits*/) const {
+            uint8_t_pair p = { .data16 = psram_read16(&psram_spi, addr & 0xFFFFFu/*1MB*/) };
+            return (struct sample32_pair){
+                .low = (int8_t)p.data8[0] << int32_t(8),
+                .high = (int8_t)p.data8[1] << int32_t(8)
+            };
+        }
+
+        INLINE sample32_pair LoadSamples16(const uint32_t addr/*memory address without fractional bits*/) const {
+            const uint32_t adjaddr = (addr & 0xC0000u/*256KB bank*/) | ((addr & 0x1FFFFu) << 1u/*16-bit sample value within bank*/);
+            uint16_t_pair p = { .data32 = psram_read32(&psram_spi, adjaddr) };
+            return (struct sample32_pair){
+                .low = (int16_t)p.data16[0],
+                .high = (int16_t)p.data16[1]
+            };
+        }
+#endif
+
         // Returns a single 16-bit sample from the Gravis's RAM
         INLINE int32_t GetSample8() const {
             /* LoadSample*() will take care of wrapping to 1MB */
             const uint32_t useAddr = WaveAddr >> WAVE_FRACT;
             {
                 // Interpolate
+#ifdef PSRAM
+                sample32_pair p = LoadSamples8(useAddr);
+                int32_t diff = p.high - p.low;
+                int32_t scale = (int32_t)(WaveAddr & WAVE_FRACT_MASK);
+                return (p.low + ((diff * scale) >> WAVE_FRACT));
+#else
                 int32_t w1 = LoadSample8(useAddr);
-                return w1;
-                /* can't interpolate yet, too much traffic on PSRAM
                 int32_t w2 = LoadSample8(useAddr + 1u);
                 int32_t diff = w2 - w1;
                 int32_t scale = (int32_t)(WaveAddr & WAVE_FRACT_MASK);
                 return (w1 + ((diff * scale) >> WAVE_FRACT));
-                */
+#endif
             }
         }
 
@@ -286,14 +324,18 @@ class GUSChannels {
             const uint32_t useAddr = WaveAddr >> WAVE_FRACT;
             {
                 // Interpolate
+#ifdef PSRAM
+                sample32_pair p = LoadSamples16(useAddr);
+                int32_t diff = p.high - p.low;
+                int32_t scale = (int32_t)(WaveAddr & WAVE_FRACT_MASK);
+                return (p.low + ((diff * scale) >> WAVE_FRACT));
+#else
                 int32_t w1 = LoadSample16(useAddr);
-                return w1;
-                /* can't interpolate yet, too much traffic on PSRAM
                 int32_t w2 = LoadSample16(useAddr + 1u);
                 int32_t diff = w2 - w1;
                 int32_t scale = (int32_t)(WaveAddr & WAVE_FRACT_MASK);
                 return (w1 + ((diff * scale) >> WAVE_FRACT));
-                */
+#endif
             }
         }
 
