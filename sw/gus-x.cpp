@@ -43,6 +43,8 @@ extern pio_spi_inst_t psram_spi;
 #include "math.h"
 #include "regs.h"
 */
+#include "pico_pic.h"
+
 using namespace std;
 
 #if defined(_MSC_VER)
@@ -142,7 +144,7 @@ struct GFGus {
     uint32_t basefreq;
 
     struct GusTimer {
-        float delay;
+        uint32_t delay;
         uint8_t value;
         bool reached;
         bool raiseirq;
@@ -627,7 +629,7 @@ void DEBUG_PrintGUS() { //debugger "GUS" command
                         myGUS.RampIRQ,
                         myGUS.WaveIRQ);
         for (size_t t=0;t < 2;t++) {
-                LOG_MSG("Timer %u: delay=%.3fms value=%02x reached=%u raiseirq=%u masked=%u running=%u\n",
+                LOG_MSG("Timer %u: delay=%dus value=%02x reached=%u raiseirq=%u masked=%u running=%u\n",
                         (unsigned int)t + 1u,
                         myGUS.timers[t].delay,
                         myGUS.timers[t].value,
@@ -748,8 +750,8 @@ static void GUSReset(void) {
         myGUS.WaveIRQ = 0;
         myGUS.IRQChan = 0;
 
-        myGUS.timers[0].delay = 0.080f;
-        myGUS.timers[1].delay = 0.320f;
+        myGUS.timers[0].delay = 80;
+        myGUS.timers[1].delay = 320;
         myGUS.timers[0].value = 0xff;
         myGUS.timers[1].value = 0xff;
         myGUS.timers[0].masked = false;
@@ -761,9 +763,7 @@ static void GUSReset(void) {
         myGUS.timers[0].running = false;
         myGUS.timers[1].running = false;
 
-        /* TODO implement IRQ
         PIC_RemoveEvents(GUS_TimerEvent);
-        */
 
         myGUS.ChangeIRQDMA = false;
         myGUS.DMAControl = 0x00;
@@ -858,16 +858,18 @@ static INLINE void GUS_CheckIRQ(void) {
             /* The GUS fires an IRQ, then waits for the interrupt service routine to
              * clear all pending interrupt events before firing another one. if you
              * don't service all events, then you don't get another interrupt. */
-            if (gus_prev_effective_irqstat == 0) {
-                /* TODO implement IRQ
+            // if (gus_prev_effective_irqstat == 0) {
                 PIC_ActivateIRQ(myGUS.irq1);
 
+                /* no fancy stuff
                 if (gus_warn_irq_conflict)
                     LOG(LOG_MISC,LOG_WARN)(
                         "GUS warning: Both IRQs set to the same signal line WITHOUT combining! "
                         "This is documented to cause bus conflicts on real hardware");
-                */ // TODO implement IRQ
-            }
+                */ // no fancy stuff
+            // }
+        } else if (gus_prev_effective_irqstat != 0) {
+            PIC_DeActivateIRQ(myGUS.irq1);
         }
 
         gus_prev_effective_irqstat = irqstat;
@@ -988,10 +990,8 @@ static void GUS_TimerEvent(Bitu val) {
         myGUS.IRQStatus|=0x4 << val;
         GUS_CheckIRQ();
     }
-    /* TODO implement IRQ
     if (myGUS.timers[val].running) 
         PIC_AddEvent(GUS_TimerEvent,myGUS.timers[val].delay,val);
-    */ // TODO implement IRQ
 }
 
  
@@ -1178,11 +1178,11 @@ static void ExecuteGlobRegister(void) {
         break;
     case 0x46:  // Timer 1 control
         myGUS.timers[0].value = (uint8_t)(myGUS.gRegData>>8);
-        myGUS.timers[0].delay = (0x100 - myGUS.timers[0].value) * 0.080f;
+        myGUS.timers[0].delay = (0x100 - myGUS.timers[0].value) * 80;
         break;
     case 0x47:  // Timer 2 control
         myGUS.timers[1].value = (uint8_t)(myGUS.gRegData>>8);
-        myGUS.timers[1].delay = (0x100 - myGUS.timers[1].value) * 0.320f;
+        myGUS.timers[1].delay = (0x100 - myGUS.timers[1].value) * 320;
         break;
     case 0x49:  // DMA sampling control register
         myGUS.SampControl = (uint8_t)(myGUS.gRegData>>8);
@@ -1749,17 +1749,13 @@ extern void write_gus(Bitu port,Bitu val,Bitu iolen) {
         myGUS.timers[1].masked=(val & 0x20)>0;
         if (val & 0x1) {
             if (!myGUS.timers[0].running) {
-                /* TODO impelement IRQ
                 PIC_AddEvent(GUS_TimerEvent,myGUS.timers[0].delay,0);
-                */ 
                 myGUS.timers[0].running=true;
             }
         } else myGUS.timers[0].running=false;
         if (val & 0x2) {
             if (!myGUS.timers[1].running) {
-                /* TODO impelement IRQ
                 PIC_AddEvent(GUS_TimerEvent,myGUS.timers[1].delay,1);
-                */
                 myGUS.timers[1].running=true;
             }
         } else myGUS.timers[1].running=false;

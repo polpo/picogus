@@ -163,6 +163,9 @@ int main()
     gpio_init(LED_PIN);
     gpio_set_dir(LED_PIN, GPIO_OUT);
 
+    alarm_pool_init_default();
+    gpio_init(IRQ_PIN);
+    gpio_set_dir(IRQ_PIN, GPIO_OUT);
 
     puts("Starting ISA bus PIO...");
     PIO pio = pio0;

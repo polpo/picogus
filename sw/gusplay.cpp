@@ -96,7 +96,7 @@ void play_gus() {
             // todo hack overwriting const
             ((struct audio_format *) ap->format)->sample_freq = /*gus->*/playback_rate;
         }
-        gpio_xor_mask(1u << PICO_DEFAULT_LED_PIN);
+        // gpio_xor_mask(1u << PICO_DEFAULT_LED_PIN);
         give_audio_buffer(ap, buffer);
     }
 }

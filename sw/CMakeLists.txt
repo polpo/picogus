@@ -15,7 +15,7 @@ include(pico_extras_import.cmake)
 
 project(sw-pico C CXX ASM)
 
-set(CMAKE_BUILD_TYPE "Release")
+set(CMAKE_BUILD_TYPE "Debug")
 set(PICO_COPY_TO_RAM 1)
 #set(SKIP_PICO_MALLOC 1)
 
@@ -43,11 +43,11 @@ target_compile_definitions(sw-pico PRIVATE
 )
 
 if(PROJECT_TYPE STREQUAL "GUS")
-    target_sources(sw-pico PRIVATE gusplay.cpp gus-x.cpp)
+    target_sources(sw-pico PRIVATE gusplay.cpp gus-x.cpp pico_pic.cpp)
     target_compile_definitions(sw-pico PRIVATE
         SOUND_GUS=1
-        PSRAM=1
-        TEST_PSRAM=1
+        # PSRAM=1
+        # TEST_PSRAM=1
     )
     pico_generate_pio_header(sw-pico ${CMAKE_CURRENT_LIST_DIR}/psram_spi.pio)
 endif()
