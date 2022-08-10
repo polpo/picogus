@@ -6,6 +6,10 @@ ISA card emulation on the Raspberry Pi Pico's RP2040 microcontroller, and Raspbe
 
 This is a work in progress in the experimentation phase. It can emulate a GUS and produce sound but things are nowhere near perfect! Please see [the Wiki](https://github.com/polpo/pigus/wiki) for current status.
 
+See/hear it in action on YouTube:
+
+[![Watch the video](https://img.youtube.com/vi/rZopvkDTv08/default.jpg)](https://youtu.be/rZopvkDTv08)
+
 ## For Raspberry Pi Pico:
 
 ![picogus-prototype](https://user-images.githubusercontent.com/1544908/182006174-71a1792d-ac5b-4c2b-8e61-94a05a0ef55c.jpg)
