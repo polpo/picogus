@@ -8,7 +8,7 @@ This is a work in progress in the experimentation phase. It can emulate a GUS an
 
 See/hear it in action on YouTube:
 
-[![Watch the video](https://img.youtube.com/vi/rZopvkDTv08/default.jpg)](https://youtu.be/rZopvkDTv08)
+[![Watch the video](https://img.youtube.com/vi/rZopvkDTv08/hqdefault.jpg)](https://youtu.be/rZopvkDTv08)
 
 ## For Raspberry Pi Pico:
 
