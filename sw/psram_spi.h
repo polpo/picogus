@@ -3,7 +3,11 @@
 #include "hardware/pio.h"
 #include "hardware/gpio.h"
 #include "hardware/timer.h"
+#ifdef USE_SPINLOCK
 #include "hardware/sync.h"
+#else
+#include "pico/mutex.h"
+#endif
 #include "stdio.h"
 
 // SPI Defines
@@ -21,16 +25,24 @@ extern "C" {
 typedef struct pio_spi_inst {
     PIO pio;
     uint sm;
+#ifdef USE_SPINLOCK
     spin_lock_t* spinlock;
+#else
+    mutex_t mtx;
+#endif
 } pio_spi_inst_t;
 
 
-static __force_inline void __time_critical_func(pio_spi_write_read_blocking)(const pio_spi_inst_t* spi,
+static __force_inline void __time_critical_func(pio_spi_write_read_blocking)(pio_spi_inst_t* spi,
                                                        const uint8_t* src, const size_t src_len,
                                                        uint8_t* dst, const size_t dst_len) {
     size_t tx_remain = src_len, rx_remain = dst_len;
 
+#ifdef USE_SPINLOCK
     uint32_t irq_state = spin_lock_blocking(spi->spinlock);
+#else
+    mutex_enter_blocking(&spi->mtx); 
+#endif
     // Put bytes to write in X
     pio_sm_put_blocking(spi->pio, spi->sm, src_len * 8);
     // Put bytes to read in Y
@@ -51,7 +63,11 @@ static __force_inline void __time_critical_func(pio_spi_write_read_blocking)(con
             --rx_remain;
         }
     }
+#ifdef USE_SPINLOCK
     spin_unlock(spi->spinlock, irq_state);
+#else
+    mutex_exit(&spi->mtx);
+#endif
 }
 
 
@@ -68,8 +84,12 @@ __force_inline pio_spi_inst_t psram_init(void) {
     pio_spi_inst_t spi;
     spi.pio = pio1;
     spi.sm = spi_sm;
+#ifdef USE_SPINLOCK
     int spin_id = spin_lock_claim_unused(true);
     spi.spinlock = spin_lock_init(spin_id);
+#else
+    mutex_init(&spi.mtx);
+#endif
     printf("sm is %d\n", spi_sm);
 
     gpio_set_drive_strength(PIN_CS, GPIO_DRIVE_STRENGTH_2MA);

@@ -60,7 +60,7 @@ constexpr uint8_t ADLIB_CMD_DEFAULT = 85u;
 //constexpr int BUFFER_FRAMES = 48;
 constexpr int BUFFER_FRAMES = 1024;
 //constexpr uint32_t RAM_SIZE = 1024 * 1024;        // 1 MiB
-constexpr uint32_t RAM_SIZE = 1024 * 128;        // 1 MiB
+constexpr uint32_t RAM_SIZE = 1024 * 64;        // 1 MiB
 
 // DMA transfer size and rate constants
 constexpr uint32_t BYTES_PER_DMA_XFER = 8 * 1024;         // 8 KiB per transfer
@@ -86,8 +86,8 @@ constexpr uint8_t PAN_DEFAULT_POSITION = 7u;
 constexpr uint8_t PAN_POSITIONS = 16u;  // 0: -45-deg, 7: centre, 15: +45-deg
 
 // Timer delay constants
-constexpr double TIMER_1_DEFAULT_DELAY = 0.080;
-constexpr double TIMER_2_DEFAULT_DELAY = 0.320;
+constexpr uint32_t TIMER_1_DEFAULT_DELAY = 80;
+constexpr uint32_t TIMER_2_DEFAULT_DELAY = 320;
 
 // Volume scaling and dampening constants
 constexpr auto DELTA_DB = 0.002709201;     // 0.0235 dB increments
@@ -195,7 +195,7 @@ private:
 	uint8_t pan_position = PAN_DEFAULT_POSITION;
 };
 
-static void GUS_TimerEvent(uint32_t t, void* pParam);
+static void GUS_TimerEvent(Bitu t);
 /* static void GUS_DMA_Event(uint32_t val); */
 
 using voice_array_t = std::array<std::unique_ptr<Voice>, MAX_VOICES>;
@@ -229,7 +229,7 @@ public:
 	uint16_t ReadFromPort(io_port_t port, io_width_t width);
 
 	struct Timer {
-		double delay = 0.0;
+		uint32_t delay = 0;
 		uint8_t value = 0xff;
 		bool has_expired = true;
 		bool is_counting_down = false;

@@ -696,7 +696,7 @@ void DEBUG_PrintGUS() { //debugger "GUS" command
 
 static INLINE void GUS_CheckIRQ(void);
 
-static void GUS_TimerEvent(Bitu val);
+static uint32_t GUS_TimerEvent(Bitu val);
 
 /* TODO implement DMA
 static void GUS_DMA_Callback(DmaChannel * chan,DMAEvent event);
@@ -824,7 +824,7 @@ static void GUSReset(void) {
     GUS_CheckIRQ();
 }
 
-static uint8_t GUS_EffectiveIRQStatus(void) {
+__force_inline static uint8_t GUS_EffectiveIRQStatus(void) {
     uint8_t ret = 0;
 
     /* Behavior observed on real GUS hardware: Master IRQ enable bit 2 of the reset register affects only voice/wave
@@ -854,11 +854,11 @@ static INLINE void GUS_CheckIRQ(void) {
     if (myGUS.mixControl & 0x08/*Enable latches*/) {
         uint8_t irqstat = GUS_EffectiveIRQStatus();
 
-        if (irqstat != 0) {
+        if (irqstat != 0 /*&& gus_prev_effective_irqstat == 0*/) {
             /* The GUS fires an IRQ, then waits for the interrupt service routine to
              * clear all pending interrupt events before firing another one. if you
              * don't service all events, then you don't get another interrupt. */
-            // if (gus_prev_effective_irqstat == 0) {
+                // puts("activateirq");
                 PIC_ActivateIRQ(myGUS.irq1);
 
                 /* no fancy stuff
@@ -867,8 +867,8 @@ static INLINE void GUS_CheckIRQ(void) {
                         "GUS warning: Both IRQs set to the same signal line WITHOUT combining! "
                         "This is documented to cause bus conflicts on real hardware");
                 */ // no fancy stuff
-            // }
         } else if (gus_prev_effective_irqstat != 0) {
+            // puts("deactivateirq");
             PIC_DeActivateIRQ(myGUS.irq1);
         }
 
@@ -894,7 +894,7 @@ static void CheckVoiceIrq(void) {
     }
 }
 
-static uint16_t ExecuteReadRegister(void) {
+__force_inline static uint16_t ExecuteReadRegister(void) {
     uint8_t tmpreg;
 //  LOG_MSG("Read global reg %x",myGUS.gRegSelect);
     switch (myGUS.gRegSelect) {
@@ -984,18 +984,21 @@ static uint16_t ExecuteReadRegister(void) {
     }
 }
 
-static void GUS_TimerEvent(Bitu val) {
+static uint32_t GUS_TimerEvent(Bitu val) {
     if (!myGUS.timers[val].masked) myGUS.timers[val].reached=true;
     if (myGUS.timers[val].raiseirq) {
         myGUS.IRQStatus|=0x4 << val;
         GUS_CheckIRQ();
     }
-    if (myGUS.timers[val].running) 
-        PIC_AddEvent(GUS_TimerEvent,myGUS.timers[val].delay,val);
+    if (myGUS.timers[val].running) {
+        return myGUS.timers[val].delay;  // Keep timer running
+        // PIC_AddEvent(GUS_TimerEvent,myGUS.timers[val].delay,val);
+    }
+    return 0;  // Stop timer
 }
 
  
-static void ExecuteGlobRegister(void) {
+__force_inline static void ExecuteGlobRegister(void) {
     int i;
 //  if (myGUS.gRegSelect|1!=0x44) LOG_MSG("write global register %x with %x", myGUS.gRegSelect, myGUS.gRegData);
     switch(myGUS.gRegSelect) {
@@ -1570,7 +1573,7 @@ static void write_gus_cs4231(Bitu port,Bitu val,Bitu iolen) {
 }
 #endif // 0 // no fancy stuff
 
-extern Bitu read_gus(Bitu port,Bitu iolen) {
+__force_inline Bitu read_gus(Bitu port,Bitu iolen) {
     uint16_t reg16;
 
     (void)iolen;//UNUSED
@@ -1583,11 +1586,13 @@ extern Bitu read_gus(Bitu port,Bitu iolen) {
 
     /* Except for port 3x4 subdivide 16-bit I/O into two 8-bit reads.
      * See write_gus() for explanation. */
+    /*
     if (iolen == 2) {
         if ((port - GUS_BASE) != 0x304) {
             return (read_gus(port,1) & 0xFF) + (read_gus(port+1,1) << 8u);
         }
     }
+    */
 
     switch(port - GUS_BASE) {
     case 0x206:
@@ -1647,11 +1652,11 @@ extern Bitu read_gus(Bitu port,Bitu iolen) {
     case 0x303:
         return myGUS.gRegSelectData;
     case 0x304:
-        if (iolen==2) reg16 = ExecuteReadRegister() & 0xffff;
-        else reg16 = ExecuteReadRegister() & 0xff;
+        /*if (iolen==2) reg16 = ExecuteReadRegister() & 0xffff;
+        else*/ reg16 = ExecuteReadRegister() & 0xff;
 
-        if (gus_type < GUS_INTERWAVE) // Versions prior to the Interwave will reflect last I/O to 3X2-3X5 when read back from 3X3
-            myGUS.gRegSelectData = reg16 & 0xFF;
+        //if (gus_type < GUS_INTERWAVE) // Versions prior to the Interwave will reflect last I/O to 3X2-3X5 when read back from 3X3
+            myGUS.gRegSelectData = reg16/* & 0xFF*/;
 
         return reg16;
     case 0x305:
@@ -1693,7 +1698,7 @@ extern Bitu read_gus(Bitu port,Bitu iolen) {
 }
 
 
-extern void write_gus(Bitu port,Bitu val,Bitu iolen) {
+__force_inline void write_gus(Bitu port,Bitu val,Bitu iolen) {
 //  LOG_MSG("Write gus port %x val %x",port,val);
 
     /* 12-bit ISA decode (FIXME: Check GUS MAX ISA card to confirm)
@@ -1721,6 +1726,7 @@ extern void write_gus(Bitu port,Bitu val,Bitu iolen) {
      * port 3x4 (gRegData and execute register).
      *
      * Demo link: [https://files.scene.org/get/mirrors/hornet/demos/1997/a/atl-mnsn.zip] */
+    /*
     if (iolen == 2) {
         if ((port - GUS_BASE) != 0x304) {
             write_gus(port,  val&0xFF,1);
@@ -1728,6 +1734,7 @@ extern void write_gus(Bitu port,Bitu val,Bitu iolen) {
             return;
         }
     }
+    */
 
     switch(port - GUS_BASE) {
     case 0x200:
@@ -1894,18 +1901,18 @@ extern void write_gus(Bitu port,Bitu val,Bitu iolen) {
         myGUS.gRegData = 0;
         break;
     case 0x304:
-        if (iolen==2) {
+        /*if (iolen==2) {
             if (gus_type < GUS_INTERWAVE) // Versions prior to the Interwave will reflect last I/O to 3X2-3X5 when read back from 3X3
                 myGUS.gRegSelectData = val & 0xFF;
 
             myGUS.gRegData=(uint16_t)val;
             ExecuteGlobRegister();
-        } else {
-            if (gus_type < GUS_INTERWAVE) // Versions prior to the Interwave will reflect last I/O to 3X2-3X5 when read back from 3X3
+        } else {*/
+            // if (gus_type < GUS_INTERWAVE) // Versions prior to the Interwave will reflect last I/O to 3X2-3X5 when read back from 3X3
                 myGUS.gRegSelectData = val;
 
             myGUS.gRegData = (uint16_t)val;
-        }
+        // }
         break;
     case 0x305:
         if (gus_type < GUS_INTERWAVE) // Versions prior to the Interwave will reflect last I/O to 3X2-3X5 when read back from 3X3
@@ -2510,7 +2517,7 @@ public:
         if ((myGUS.memsize&((256u << 10u) - 1u)) != 0)
             LOG(LOG_MISC,LOG_WARN)("GUS emulation warning: %uKB onboard is an unusual value. Usually GUS cards have some multiple of 256KB RAM onboard",myGUS.memsize>>10);
 #endif // 0 // dbx-specific
-       myGUS.memsize = GUS_RAM_SIZE;
+        myGUS.memsize = GUS_RAM_SIZE;
 
         LOG_MSG("GUS emulation: %uKB onboard",myGUS.memsize>>10);
 

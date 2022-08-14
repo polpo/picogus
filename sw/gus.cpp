@@ -44,9 +44,11 @@
 #include "soft_limiter.h"
 #include "string_utils.h"
 */
+#include "pico_pic.h"
 
 #include "gus.h"
 
+extern Gus* gus;
 
 Voice::Voice(uint8_t num, VoiceIrq &irq) noexcept
         : vol_ctrl{irq.vol_state},
@@ -471,9 +473,11 @@ void Gus::CheckIrq()
 	if (should_interrupt && lines_enabled) {
             /* if (prev_interrupt == 0) { */
                 //(*irq_callback)(1, irq_param);
+                PIC_ActivateIRQ(0);
             /* } */
         } else if (prev_interrupt) {
             //(*irq_callback)(0, irq_param);
+            PIC_DeActivateIRQ(0);
         }
         prev_interrupt = should_interrupt;
 }
@@ -957,16 +961,18 @@ void Gus::StopPlayback()
 	selected_register = 0u;
 	should_change_irq_dma = false;
 	//m_GusTimer.RemoveEvents(GUS_TimerEvent);
+	PIC_RemoveEvents(GUS_TimerEvent);
 	is_running = false;
 }
 
-static void GUS_TimerEvent(uint32_t t, void* pParam)
+static void GUS_TimerEvent(Bitu t)
 {
 
-	Gus* gus = static_cast<Gus*>(pParam);
+	// Gus* gus = static_cast<Gus*>(pParam);
 	if (gus->CheckTimer(t)) {
 		const auto &timer = t == 0 ? gus->timer_one : gus->timer_two;
 		//gus->m_GusTimer.AddEvent(GUS_TimerEvent, timer.delay, t, gus);
+		PIC_AddEvent(GUS_TimerEvent, timer.delay, t);
 	}
 }
 
@@ -1020,12 +1026,14 @@ void Gus::WriteToPort(io_port_t port, io_val_t value, io_width_t width)
 		if (val & 0x1) {
 			if (!timer_one.is_counting_down) {
 				//m_GusTimer.AddEvent(GUS_TimerEvent, timer_one.delay, 0, this);
+                            PIC_AddEvent(GUS_TimerEvent,timer_one.delay,0);
 				timer_one.is_counting_down = true;
 			}
 		} else
 			timer_one.is_counting_down = false;
 		if (val & 0x2) {
 			if (!timer_two.is_counting_down) {
+                            PIC_AddEvent(GUS_TimerEvent,timer_two.delay,1);
 				//m_GusTimer.AddEvent(GUS_TimerEvent, timer_two.delay, 1, this);
 				timer_two.is_counting_down = true;
 			}

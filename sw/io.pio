@@ -17,8 +17,8 @@ restart:
     wait 0 gpio IOW_PIN
     ; Read address
     in pins, 10
-    ; Set muxes to data. Wait 16 cycles for mux to switch
-    set pins, 0b11 [16]
+    ; Set muxes to data. Wait 8 cycles for mux to switch
+    set pins, 0b11 [8]
     ; Read data
     in pins, 8
     ; irq 0 rel

@@ -2,7 +2,7 @@
 
 #include "pico/platform.h"
 
-#define MIXER_BUFSIZE 1024u
+#define MIXER_BUFSIZE 256u
 
 typedef uintptr_t	Bitu;
 
@@ -14,5 +14,10 @@ static INLINE uint16_t host_readw(ConstHostPt off) {
     return __builtin_bswap16(*(uint16_t *)off);
 }
 
+#ifdef DEBUG
 #define LOG_MSG(msg, ...) printf(msg "\n", ##__VA_ARGS__);
 #define DEBUG_LOG_MSG(msg, ...) printf(msg "\n", ##__VA_ARGS__);
+#else
+#define LOG_MSG(...) (void)0
+#define DEBUG_LOG_MSG(...) (void)0
+#endif

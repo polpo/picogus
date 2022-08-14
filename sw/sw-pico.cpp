@@ -3,6 +3,9 @@
 #include "pico/multicore.h"
 #include "hardware/pio.h"
 #include "hardware/irq.h"
+// #include "hardware/vreg.h"
+#include "hardware/regs/vreg_and_chip_reset.h"
+
 
 // #include "stdio_async_uart.h"
 /*
@@ -32,13 +35,16 @@ extern "C" void OPL_Pico_PortWrite(opl_port_t, unsigned int);
 #endif
 
 #ifdef SOUND_GUS
-// #include "gus.h"
-#include "gus-x.h"
+#ifdef DOSBOX_STAGING
+#include "gus.h"
+Gus* gus;
+#else
+#include "gus-x.cpp"
+#endif
 
 constexpr uint16_t GUS_PORT = 0x240u;
 constexpr uint16_t GUS_PORT_TEST = GUS_PORT >> 4 | 0x10;
 void play_gus(void);
-// Gus *gus;
 #endif
 
 constexpr uint LED_PIN = PICO_DEFAULT_LED_PIN;
@@ -52,7 +58,7 @@ uint16_t port;
 uint32_t value;
 
 
-inline void handle_iow(void) {
+__force_inline void handle_iow(void) {
     iow_read = pio_sm_get_blocking(pio0, iow_sm); //>> 16;
     // printf("IOW: %x\n", iow_read);
     port = (iow_read >> 8) & 0x3FF;
@@ -61,8 +67,11 @@ inline void handle_iow(void) {
         pio_sm_put(pio0, iow_sm, 0xffffffffu);
         value = iow_read & 0xFF;
         // uint32_t write_begin = time_us_32();
-        // gus->WriteToPort(port, value, io_width_t::byte); // 3x4 supports 16-bit transfers but PiGUS doesn't! force byte
+#ifdef DOSBOX_STAGING
+        gus->WriteToPort(port, value, io_width_t::byte); // 3x4 supports 16-bit transfers but PiGUS doesn't! force byte
+#else                                                         
         write_gus(port, value, 1 /* always an 8 bit write */);
+#endif
         // uint32_t write_elapsed = time_us_32() - write_begin;
         // if (write_elapsed > 1) {
         //     printf("long write to port %x, (sel reg %x), took %d us\n", port, gus->selected_register, write_elapsed);
@@ -98,7 +107,7 @@ inline void handle_iow(void) {
 #endif // SOUND_OPL
 }
 
-inline void handle_ior(void) {
+__force_inline void handle_ior(void) {
     ior_read = pio_sm_get_blocking(pio0, ior_sm); //>> 16;
     port = ior_read & 0x3FF;
     // printf("IOR: %x\n", port);
@@ -109,8 +118,11 @@ inline void handle_ior(void) {
         if (port == 0x242) {
             value = 0xdd;
         } else {
-            //value = gus->ReadFromPort(port, io_width_t::byte);
+#ifdef DOSBOX_STAGING
+            value = gus->ReadFromPort(port, io_width_t::byte);
+#else 
             value = read_gus(port, 1);
+#endif
         }
         // OR with 0x00ffff00 is required to set pindirs in the PIO
         pio_sm_put(pio0, ior_sm, 0x00ffff00u | value);
@@ -147,6 +159,10 @@ void err_blink(void) {
     }
 }
 
+#ifndef USE_ALARM
+#include "pico_pic.h"
+#endif
+
 int main()
 {
     // Overclock!
@@ -154,11 +170,21 @@ int main()
     // Use hacked set_sys_clock_khz to keep SPI clock high - see clock_pll.h for details
     // gset_sys_clock_khz(266000, true);
     set_sys_clock_khz(270000, true);
+    // vreg_set_voltage(VREG_VOLTAGE_1_20);
 
     stdio_init_all();
     // stdio_async_uart_init_full(UART_ID, BAUD_RATE, UART_TX_PIN, UART_RX_PIN);
 
     puts("PicoGUS booting!");
+
+    io_rw_32 *reset_reason = (io_rw_32 *) (VREG_AND_CHIP_RESET_BASE + VREG_AND_CHIP_RESET_CHIP_RESET_OFFSET);
+    if (*reset_reason & VREG_AND_CHIP_RESET_CHIP_RESET_HAD_POR_BITS) {
+        puts("I was reset due to power on reset or brownout detection.");
+    } else if (*reset_reason & VREG_AND_CHIP_RESET_CHIP_RESET_HAD_RUN_BITS) {
+        puts("I was reset due to the RUN pin (either manually or due to ISA RESET signal)");
+    } else if(*reset_reason & VREG_AND_CHIP_RESET_CHIP_RESET_HAD_POR_BITS) {
+        puts("I was reset due the debug port");
+    }
 
     gpio_init(LED_PIN);
     gpio_set_dir(LED_PIN, GPIO_OUT);
@@ -263,8 +289,11 @@ int main()
 
 #ifdef SOUND_GUS
     puts("Creating GUS");
-    // gus = new Gus(GUS_PORT, nullptr, nullptr);
+#ifdef DOSBOX_STAGING
+    gus = new Gus(GUS_PORT, nullptr, nullptr);
+#else
     GUS_OnReset();
+#endif
     multicore_launch_core1(&play_gus);
 #endif
 
@@ -285,6 +314,10 @@ int main()
 
     gpio_xor_mask(1u << LED_PIN);
 
+#ifndef USE_ALARM
+    PIC_Init();
+#endif
+
     for (;;) {
 #ifndef USE_IRQ
         if (!pio_sm_is_rx_fifo_empty(pio, iow_sm)) {
@@ -297,6 +330,8 @@ int main()
             // gpio_xor_mask(1u << LED_PIN);
         }
 #endif
+#ifndef USE_ALARM
+        PIC_HandleEvents();
+#endif
     }
-    for(;;) {}
 }

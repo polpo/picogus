@@ -11,32 +11,44 @@ PIC_TimerEvent timerEvents[3];
 
 int64_t PIC_HandleEvent(alarm_id_t id, void *user_data) {
     PIC_TimerEvent* event = (PIC_TimerEvent *)user_data;
-    // printf("event fired: %x %x\n", event->handler, event->value);
-    (event->handler)(event->value);
-    event->handler = nullptr;
-    event->value = 0;
-    event->alarm_id = 0;
-    gpio_put(PICO_DEFAULT_LED_PIN, 0);
+    uint32_t ret = (event->handler)(event->value);
+    // PIC_DeActivateIRQ(0);
+    // printf("called event handler: %x %x, ret %d\n", event->handler, event->value, ret);
+#ifdef USE_ALARM
+    // gpio_xor_mask(1u << PICO_DEFAULT_LED_PIN);
+    return -(int32_t)ret;
+#else
+    if (ret) {
+        event->deadline = time_us_32() + ret;
+    } else {
+        event->active = false;
+    }
     return 0;
-}
-
-void PIC_AddEvent(PIC_EventHandler handler, uint32_t delay, Bitu val) {
-    // printf("add event: %x %x %d\n", handler, val, delay);
-    timerEvents[val].handler = handler;
-    timerEvents[val].value = val;
-    timerEvents[val].alarm_id = add_alarm_in_us(delay, PIC_HandleEvent, &timerEvents[val], true);
-    gpio_put(PICO_DEFAULT_LED_PIN, 1);
+#endif
 }
 
 void PIC_RemoveEvents(PIC_EventHandler handler) {
+    // puts("removeevents");
     for (int i = 0; i < 3; ++i) {
         if (timerEvents[i].handler == handler) {
-            timerEvents[i].handler = nullptr;
-            timerEvents[i].value = 0;
+#ifdef USE_ALARM
             if (timerEvents[i].alarm_id) {
                 cancel_alarm(timerEvents[i].alarm_id);
                 timerEvents[i].alarm_id = 0;
             }
+#else
+            timerEvents[i].active = false;
+#endif
         }
     }
+}
+
+void PIC_Init() {
+#ifndef USE_ALARM
+    for (int i = 0; i < 3; ++i) {
+        timerEvents[i].active = false;
+        timerEvents[i].deadline = UINT32_MAX;
+        timerEvents[i].handler = nullptr;
+    }
+#endif
 }
