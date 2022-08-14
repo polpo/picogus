@@ -314,9 +314,9 @@ int main()
 
     gpio_xor_mask(1u << LED_PIN);
 
-#ifndef USE_ALARM
+    /*
     PIC_Init();
-#endif
+    */
 
     for (;;) {
 #ifndef USE_IRQ

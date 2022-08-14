@@ -14,8 +14,11 @@
 #endif
 
 #include "pico/stdlib.h"
-
 #include "pico/audio_i2s.h"
+
+#ifdef USE_ALARM
+#include "pico_pic.h"
+#endif
 
 #if PICO_ON_DEVICE
 #include "pico/binary_info.h"
@@ -75,6 +78,11 @@ void play_gus() {
     puts("starting core 1");
     uint32_t start, end;
 
+#ifdef USE_ALARM
+    // Init PIC on this core so it handles timers
+    PIC_Init();
+#endif
+
     struct audio_buffer_pool *ap = init_audio();
     for (;;) {
 #ifdef DOSBOX_STAGING
@@ -88,14 +96,15 @@ void play_gus() {
         /* gus->dothangs; */
         int16_t *samples = (int16_t *) buffer->buffer->bytes;
 
-        uint32_t gus_audio_begin = time_us_32();
+        // uint32_t gus_audio_begin = time_us_32();
 #ifdef DOSBOX_STAGING
         gus->AudioCallback(buffer->max_sample_count, samples);
 #else
         GUS_CallBack(buffer->max_sample_count, samples);
 #endif
+        /*
         uint32_t gus_audio_elapsed = time_us_32() - gus_audio_begin;
-        if (/*gus->*/active_voices) {
+        if (active_voices) {
             // printf("%d\n", gus->active_voices);
             // printf("%d us %d samples (tgt 23220)\n", gus_audio_elapsed, buffer->max_sample_count);
             // uart_print_hex_u32(gus_audio_elapsed);
@@ -103,12 +112,13 @@ void play_gus() {
                 gpio_xor_mask(1u << PICO_DEFAULT_LED_PIN);
             }
         }
+        */
         buffer->sample_count = buffer->max_sample_count;
         // if GUS sample rate changed
-        if (/*gus->*/active_voices && (ap->format->sample_freq != /*gus->*/playback_rate)) {
-            printf("changing sample rate to %d", /*gus->*/playback_rate);
+        if (active_voices && (ap->format->sample_freq != playback_rate)) {
+            printf("changing sample rate to %d", playback_rate);
             // todo hack overwriting const
-            ((struct audio_format *) ap->format)->sample_freq = /*gus->*/playback_rate;
+            ((struct audio_format *) ap->format)->sample_freq = playback_rate;
         }
         // gpio_xor_mask(1u << PICO_DEFAULT_LED_PIN);
         give_audio_buffer(ap, buffer);

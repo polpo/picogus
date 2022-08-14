@@ -341,7 +341,7 @@ class GUSChannels {
             }
         }
 
-        void WriteWaveFreq(uint16_t val) {
+        __force_inline void WriteWaveFreq(uint16_t val) {
             WaveFreq = val;
             if (myGUS.fixed_sample_rate_output) {
                 double frameadd = double(val >> 1)/512.0;       //Samples / original gus frame
@@ -352,7 +352,7 @@ class GUSChannels {
                 WaveAdd = ((uint32_t)(val >> 1)) << ((uint32_t)(WAVE_FRACT-9));
             }
         }
-        void WriteWaveCtrl(uint8_t val) {
+        __force_inline void WriteWaveCtrl(uint8_t val) {
             uint32_t oldirq=myGUS.WaveIRQ;
             WaveCtrl = val & 0x7f;
 
@@ -1662,7 +1662,7 @@ __force_inline Bitu read_gus(Bitu port,Bitu iolen) {
     case 0x305:
         reg16 = ExecuteReadRegister() >> 8;
 
-        if (gus_type < GUS_INTERWAVE) // Versions prior to the Interwave will reflect last I/O to 3X2-3X5 when read back from 3X3
+        // if (gus_type < GUS_INTERWAVE) // Versions prior to the Interwave will reflect last I/O to 3X2-3X5 when read back from 3X3
             myGUS.gRegSelectData = reg16 & 0xFF;
 
         return reg16;
@@ -1891,7 +1891,7 @@ __force_inline void write_gus(Bitu port,Bitu val,Bitu iolen) {
         break;
     case 0x302:
         myGUS.gCurChannel = val & 31;
-        if (gus_type < GUS_INTERWAVE) // Versions prior to the Interwave will reflect last I/O to 3X2-3X5 when read back from 3X3
+        // if (gus_type < GUS_INTERWAVE) // Versions prior to the Interwave will reflect last I/O to 3X2-3X5 when read back from 3X3
             myGUS.gRegSelectData = (uint8_t)val;
 
         curchan = guschan[myGUS.gCurChannel];
@@ -1915,7 +1915,7 @@ __force_inline void write_gus(Bitu port,Bitu val,Bitu iolen) {
         // }
         break;
     case 0x305:
-        if (gus_type < GUS_INTERWAVE) // Versions prior to the Interwave will reflect last I/O to 3X2-3X5 when read back from 3X3
+        // if (gus_type < GUS_INTERWAVE) // Versions prior to the Interwave will reflect last I/O to 3X2-3X5 when read back from 3X3
             myGUS.gRegSelectData = val;
 
         myGUS.gRegData = (uint16_t)((0x00ff & myGUS.gRegData) | val << 8);

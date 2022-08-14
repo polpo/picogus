@@ -28,6 +28,8 @@ struct PIC_TimerEvent {
 
 extern PIC_TimerEvent timerEvents[3];
 
+extern alarm_pool_t* alarm_pool;
+
 int64_t PIC_HandleEvent(alarm_id_t id, void *user_data);
 
 __force_inline void PIC_ActivateIRQ(Bitu irq) {
@@ -46,7 +48,8 @@ __force_inline void PIC_AddEvent(PIC_EventHandler handler, uint32_t delay, Bitu 
     timerEvents[val].handler = handler;
     timerEvents[val].value = val;
 #ifdef USE_ALARM
-    timerEvents[val].alarm_id = add_alarm_in_us(delay, PIC_HandleEvent, timerEvents + val, true);
+    // timerEvents[val].alarm_id = add_alarm_in_us(delay, PIC_HandleEvent, timerEvents + val, true);
+    timerEvents[val].alarm_id = alarm_pool_add_alarm_in_us(alarm_pool, delay, PIC_HandleEvent, timerEvents + val, true);
 #else
     timerEvents[val].deadline = time_us_32() + delay;
     timerEvents[val].active = true;
@@ -56,9 +59,9 @@ __force_inline void PIC_AddEvent(PIC_EventHandler handler, uint32_t delay, Bitu 
 
 void PIC_RemoveEvents(PIC_EventHandler handler);
 
-#ifndef USE_ALARM
 void PIC_Init(void);
 
+#ifndef USE_ALARM
 __force_inline void PIC_HandleEvents() {
     for (int i = 0; i < 3; ++i) {
         if (timerEvents[i].active && timerEvents[i].deadline <= time_us_32()) {

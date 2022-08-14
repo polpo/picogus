@@ -50,7 +50,7 @@ if(PROJECT_TYPE STREQUAL "GUS")
         PSRAM=1
         TEST_PSRAM=1
         USE_ALARM=1
-        # USE_SPINLOCK=1
+        USE_SPINLOCK=1
     )
     pico_generate_pio_header(sw-pico ${CMAKE_CURRENT_LIST_DIR}/psram_spi.pio)
 endif()
