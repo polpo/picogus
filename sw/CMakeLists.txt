@@ -48,7 +48,7 @@ if(PROJECT_TYPE STREQUAL "GUS")
     target_compile_definitions(sw-pico PRIVATE
         SOUND_GUS=1
         PSRAM=1
-        TEST_PSRAM=1
+        # TEST_PSRAM=1
         USE_ALARM=1
         USE_SPINLOCK=1
     )

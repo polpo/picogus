@@ -86,12 +86,18 @@ void play_gus() {
     struct audio_buffer_pool *ap = init_audio();
     for (;;) {
 #ifdef DOSBOX_STAGING
-        uint8_t active_voices = gus->active_voices;
+        // uint8_t active_voices = gus->active_voices;
         uint32_t playback_rate = gus->playback_rate;
 #else
-        uint8_t active_voices = GUS_activeChannels();
+        // uint8_t active_voices = GUS_activeChannels();
         uint32_t playback_rate = GUS_basefreq();
 #endif
+        // if GUS sample rate changed
+        if (ap->format->sample_freq != playback_rate) {
+            // printf("changing sample rate to %d", playback_rate);
+            // todo hack overwriting const
+            ((struct audio_format *) ap->format)->sample_freq = playback_rate;
+        }
         struct audio_buffer *buffer = take_audio_buffer(ap, true);
         /* gus->dothangs; */
         int16_t *samples = (int16_t *) buffer->buffer->bytes;
@@ -114,12 +120,6 @@ void play_gus() {
         }
         */
         buffer->sample_count = buffer->max_sample_count;
-        // if GUS sample rate changed
-        if (active_voices && (ap->format->sample_freq != playback_rate)) {
-            printf("changing sample rate to %d", playback_rate);
-            // todo hack overwriting const
-            ((struct audio_format *) ap->format)->sample_freq = playback_rate;
-        }
         // gpio_xor_mask(1u << PICO_DEFAULT_LED_PIN);
         give_audio_buffer(ap, buffer);
     }

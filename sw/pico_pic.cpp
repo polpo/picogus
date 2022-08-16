@@ -13,6 +13,11 @@ alarm_pool_t* alarm_pool;
 
 int64_t PIC_HandleEvent(alarm_id_t id, void *user_data) {
     PIC_TimerEvent* event = (PIC_TimerEvent *)user_data;
+#ifdef USE_ALARM
+    if (id != event->alarm_id) {
+        return 0;
+    }
+#endif
     uint32_t ret = (event->handler)(event->value);
     // printf("called event handler: %x %x, ret %d\n", event->handler, event->value, ret);
 #ifdef USE_ALARM
@@ -48,7 +53,7 @@ void PIC_RemoveEvents(PIC_EventHandler handler) {
 
 void PIC_Init() {
 #ifdef USE_ALARM
-    alarm_pool = alarm_pool_create(2, 10);
+    alarm_pool = alarm_pool_create(2, PICO_TIME_DEFAULT_ALARM_POOL_MAX_TIMERS);
 #else
     for (int i = 0; i < 3; ++i) {
         timerEvents[i].active = false;

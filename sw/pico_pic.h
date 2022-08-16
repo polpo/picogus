@@ -49,6 +49,7 @@ __force_inline void PIC_AddEvent(PIC_EventHandler handler, uint32_t delay, Bitu 
     timerEvents[val].value = val;
 #ifdef USE_ALARM
     // timerEvents[val].alarm_id = add_alarm_in_us(delay, PIC_HandleEvent, timerEvents + val, true);
+    // alarm_pool_cancel_alarm(alarm_pool, timerEvents[val].alarm_id);
     timerEvents[val].alarm_id = alarm_pool_add_alarm_in_us(alarm_pool, delay, PIC_HandleEvent, timerEvents + val, true);
 #else
     timerEvents[val].deadline = time_us_32() + delay;

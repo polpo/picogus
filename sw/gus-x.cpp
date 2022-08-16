@@ -92,6 +92,41 @@ enum GUSType {
 static uint16_t const pantablePDF[16] = { 0, 13, 26, 41, 57, 72, 94, 116, 141, 169, 203, 244, 297, 372, 500, 4095 };
 static bool gus_fixed_table = false;
 
+static uint16_t const sample_rates[32] = {
+    44100,
+    44100,
+    44100,
+    44100,
+    44100,
+    44100,
+    44100,
+    44100,
+    44100,
+    44100,
+    44100,
+    44100,
+    44100,
+    44100,
+    41160,
+    38587,
+    36317,
+    34300,
+    32494,
+    30870,
+    29400,
+    28063,
+    26843,
+    25725,
+    24696,
+    23746,
+    22866,
+    22050,
+    21289,
+    20580,
+    19916,
+    19293,
+};
+
 uint8_t adlib_commandreg;
 // static MixerChannel * gus_chan;
 static uint8_t const irqtable[8] = { 0/*invalid*/, 2, 5, 3, 7, 11, 12, 15 };
@@ -367,20 +402,20 @@ class GUSChannels {
             if (myGUS.WaveIRQ & irqmask) ret|=0x80;
             return ret;
         }
-        void UpdateWaveRamp(void) { 
+        __force_inline void UpdateWaveRamp(void) { 
             WriteWaveFreq(WaveFreq);
             WriteRampRate(RampRate);
         }
-        void WritePanPot(uint8_t val) {
+        __force_inline void WritePanPot(uint8_t val) {
             PanPot = val;
             PanLeft = pantable[val & 0xf];
             PanRight = pantable[0x0f-(val & 0xf)];
             UpdateVolumes();
         }
-        uint8_t ReadPanPot(void) {
+        __force_inline uint8_t ReadPanPot(void) {
             return PanPot;
         }
-        void WriteRampCtrl(uint8_t val) {
+        __force_inline void WriteRampCtrl(uint8_t val) {
             uint32_t old=myGUS.RampIRQ;
             RampCtrl = val & 0x7f;
             //Manually set the irq
@@ -396,7 +431,7 @@ class GUSChannels {
             if (myGUS.RampIRQ & irqmask) ret|=0x80;
             return ret;
         }
-        void WriteRampRate(uint8_t val) {
+        __force_inline void WriteRampRate(uint8_t val) {
             RampRate = val;
             if (myGUS.fixed_sample_rate_output) {
                 double frameadd = (double)(RampRate & 63)/(double)(1 << (3*(val >> 6)));
@@ -531,7 +566,7 @@ class GUSChannels {
             UpdateVolumes();
         }
 
-        void generateSamples(int32_t* stream, uint32_t len) {
+        __force_inline void generateSamples(int32_t* stream, uint32_t len) {
             int32_t tmpsamp;
             int i;
 
@@ -773,7 +808,8 @@ static void GUSReset(void) {
         myGUS.ActiveChannels = 14;
         myGUS.ActiveChannelsUser = 14;
         myGUS.ActiveMask=0xffffffffU >> (32-myGUS.ActiveChannels);
-        myGUS.basefreq = (uint32_t)(1000000.0/(1.619695497*(float)(myGUS.ActiveChannels)));
+        // myGUS.basefreq = (uint32_t)(1000000.0/(1.619695497*(float)(myGUS.ActiveChannels)));
+        myGUS.basefreq = sample_rates[myGUS.ActiveChannels - 1];
 
         /* TODO dbx
         gus_chan->FillUp();
@@ -876,7 +912,7 @@ static INLINE void GUS_CheckIRQ(void) {
     }
 }
 
-static void CheckVoiceIrq(void) {
+__force_inline static void CheckVoiceIrq(void) {
     Bitu totalmask=(myGUS.RampIRQ|myGUS.WaveIRQ) & myGUS.ActiveMask;
     if (!totalmask) {
         GUS_CheckIRQ();
@@ -1138,7 +1174,8 @@ __force_inline static void ExecuteGlobRegister(void) {
         */
 
         myGUS.ActiveMask=0xffffffffU >> (32-myGUS.ActiveChannels);
-        myGUS.basefreq = (uint32_t)(1000000.0/(1.619695497*(float)(myGUS.ActiveChannels)));
+        // myGUS.basefreq = (uint32_t)(1000000.0/(1.619695497*(float)(myGUS.ActiveChannels)));
+        myGUS.basefreq = sample_rates[myGUS.ActiveChannels - 1];
 
 #if 0 // dbx specific
         if (!myGUS.fixed_sample_rate_output)    gus_chan->SetFreq(myGUS.basefreq);
@@ -1177,7 +1214,9 @@ __force_inline static void ExecuteGlobRegister(void) {
         if (!myGUS.timers[0].raiseirq) myGUS.IRQStatus&=~0x04;
         myGUS.timers[1].raiseirq=(myGUS.TimerControl & 0x08)>0;
         if (!myGUS.timers[1].raiseirq) myGUS.IRQStatus&=~0x08;
-        GUS_CheckIRQ();
+        // if (!myGUS.timers[0].raiseirq && !myGUS.timers[1].raiseirq) {
+            GUS_CheckIRQ();
+        // }
         break;
     case 0x46:  // Timer 1 control
         myGUS.timers[0].value = (uint8_t)(myGUS.gRegData>>8);
@@ -2517,6 +2556,7 @@ public:
         if ((myGUS.memsize&((256u << 10u) - 1u)) != 0)
             LOG(LOG_MISC,LOG_WARN)("GUS emulation warning: %uKB onboard is an unusual value. Usually GUS cards have some multiple of 256KB RAM onboard",myGUS.memsize>>10);
 #endif // 0 // dbx-specific
+        myGUS.rate=44100;
         myGUS.memsize = GUS_RAM_SIZE;
 
         LOG_MSG("GUS emulation: %uKB onboard",myGUS.memsize>>10);
