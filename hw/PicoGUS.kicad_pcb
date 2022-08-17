@@ -935,7 +935,7 @@
       (net 86 "Net-(J5-PadT)") (pintype "passive") (tstamp 6d2ff9c5-e08c-4fe1-bf1c-e61b71111c89))
     (pad "TN" thru_hole oval (at 0 11.6 270) (size 2.8 1.8) (drill oval 2 1) (layers *.Cu *.Mask)
       (net 87 "unconnected-(J5-PadTN)") (pintype "passive+no_connect") (tstamp 03c45cd0-ee93-4ff4-8590-7c0777f3d335))
-    (model "/Users/ian/Downloads/CUI_DEVICES_SJ1-3535NG-BE.step"
+    (model "${KIPRJMOD}/parts/CUI_DEVICES_SJ1-3535NG-BE.step"
       (offset (xyz 0.9 5.2 7.01))
       (scale (xyz 1 1 1))
       (rotate (xyz 180 0 -90))
@@ -1508,7 +1508,7 @@
       (net 101 "unconnected-(U1-Pad43)") (pinfunction "SWDIO") (pintype "bidirectional+no_connect") (tstamp 0cf858ab-df03-4dc4-b759-a22cca1a07ae))
     (pad "43" thru_hole oval (at 2.54 23.9) (size 1.7 1.7) (drill 1.02) (layers *.Cu *.Mask)
       (net 101 "unconnected-(U1-Pad43)") (pinfunction "SWDIO") (pintype "bidirectional+no_connect") (tstamp 63b24e35-baa0-4dc0-8bb7-9899a78c2969))
-    (model "/Users/ian/Downloads/KiCad-RP-Pico-main/RP-Pico Libraries/Pico.wrl"
+    (model "${KIPRJMOD}/parts/Pico.wrl"
       (offset (xyz 0 0 0))
       (scale (xyz 1 1 1))
       (rotate (xyz 0 0 0))
@@ -1906,7 +1906,7 @@
     (fp_circle (center 0 0) (end 3.45 0) (layer "F.CrtYd") (width 0.05) (fill none) (tstamp b8d0a201-76f7-407a-a103-ab48892a15a4))
     (pad "1" thru_hole circle (at 0 0) (size 6.4 6.4) (drill 3.2) (layers *.Cu *.Mask)
       (net 19 "GND") (pinfunction "1") (pintype "input") (tstamp 07462cd0-2a05-4eaf-9122-83f7637f4fba))
-    (model "/Users/ian/Downloads/keystone-PN9202-1.STEP"
+    (model "${KIPRJMOD}/parts/keystone-PN9202-1.STEP"
       (offset (xyz 6.1 88.3 19))
       (scale (xyz 1 1 1))
       (rotate (xyz 180 0 -90))
@@ -2104,12 +2104,12 @@
       (scale (xyz 1 1 1))
       (rotate (xyz 0 0 90))
     )
-    (model "/Users/ian/Downloads/Unnamed1-Cube.step"
+    (model "${KIPRJMOD}/parts/Unnamed1-Cube.step"
       (offset (xyz -16.5 -7.85 2.6))
       (scale (xyz 1 1 1))
       (rotate (xyz 0 0 0))
     )
-    (model "/Users/ian/Downloads/CUI_DEVICES_SJ-3523-SMT-TR/CUI_DEVICES_SJ-3523-SMT-TR.step"
+    (model "${KIPRJMOD}/parts/CUI_DEVICES_SJ-3523-SMT-TR.step"
       (offset (xyz 9 -7.9 4.3))
       (scale (xyz 1 1 1))
       (rotate (xyz -90 0 -90))
