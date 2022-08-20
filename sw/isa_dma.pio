@@ -4,7 +4,6 @@
 .define public IOR_PIN 5
 .define public IOCHRDY_PIN 26
 .define public ADS_PIN 27
-.define public BUSOE_PIN 28
 .define public DACK_PIN 20
 .define public DRQ_PIN 21
 .define public TC_PIN 22
@@ -21,6 +20,7 @@ dmaloop:
     in pins, 8           side 0b10      ; input data, deassert IOCHRDY if we stall on full FIFO
     wait 1 gpio IOW_PIN  side 0b11      ; wait for IOW deassert with IOCHRDY back high
     jmp pin restart      side 0b01      ; if TC high, transfer is over. set ADS back to addr
+    wait 1 gpio DACK_PIN side 0b01      ; DACK rising edge
     jmp dmaloop          side 0b11      ; else wait for more data and get ADS back to data
 
 % c-sdk {

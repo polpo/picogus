@@ -4,7 +4,7 @@
 .define public IOR_PIN 5
 .define public IOCHRDY_PIN 26
 .define public ADS_PIN 27
-.define public BUSOE_PIN 28
+.define public UART_TX_PIN 28
 .define public DACK_PIN 20
 
 .program iow

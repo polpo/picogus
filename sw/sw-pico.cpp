@@ -13,9 +13,9 @@
 #define UART_RX_PIN (1)
 #define UART_ID     uart0
 */
-#define UART_TX_PIN (20)
-#define UART_RX_PIN (21)
-#define UART_ID     uart1
+#define UART_TX_PIN (28)
+#define UART_RX_PIN (-1)
+#define UART_ID     uart0
 #define BAUD_RATE   115200
 
 // #include "clock_pll.h"
@@ -308,9 +308,12 @@ int main()
     /* gpio_put(IOCHRDY_PIN, 1); */
 
     puts("Enabling bus transceivers...");
-    gpio_init(BUSOE_PIN);
-    gpio_set_dir(BUSOE_PIN, GPIO_OUT);
-    gpio_put(BUSOE_PIN, 1);
+    // waggle ADS to set BUSOE latch
+    gpio_init(ADS_PIN);
+    gpio_set_dir(ADS_PIN, GPIO_OUT);
+    gpio_put(ADS_PIN, 1);
+    busy_wait_ms(10);
+    gpio_put(ADS_PIN, 0);
 
     gpio_xor_mask(1u << LED_PIN);
 
