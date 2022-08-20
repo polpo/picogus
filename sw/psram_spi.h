@@ -33,9 +33,11 @@ typedef struct pio_spi_inst {
 } pio_spi_inst_t;
 
 
-static __force_inline void __time_critical_func(pio_spi_write_read_blocking)(pio_spi_inst_t* spi,
-                                                       const uint8_t* src, const size_t src_len,
-                                                       uint8_t* dst, const size_t dst_len) {
+static __force_inline void __time_critical_func(pio_spi_write_read_blocking)(
+        pio_spi_inst_t* spi,
+        const uint8_t* src, const size_t src_len,
+        uint8_t* dst, const size_t dst_len
+) {
     size_t tx_remain = src_len, rx_remain = dst_len;
 
 #ifdef USE_SPINLOCK

@@ -1,0 +1,57 @@
+.define public AD0_PIN 6
+.define public IRQ_PIN 19
+.define public IOW_PIN 4
+.define public IOR_PIN 5
+.define public IOCHRDY_PIN 26
+.define public ADS_PIN 27
+.define public BUSOE_PIN 28
+.define public DACK_PIN 20
+.define public DRQ_PIN 21
+.define public TC_PIN 22
+
+.program dma_write
+.side_set 2                             ; sideset bit 1 is ADS, bit 0 is IOCHRDY
+restart:
+    out null, 32         side 0b01      ; wait to trigger DMA operation
+dmaloop:
+    set pins, 1          side 0b11      ; assert DRQ 
+    wait 0 gpio DACK_PIN side 0b11      ; DACK faling edge
+    set pins, 0          side 0b11      ; deassert DRQ 
+    wait 0 gpio IOW_PIN  side 0b11      ; wait for IOW assert
+    in pins, 8           side 0b10      ; input data, deassert IOCHRDY if we stall on full FIFO
+    wait 1 gpio IOW_PIN  side 0b11      ; wait for IOW deassert with IOCHRDY back high
+    jmp pin restart      side 0b01      ; if TC high, transfer is over. set ADS back to addr
+    jmp dmaloop          side 0b11      ; else wait for more data and get ADS back to data
+
+% c-sdk {
+static inline void dma_write_program_init(PIO pio, uint sm, uint offset) {
+    pio_sm_config c = dma_write_program_get_default_config(offset);
+
+    // Set up AD0 bus as input
+    sm_config_set_in_pins(&c, AD0_PIN);
+    // Autopush at 8 bits
+    sm_config_set_in_shift(&c, false, true, 8);
+
+    // Autopull 32 bits (condition variables)
+    sm_config_set_out_shift(&c, true, true /* autopull */, 32);
+
+    // Set the pin direction for IOW and AD0 bus as input at the PIO
+    pio_sm_set_consecutive_pindirs(pio, sm, IOW_PIN, 1, false);
+    pio_sm_set_consecutive_pindirs(pio, sm, AD0_PIN, 8, false);
+
+    sm_config_set_jmp_pin(&c, TC_PIN);
+
+    // set up IOCHRDY and ADS
+    sm_config_set_set_pins(&c, DRQ_PIN, 1);
+    pio_gpio_init(pio, IOCHRDY_PIN);
+    pio_gpio_init(pio, ADS_PIN);
+    pio_gpio_init(pio, DRQ_PIN);
+    pio_sm_set_consecutive_pindirs(pio, sm, IOCHRDY_PIN, 2, true);
+
+    // Load our configuration, and jump to the start of the program
+    pio_sm_init(pio, sm, offset, &c);
+    // Set the state machine running
+    pio_sm_set_enabled(pio, sm, true);
+}
+%}
+

@@ -76,7 +76,7 @@ pico_enable_stdio_uart(sw-pico 1)
 pico_enable_stdio_usb(sw-pico 0)
 pico_enable_stdio_semihosting(sw-pico 0)
 
-pico_generate_pio_header(sw-pico ${CMAKE_CURRENT_LIST_DIR}/io.pio)
+pico_generate_pio_header(sw-pico ${CMAKE_CURRENT_LIST_DIR}/isa_io.pio)
 
 add_subdirectory(stdio_async_uart)
 

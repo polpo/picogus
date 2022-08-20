@@ -1,44 +1,36 @@
 .define public AD0_PIN 6
 .define public IRQ_PIN 19
-.define public IOW_PIN 4  ; was 20
-.define public IOR_PIN 5  ; was 21
+.define public IOW_PIN 4
+.define public IOR_PIN 5
 .define public IOCHRDY_PIN 26
 .define public ADS_PIN 27
 .define public BUSOE_PIN 28
+.define public DACK_PIN 20
 
 .program iow
 restart:
 .wrap_target
-    ; muxes to addr, IOCHRDY high
-    set pins, 0b01
-    ; IOW rising edge (or already high when PIO starts)
-    wait 1 gpio IOW_PIN
-    ; IOW falling edge:
-    wait 0 gpio IOW_PIN
-    ; Read address
-    in pins, 10
-    ; Set muxes to data. Wait 8 cycles for mux to switch
-    set pins, 0b11 [8]
-    ; Read data
-    in pins, 8
-    ; irq 0 rel
-    ; Set muxes back to address
-    set pins, 0b01
-    ; get condition from handle_iow
-    out X, 32
-    ; if we get a 0 condition from handle_iow, it's not an interesting address
-    jmp !X restart
-    ; set IOCHRDY low
-    set pins, 0b00
-    ; stall until handle_iow completes
-    out null, 32
+    wait 1 gpio IOW_PIN         ; IOW rising edge (or already high when PIO starts)
+    wait 0 gpio IOW_PIN         ; IOW falling edge:
+    jmp pin read_addr           ; if this is not during DMA (~DACK deasserted), go ahead and read address
+    jmp restart                 ; otherwise restart
+read_addr:
+    in pins, 10                 ; Read address
+    set pins, 0b11 [8]          ; Set muxes to data. Wait 8 cycles for mux to switch
+    in pins, 8                  ; Read data
+    set pins, 0b01              ; Set muxes back to address
+    out X, 32                   ; get condition from handle_iow
+    jmp !X restart              ; if we get a 0 condition from handle_iow, it's not an interesting address
+    set pins, 0b00              ; set IOCHRDY low
+    out null, 32                ; stall until handle_iow completes
+    set pins, 0b01              ; muxes to addr, IOCHRDY high
 .wrap
 
 % c-sdk {
 static inline void iow_program_init(PIO pio, uint sm, uint offset) {
     pio_sm_config c = iow_program_get_default_config(offset);
 
-    // Set up AD0 buus as input
+    // Set up AD0 pins as input
     sm_config_set_in_pins(&c, AD0_PIN);
     // Autopush at 18 bits (10 addr + 8 data)
     sm_config_set_in_shift(&c, false, true, 18);
@@ -56,6 +48,9 @@ static inline void iow_program_init(PIO pio, uint sm, uint offset) {
     pio_gpio_init(pio, ADS_PIN);
     pio_sm_set_consecutive_pindirs(pio, sm, IOCHRDY_PIN, 2, true);
 
+    // JMP on ~DACK so we can ignore iow during DMA write
+    sm_config_set_jmp_pin(&c, DACK_PIN);
+
     // Load our configuration, and jump to the start of the program
     pio_sm_init(pio, sm, offset, &c);
     // Set the state machine running
@@ -65,10 +60,8 @@ static inline void iow_program_init(PIO pio, uint sm, uint offset) {
 
 .program ior
 restart:
-    ; muxes to addr, IOCHRDY high
-    set pins, 0b01
-    ; ensure IOR high when PIO starts
-    wait 1 gpio IOR_PIN
+    set pins, 0b01              ; muxes to addr, IOCHRDY high
+    wait 1 gpio IOR_PIN         ; ensure IOR high when PIO starts
 .wrap_target
     wait 0 gpio IOR_PIN         ; IOR falling edge
     in pins, 10                 ; - Read address

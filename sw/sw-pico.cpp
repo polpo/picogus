@@ -24,7 +24,7 @@
 #include "psram_spi.h"
 pio_spi_inst_t psram_spi;
 #endif
-#include "io.pio.h"
+#include "isa_io.pio.h"
 
 #ifdef SOUND_OPL
 #include "opl.h"
