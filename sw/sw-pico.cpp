@@ -193,25 +193,6 @@ int main()
     gpio_init(IRQ_PIN);
     gpio_set_dir(IRQ_PIN, GPIO_OUT);
 
-    puts("Starting ISA bus PIO...");
-    PIO pio = pio0;
-
-    uint iow_offset = pio_add_program(pio, &iow_program);
-    uint iow_sm = pio_claim_unused_sm(pio, true);
-    iow_program_init(pio, iow_sm, iow_offset);
-   
-    uint ior_offset = pio_add_program(pio, &ior_program);
-    ior_sm = pio_claim_unused_sm(pio, true);
-    ior_program_init(pio, ior_sm, ior_offset);
-    /*
-    uint ior_write_offset = pio_add_program(pio, &ior_write_program);
-    ior_write_sm = pio_claim_unused_sm(pio, true);
-    ior_write_program_init(pio, ior_write_sm, ior_write_offset);
-    */
-
-    // gpio_set_drive_strength(ADS_PIN, GPIO_DRIVE_STRENGTH_12MA);
-    gpio_set_slew_rate(ADS_PIN, GPIO_SLEW_RATE_FAST);
-
 #ifdef USE_IRQ
     puts("Enabling IRQ");
     const int irq = PIO0_IRQ_0;
@@ -314,6 +295,26 @@ int main()
     gpio_put(ADS_PIN, 1);
     busy_wait_ms(10);
     gpio_put(ADS_PIN, 0);
+
+    puts("Starting ISA bus PIO...");
+    PIO pio = pio0;
+
+    uint iow_offset = pio_add_program(pio, &iow_program);
+    uint iow_sm = pio_claim_unused_sm(pio, true);
+    iow_program_init(pio, iow_sm, iow_offset);
+   
+    uint ior_offset = pio_add_program(pio, &ior_program);
+    ior_sm = pio_claim_unused_sm(pio, true);
+    ior_program_init(pio, ior_sm, ior_offset);
+    /*
+    uint ior_write_offset = pio_add_program(pio, &ior_write_program);
+    ior_write_sm = pio_claim_unused_sm(pio, true);
+    ior_write_program_init(pio, ior_write_sm, ior_write_offset);
+    */
+
+    // gpio_set_drive_strength(ADS_PIN, GPIO_DRIVE_STRENGTH_12MA);
+    gpio_set_slew_rate(ADS_PIN, GPIO_SLEW_RATE_FAST);
+
 
     gpio_xor_mask(1u << LED_PIN);
 

@@ -2006,7 +2006,7 @@ __force_inline void write_gus(Bitu port,Bitu val,Bitu iolen) {
     }
 }
 
-//#if 0 // TODO implement DMA
+#if 0 // TODO implement DMA
 static constexpr Bitu GUS_Master_Clock = 617400; /* NOTE: This is 1000000Hz / 1.619695497. Seems to be a common base rate within the hardware. */
 static constexpr Bitu GUS_DMA_Event_transfer = 16; /* DMA words (8 or 16-bit) per interval */
 static constexpr Bitu GUS_DMA_Events_per_sec = 44100 / 4; /* cheat a little, to improve emulation performance */
