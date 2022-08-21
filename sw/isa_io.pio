@@ -8,22 +8,23 @@
 .define public DACK_PIN 20
 
 .program iow
+.side_set 2 opt                   ; sideset bit 1 is ADS, bit 0 is IOCHRDY
 restart:
 .wrap_target
-    wait 1 gpio IOW_PIN         ; IOW rising edge (or already high when PIO starts)
-    wait 0 gpio IOW_PIN         ; IOW falling edge:
-    jmp pin read_addr           ; if this is not during DMA (~DACK deasserted), go ahead and read address
-    jmp restart                 ; otherwise restart
+    wait 1 gpio IOW_PIN side 0b01 ; IOW rising edge (or already high when PIO starts)
+    wait 0 gpio IOW_PIN           ; IOW falling edge:
+    jmp pin read_addr             ; if this is not during DMA (~DACK deasserted), go ahead and read address
+    jmp restart                   ; otherwise restart
 read_addr:
-    in pins, 10                 ; Read address
-    set pins, 0b11 [8]          ; Set muxes to data. Wait 8 cycles for mux to switch
-    in pins, 8                  ; Read data
-    set pins, 0b01              ; Set muxes back to address
-    out X, 32                   ; get condition from handle_iow
-    jmp !X restart              ; if we get a 0 condition from handle_iow, it's not an interesting address
-    set pins, 0b00              ; set IOCHRDY low
-    out null, 32                ; stall until handle_iow completes
-    set pins, 0b01              ; muxes to addr, IOCHRDY high
+    in pins, 10                   ; Read address
+    nop [3]             side 0b11 ; Set muxes to data. Wait 7 cycles for mux to switch
+    in pins, 8                    ; Read data
+;    set pins, 0         side 1  ; Set muxes back to address
+    out X, 32           side 0b01 ; get condition from handle_iow, set muxes back to address
+    jmp !X restart                ; if we get a 0 condition from handle_iow, it's not an interesting address
+;    set pins, 0b00              ; set IOCHRDY low
+    out null, 32        side 0b00 ; stall with IOCHRDY low until handle_iow completes
+;    set pins, 0b01      side 0b01 ; muxes to addr, IOCHRDY high
 .wrap
 
 % c-sdk {
@@ -43,9 +44,11 @@ static inline void iow_program_init(PIO pio, uint sm, uint offset) {
     pio_sm_set_consecutive_pindirs(pio, sm, AD0_PIN, 10, false);
 
     // set up IOCHRDY and ADS
-    sm_config_set_set_pins(&c, IOCHRDY_PIN, 2);
+    sm_config_set_sideset_pins(&c, IOCHRDY_PIN);
     pio_gpio_init(pio, IOCHRDY_PIN);
     pio_gpio_init(pio, ADS_PIN);
+    pio_sm_set_pins_with_mask(pio, sm, 1u << IOCHRDY_PIN, 1u << IOCHRDY_PIN);
+    pio_sm_set_pins_with_mask(pio, sm, 0, 1u << ADS_PIN);
     pio_sm_set_consecutive_pindirs(pio, sm, IOCHRDY_PIN, 2, true);
 
     // JMP on ~DACK so we can ignore iow during DMA write
@@ -59,22 +62,23 @@ static inline void iow_program_init(PIO pio, uint sm, uint offset) {
 %}
 
 .program ior
+.side_set 2 opt                   ; sideset bit 1 is ADS, bit 0 is IOCHRDY
 restart:
-    set pins, 0b01              ; muxes to addr, IOCHRDY high
-    wait 1 gpio IOR_PIN         ; ensure IOR high when PIO starts
+;    set pins, 0        side 0b01 ; muxes to addr, IOCHRDY high
+    wait 1 gpio IOR_PIN           ; ensure IOR high when PIO starts
 .wrap_target
-    wait 0 gpio IOR_PIN         ; IOR falling edge
-    in pins, 10                 ; - Read address
-    out X, 32                   ; stall until we get condition from handle_ior
-    jmp !X restart              ; if we get a 0 condition from handle_ior, it's not an interesting address
-    set pins, 0b00              ; set IOCHRDY low, muxes to addr
-    out pins, 8                 ; output data to be written
-    out pindirs, 8              ; next 8 in pindirs is FF - set pindirs as output
-    set pins, 0b11              ; set IOCHRDY high, muxes to data
-    wait 1 gpio IOR_PIN         ; - wait for IOR rising edge
-    out pins, 8                 ; next 8 in pindirs is FF - reset data pins back to 0
-    set pins, 0b01              ; set muxes back to address
-    out pindirs, 8              ; next 8 in pindirs is 00 - set pindirs back as input
+    wait 0 gpio IOR_PIN           ; IOR falling edge
+    in pins, 10                   ; - Read address
+    out X, 32                     ; stall until we get condition from handle_ior
+    jmp !X restart                ; if we get a 0 condition from handle_ior, it's not an interesting address
+;    set pins, 0         side 1  ; set IOCHRDY low, muxes to addr
+    out pins, 8         side 0b00 ; output data to be written, stalling with IOCHRDY low until data is ready
+    out pindirs, 8                ; next 8 in pindirs is FF - set pindirs as output
+;    set pins, 1         side 0b11 ; set IOCHRDY high, muxes to data
+    wait 1 gpio IOR_PIN side 0b11 ; - wait for IOR rising edge with IOCHRDY high and muxes to data
+    out pins, 8                   ; next 8 in pindirs is FF - reset data pins back to 0
+;    set pins, 0         side 0  ; set muxes back to address
+    out pindirs, 8      side 0b01 ; next 8 in pindirs is 00 - set pindirs back as input
 .wrap
 
 % c-sdk {
@@ -97,11 +101,12 @@ static inline void ior_program_init(PIO pio, uint sm, uint offset) {
     }
 
     // set up IOCHRDY and ADS
-    sm_config_set_set_pins(&c, IOCHRDY_PIN, 2);
-    pio_gpio_init(pio, ADS_PIN);
+    sm_config_set_sideset_pins(&c, IOCHRDY_PIN);
     pio_gpio_init(pio, IOCHRDY_PIN);
+    pio_gpio_init(pio, ADS_PIN);
+    pio_sm_set_pins_with_mask(pio, sm, 1u << IOCHRDY_PIN, 1u << IOCHRDY_PIN);
+    pio_sm_set_pins_with_mask(pio, sm, 0, 1u << ADS_PIN);
     pio_sm_set_consecutive_pindirs(pio, sm, IOCHRDY_PIN, 2, true);
-
 
     // Load our configuration, and jump to the start of the program
     // pio->input_sync_bypass = ((0x1u << IOR_PIN) | (0x3ffu << AD0_PIN));

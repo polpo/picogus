@@ -72,7 +72,7 @@ endif()
 pico_set_program_name(sw-pico "sw-pico")
 pico_set_program_version(sw-pico "0.1")
 
-pico_enable_stdio_uart(sw-pico 1)
+pico_enable_stdio_uart(sw-pico 0)
 pico_enable_stdio_usb(sw-pico 0)
 pico_enable_stdio_semihosting(sw-pico 0)
 

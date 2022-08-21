@@ -7,7 +7,7 @@
 #include "hardware/regs/vreg_and_chip_reset.h"
 
 
-// #include "stdio_async_uart.h"
+#include "stdio_async_uart.h"
 /*
 #define UART_TX_PIN (0)
 #define UART_RX_PIN (1)
@@ -66,6 +66,9 @@ __force_inline void handle_iow(void) {
     if ((port >> 4 | 0x10) == GUS_PORT_TEST) {
         pio_sm_put(pio0, iow_sm, 0xffffffffu);
         value = iow_read & 0xFF;
+        puts("IOW");
+        uart_print_hex_u32(port);
+        uart_print_hex_u32(value);
         // uint32_t write_begin = time_us_32();
 #ifdef DOSBOX_STAGING
         gus->WriteToPort(port, value, io_width_t::byte); // 3x4 supports 16-bit transfers but PiGUS doesn't! force byte
@@ -172,8 +175,8 @@ int main()
     set_sys_clock_khz(270000, true);
     // vreg_set_voltage(VREG_VOLTAGE_1_20);
 
-    stdio_init_all();
-    // stdio_async_uart_init_full(UART_ID, BAUD_RATE, UART_TX_PIN, UART_RX_PIN);
+    // stdio_init_all();
+    stdio_async_uart_init_full(UART_ID, BAUD_RATE, UART_TX_PIN, UART_RX_PIN);
 
     puts("PicoGUS booting!");
 
@@ -284,9 +287,12 @@ int main()
     }
     gpio_disable_pulls(IOW_PIN);
     gpio_disable_pulls(IOR_PIN);
-    gpio_pull_up(IOCHRDY_PIN);
-    gpio_set_dir(IOCHRDY_PIN, GPIO_OUT);
-    /* gpio_put(IOCHRDY_PIN, 1); */
+    //gpio_disable_pulls(IOCHRDY_PIN);
+    // gpio_put(IOCHRDY_PIN, 1);
+    // gpio_init(IOCHRDY_PIN);
+    // gpio_pull_up(IOCHRDY_PIN);
+    // gpio_set_dir(IOCHRDY_PIN, GPIO_OUT);
+    // gpio_put(IOCHRDY_PIN, 1);
 
     puts("Enabling bus transceivers...");
     // waggle ADS to set BUSOE latch
@@ -300,21 +306,16 @@ int main()
     PIO pio = pio0;
 
     uint iow_offset = pio_add_program(pio, &iow_program);
-    uint iow_sm = pio_claim_unused_sm(pio, true);
-    iow_program_init(pio, iow_sm, iow_offset);
+    iow_sm = pio_claim_unused_sm(pio, true);
    
-    uint ior_offset = pio_add_program(pio, &ior_program);
-    ior_sm = pio_claim_unused_sm(pio, true);
-    ior_program_init(pio, ior_sm, ior_offset);
-    /*
-    uint ior_write_offset = pio_add_program(pio, &ior_write_program);
-    ior_write_sm = pio_claim_unused_sm(pio, true);
-    ior_write_program_init(pio, ior_write_sm, ior_write_offset);
-    */
+    // uint ior_offset = pio_add_program(pio, &ior_program);
+    // ior_sm = pio_claim_unused_sm(pio, true);
+
+    iow_program_init(pio, iow_sm, iow_offset);
+    // ior_program_init(pio, ior_sm, ior_offset);
 
     // gpio_set_drive_strength(ADS_PIN, GPIO_DRIVE_STRENGTH_12MA);
     gpio_set_slew_rate(ADS_PIN, GPIO_SLEW_RATE_FAST);
-
 
     gpio_xor_mask(1u << LED_PIN);
 
@@ -329,10 +330,10 @@ int main()
             // gpio_xor_mask(1u << LED_PIN);
         }
 
-        if (!pio_sm_is_rx_fifo_empty(pio, ior_sm)) {
-            handle_ior();
-            // gpio_xor_mask(1u << LED_PIN);
-        }
+        // if (!pio_sm_is_rx_fifo_empty(pio, ior_sm)) {
+        //     handle_ior();
+        //     // gpio_xor_mask(1u << LED_PIN);
+        // }
 #endif
 #ifndef USE_ALARM
         PIC_HandleEvents();
