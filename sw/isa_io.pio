@@ -11,20 +11,19 @@
 .side_set 2 opt                   ; sideset bit 1 is ADS, bit 0 is IOCHRDY
 restart:
 .wrap_target
-    wait 1 gpio IOW_PIN side 0b01 ; IOW rising edge (or already high when PIO starts)
-    wait 0 gpio IOW_PIN           ; IOW falling edge:
+    wait 1 gpio IOW_PIN           ; IOW rising edge (or already high when PIO starts)
+    wait 0 gpio IOW_PIN           ; IOW falling edge, no sideset to not conflict with other SMs
     jmp pin read_addr             ; if this is not during DMA (~DACK deasserted), go ahead and read address
-    jmp restart                   ; otherwise restart
+    jmp restart                   ; otherwise restart ; if ~DACK were inverted... we could optimize away 1 instruction here
 read_addr:
-    in pins, 10                   ; Read address
-    nop [3]             side 0b11 ; Set muxes to data. Wait 7 cycles for mux to switch
-    in pins, 8                    ; Read data
-;    set pins, 0         side 1  ; Set muxes back to address
+    in pins, 10 [3]     side 0b11 ; Read address and flip mux simultaneously.. yolo
+    nop [3]             side 0b11 ; Wait more for mux to switch; max 3 because of optional sideset
+;    nop [3]             side 0b11 ; wait more... it kills me to burn NOPs like this
+    in pins, 8          side 0b11 ; Read data
     out X, 32           side 0b01 ; get condition from handle_iow, set muxes back to address
-    jmp !X restart                ; if we get a 0 condition from handle_iow, it's not an interesting address
-;    set pins, 0b00              ; set IOCHRDY low
+    jmp !X restart      side 0b01 ; if we get a 0 condition from handle_iow, it's not an interesting address
     out null, 32        side 0b00 ; stall with IOCHRDY low until handle_iow completes
-;    set pins, 0b01      side 0b01 ; muxes to addr, IOCHRDY high
+    nop                 side 0b01 ; bring IOCHRDY back. TODO see if we can move the sideset back to restart
 .wrap
 
 % c-sdk {
@@ -47,9 +46,9 @@ static inline void iow_program_init(PIO pio, uint sm, uint offset) {
     sm_config_set_sideset_pins(&c, IOCHRDY_PIN);
     pio_gpio_init(pio, IOCHRDY_PIN);
     pio_gpio_init(pio, ADS_PIN);
+    pio_sm_set_consecutive_pindirs(pio, sm, IOCHRDY_PIN, 2, true);
     pio_sm_set_pins_with_mask(pio, sm, 1u << IOCHRDY_PIN, 1u << IOCHRDY_PIN);
     pio_sm_set_pins_with_mask(pio, sm, 0, 1u << ADS_PIN);
-    pio_sm_set_consecutive_pindirs(pio, sm, IOCHRDY_PIN, 2, true);
 
     // JMP on ~DACK so we can ignore iow during DMA write
     sm_config_set_jmp_pin(&c, DACK_PIN);
@@ -64,20 +63,16 @@ static inline void iow_program_init(PIO pio, uint sm, uint offset) {
 .program ior
 .side_set 2 opt                   ; sideset bit 1 is ADS, bit 0 is IOCHRDY
 restart:
-;    set pins, 0        side 0b01 ; muxes to addr, IOCHRDY high
     wait 1 gpio IOR_PIN           ; ensure IOR high when PIO starts
 .wrap_target
-    wait 0 gpio IOR_PIN           ; IOR falling edge
-    in pins, 10                   ; - Read address
-    out X, 32                     ; stall until we get condition from handle_ior
-    jmp !X restart                ; if we get a 0 condition from handle_ior, it's not an interesting address
-;    set pins, 0         side 1  ; set IOCHRDY low, muxes to addr
+    wait 0 gpio IOR_PIN           ; IOR falling edge, no sideset to not conflict with other SMs
+    in pins, 10         side 0b01 ; - Read address
+    out X, 32           side 0b01 ; stall until we get condition from handle_ior
+    jmp !X restart      side 0b01 ; if we get a 0 condition from handle_ior, it's not an interesting address
     out pins, 8         side 0b00 ; output data to be written, stalling with IOCHRDY low until data is ready
-    out pindirs, 8                ; next 8 in pindirs is FF - set pindirs as output
-;    set pins, 1         side 0b11 ; set IOCHRDY high, muxes to data
+    out pindirs, 8      side 0b10 ; next 8 in pindirs is FF - set pindirs as output
     wait 1 gpio IOR_PIN side 0b11 ; - wait for IOR rising edge with IOCHRDY high and muxes to data
-    out pins, 8                   ; next 8 in pindirs is FF - reset data pins back to 0
-;    set pins, 0         side 0  ; set muxes back to address
+    out pins, 8         side 0b11 ; next 8 in pindirs is FF - reset data pins back to high
     out pindirs, 8      side 0b01 ; next 8 in pindirs is 00 - set pindirs back as input
 .wrap
 

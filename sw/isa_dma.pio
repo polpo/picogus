@@ -9,11 +9,11 @@
 .define public TC_PIN 22
 
 .program dma_write
-.side_set 2                             ; sideset bit 1 is ADS, bit 0 is IOCHRDY
+.side_set 2 opt                         ; sideset bit 1 is ADS, bit 0 is IOCHRDY
 restart:
-    out null, 32         side 0b01      ; wait to trigger DMA operation
+    out null, 32                        ; wait to trigger DMA operation
 dmaloop:
-    set pins, 1          side 0b11      ; assert DRQ 
+    set pins, 1          side 0b11      ; assert DRQ, muxes to data
     wait 0 gpio DACK_PIN side 0b11      ; DACK faling edge
     set pins, 0          side 0b11      ; deassert DRQ 
     wait 0 gpio IOW_PIN  side 0b11      ; wait for IOW assert

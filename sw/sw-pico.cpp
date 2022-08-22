@@ -66,9 +66,6 @@ __force_inline void handle_iow(void) {
     if ((port >> 4 | 0x10) == GUS_PORT_TEST) {
         pio_sm_put(pio0, iow_sm, 0xffffffffu);
         value = iow_read & 0xFF;
-        puts("IOW");
-        uart_print_hex_u32(port);
-        uart_print_hex_u32(value);
         // uint32_t write_begin = time_us_32();
 #ifdef DOSBOX_STAGING
         gus->WriteToPort(port, value, io_width_t::byte); // 3x4 supports 16-bit transfers but PiGUS doesn't! force byte
@@ -83,6 +80,9 @@ __force_inline void handle_iow(void) {
         pio_sm_put(pio0, iow_sm, 0x0u);
         //printf("GUS IOW: port: %x value: %x\n", port, value);
         // gpio_xor_mask(1u << LED_PIN);
+        // puts("IOW");
+        // uart_print_hex_u32(port);
+        // uart_print_hex_u32(value);
     } else {
         // Reset SM
         pio_sm_put(pio0, iow_sm, 0x0u);
@@ -129,7 +129,7 @@ __force_inline void handle_ior(void) {
         }
         // OR with 0x00ffff00 is required to set pindirs in the PIO
         pio_sm_put(pio0, ior_sm, 0x00ffff00u | value);
-        //printf("GUS IOR: port: %x value: %x\n", port, value);
+        // printf("GUS IOR: port: %x value: %x\n", port, value);
         // gpio_xor_mask(1u << LED_PIN);
     } else {
         // Reset PIO
@@ -290,8 +290,8 @@ int main()
     //gpio_disable_pulls(IOCHRDY_PIN);
     // gpio_put(IOCHRDY_PIN, 1);
     // gpio_init(IOCHRDY_PIN);
-    // gpio_pull_up(IOCHRDY_PIN);
-    // gpio_set_dir(IOCHRDY_PIN, GPIO_OUT);
+    gpio_pull_up(IOCHRDY_PIN);
+    gpio_set_dir(IOCHRDY_PIN, GPIO_OUT);
     // gpio_put(IOCHRDY_PIN, 1);
 
     puts("Enabling bus transceivers...");
@@ -303,19 +303,19 @@ int main()
     gpio_put(ADS_PIN, 0);
 
     puts("Starting ISA bus PIO...");
+    // gpio_set_drive_strength(ADS_PIN, GPIO_DRIVE_STRENGTH_12MA);
+    gpio_set_slew_rate(ADS_PIN, GPIO_SLEW_RATE_FAST);
+
     PIO pio = pio0;
+
+    uint ior_offset = pio_add_program(pio, &ior_program);
+    ior_sm = pio_claim_unused_sm(pio, true);
 
     uint iow_offset = pio_add_program(pio, &iow_program);
     iow_sm = pio_claim_unused_sm(pio, true);
-   
-    // uint ior_offset = pio_add_program(pio, &ior_program);
-    // ior_sm = pio_claim_unused_sm(pio, true);
 
+    ior_program_init(pio, ior_sm, ior_offset);
     iow_program_init(pio, iow_sm, iow_offset);
-    // ior_program_init(pio, ior_sm, ior_offset);
-
-    // gpio_set_drive_strength(ADS_PIN, GPIO_DRIVE_STRENGTH_12MA);
-    gpio_set_slew_rate(ADS_PIN, GPIO_SLEW_RATE_FAST);
 
     gpio_xor_mask(1u << LED_PIN);
 
@@ -330,10 +330,10 @@ int main()
             // gpio_xor_mask(1u << LED_PIN);
         }
 
-        // if (!pio_sm_is_rx_fifo_empty(pio, ior_sm)) {
-        //     handle_ior();
-        //     // gpio_xor_mask(1u << LED_PIN);
-        // }
+        if (!pio_sm_is_rx_fifo_empty(pio, ior_sm)) {
+            handle_ior();
+            // gpio_xor_mask(1u << LED_PIN);
+        }
 #endif
 #ifndef USE_ALARM
         PIC_HandleEvents();
