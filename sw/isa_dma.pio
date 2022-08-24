@@ -21,7 +21,8 @@ dmaloop:
     wait 1 gpio IOW_PIN  side 0b11      ; wait for IOW deassert with IOCHRDY back high
     jmp pin restart      side 0b01      ; if TC high, transfer is over. set ADS back to addr
     wait 1 gpio DACK_PIN side 0b01      ; DACK rising edge
-    jmp dmaloop          side 0b11      ; else wait for more data and get ADS back to data
+;    out null, 32         side 0b01      ; wait for system - time here varies based on GUS DMA delay
+;    jmp dmaloop          side 0b11      ; get ADS back to data, loop
 
 % c-sdk {
 static inline void dma_write_program_init(PIO pio, uint sm, uint offset) {

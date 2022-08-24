@@ -39,6 +39,8 @@ extern "C" void OPL_Pico_PortWrite(opl_port_t, unsigned int);
 #include "gus.h"
 Gus* gus;
 #else
+#include "isa_dma.h"
+dma_inst_t dma_config;
 #include "gus-x.cpp"
 #endif
 
@@ -316,6 +318,9 @@ int main()
 
     ior_program_init(pio, ior_sm, ior_offset);
     iow_program_init(pio, iow_sm, iow_offset);
+
+    puts("Initing ISA DMA PIO...");
+    dma_config = DMA_init(pio);
 
     gpio_xor_mask(1u << LED_PIN);
 

@@ -77,6 +77,7 @@ pico_enable_stdio_usb(picogus 0)
 pico_enable_stdio_semihosting(picogus 0)
 
 pico_generate_pio_header(picogus ${CMAKE_CURRENT_LIST_DIR}/isa_io.pio)
+pico_generate_pio_header(picogus ${CMAKE_CURRENT_LIST_DIR}/isa_dma.pio)
 
 add_subdirectory(stdio_async_uart)
 

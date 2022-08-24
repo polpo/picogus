@@ -44,6 +44,8 @@ extern pio_spi_inst_t psram_spi;
 #include "regs.h"
 */
 #include "pico_pic.h"
+#include "isa_dma.h"
+extern dma_inst_t dma_config;
 
 using namespace std;
 
@@ -733,9 +735,9 @@ static INLINE void GUS_CheckIRQ(void);
 
 static uint32_t GUS_TimerEvent(Bitu val);
 
-/* TODO implement DMA
-static void GUS_DMA_Callback(DmaChannel * chan,DMAEvent event);
-*/ // TODO implement DMA
+///* TODO implement DMA
+// static void GUS_DMA_Callback(/*DmaChannel * chan,*/DMAEvent event);
+//*/ // TODO implement DMA
 
 void GUS_StopDMA();
 void GUS_StartDMA();
@@ -827,9 +829,9 @@ static void GUSReset(void) {
         myGUS.gDramAddr = 0;
         myGUS.gRegData = 0;
 
-        /* TODO implmeent DMA
-        GUS_Update_DMA_Event_transfer();
-        */
+        // /* TODO implmeent DMA
+        // GUS_Update_DMA_Event_transfer();
+        // */
     }
 
     /* if the card was just put into reset, or the card WAS in reset, bits 1-2 are cleared */
@@ -938,15 +940,15 @@ __force_inline static uint16_t ExecuteReadRegister(void) {
         // NTS: The GUS SDK documents the active channel count as bits 5-0, which is wrong. it's bits 4-0. bits 7-5 are always 1 on real hardware.
         return ((uint16_t)(0xE0 | (myGUS.ActiveChannelsUser - 1))) << 8;
     case 0x41: // Dma control register - read acknowledges DMA IRQ
+        /* here in the real world we can't ask the DMA controller if it's masked
         if (dma_enable_on_dma_control_polling) {
-            /* TODO implement DMA
             if (!GetDMAChannel(myGUS.dma1)->masked && !(myGUS.DMAControl & 0x01) && !(myGUS.IRQStatus & 0x80)) {
-                LOG(LOG_MISC,LOG_DEBUG)("GUS: As instructed, switching on DMA ENABLE upon polling DMA control register (HACK) as workaround");
+                DEBUG_LOG_MSG("GUS: As instructed, switching on DMA ENABLE upon polling DMA control register (HACK) as workaround");
                 myGUS.DMAControl |= 0x01;
                 GUS_StartDMA();
             }
-            */ // TODO implement DMA
         }
+        */
 
         tmpreg = myGUS.DMAControl & 0xbf;
         tmpreg |= (myGUS.DMAControl & 0x100) >> 2; /* Bit 6 on read is the DMA terminal count IRQ status */
@@ -1192,9 +1194,7 @@ __force_inline static void ExecuteGlobRegister(void) {
     case 0x41:  // Dma control register
         myGUS.DMAControl &= ~0xFFu; // FIXME: Does writing DMA Control clear the DMA TC IRQ?
         myGUS.DMAControl |= (uint8_t)(myGUS.gRegData>>8);
-        /* TODO implement DMA
-        GUS_Update_DMA_Event_transfer();
-        */
+        // GUS_Update_DMA_Event_transfer();
         if (myGUS.DMAControl & 1) GUS_StartDMA();
         else GUS_StopDMA();
         break;
@@ -1291,7 +1291,7 @@ public:
         addr_control = addr & 7;
     }
     void dataWrite(uint8_t val) {
-        LOG(LOG_MISC,LOG_DEBUG)("GUS ICS-2101 Mixer Data Write val=%02xh to attensel=%u(%s) ctrlsel=%u(%s)",
+        DEBUG_LOG_MSG("GUS ICS-2101 Mixer Data Write val=%02xh to attensel=%u(%s) ctrlsel=%u(%s)",
             (int)val,
             addr_attenuator,attenuatorName(addr_attenuator),
             addr_control,controlName(addr_control));
@@ -1435,7 +1435,7 @@ public:
             }
         }
         void debugPrintMixer(const char *name) {
-            LOG(LOG_MISC,LOG_DEBUG)("GUS ICS control '%s': %.3fdB %.3fdB",name,AttenDb[0],AttenDb[1]);
+            DEBUG_LOG_MSG("GUS ICS control '%s': %.3fdB %.3fdB",name,AttenDb[0],AttenDb[1]);
         }
     public:
         uint8_t     Panning;
@@ -1486,7 +1486,7 @@ public:
     }
 public:
     void data_write(uint8_t addr,uint8_t val) {
-//      LOG(LOG_MISC,LOG_DEBUG)("GUS CS4231 write data addr=%02xh val=%02xh",addr,val);
+//      DEBUG_LOG_MSG("GUS CS4231 write data addr=%02xh val=%02xh",addr,val);
 
         switch (addr) {
             case 0x00: /* Left ADC Input Control (I0) */
@@ -1504,12 +1504,12 @@ public:
             case 0x0C: /* MODE and ID (I12) */
                 mode2 = (val & 0x40)?1:0; break;
             default:
-                LOG(LOG_MISC,LOG_DEBUG)("GUS CS4231 unhandled data write addr=%02xh val=%02xh",addr,val);
+                DEBUG_LOG_MSG("GUS CS4231 unhandled data write addr=%02xh val=%02xh",addr,val);
                 break;
         }
     }
     uint8_t data_read(uint8_t addr) {
-//      LOG(LOG_MISC,LOG_DEBUG)("GUS CS4231 read data addr=%02xh",addr);
+//      DEBUG_LOG_MSG("GUS CS4231 read data addr=%02xh",addr);
 
         switch (addr) {
             case 0x00: /* Left ADC Input Control (I0) */
@@ -1527,25 +1527,25 @@ public:
             case 0x0C: /* MODE and ID (I12) */
                 return 0x80 | (mode2 ? 0x40 : 0x00) | 0xA/*1010 codec ID*/;
             default:
-                LOG(LOG_MISC,LOG_DEBUG)("GUS CS4231 unhandled data read addr=%02xh",addr);
+                DEBUG_LOG_MSG("GUS CS4231 unhandled data read addr=%02xh",addr);
                 break;
         }
 
         return 0;
     }
     void playio_data_write(uint8_t val) {
-        LOG(LOG_MISC,LOG_DEBUG)("GUS CS4231 Playback I/O write %02xh",val);
+        DEBUG_LOG_MSG("GUS CS4231 Playback I/O write %02xh",val);
     }
     uint8_t capio_data_read(void) {
-        LOG(LOG_MISC,LOG_DEBUG)("GUS CS4231 Capture I/O read");
+        DEBUG_LOG_MSG("GUS CS4231 Capture I/O read");
         return 0;
     }
     uint8_t status_read(void) {
-        LOG(LOG_MISC,LOG_DEBUG)("GUS CS4231 Status read");
+        DEBUG_LOG_MSG("GUS CS4231 Status read");
         return 0;
     }
     void iowrite(uint8_t reg,uint8_t val) {
-//      LOG(LOG_MISC,LOG_DEBUG)("GUS CS4231 write reg=%u val=%02xh",reg,val);
+//      DEBUG_LOG_MSG("GUS CS4231 write reg=%u val=%02xh",reg,val);
 
         if (init) return;
 
@@ -1559,7 +1559,7 @@ public:
                 data_write(address,val);
                 break;
             case 0x2: /* Status Register (R2) */
-                LOG(LOG_MISC,LOG_DEBUG)("GUS CS4231 attempted write to status register val=%02xh",val);
+                DEBUG_LOG_MSG("GUS CS4231 attempted write to status register val=%02xh",val);
                 break;
             case 0x3: /* Playback I/O Data Register (R3) */
                 playio_data_write(val);
@@ -1567,7 +1567,7 @@ public:
         }
     }
     uint8_t ioread(uint8_t reg) {
-//      LOG(LOG_MISC,LOG_DEBUG)("GUS CS4231 write read=%u",reg);
+//      DEBUG_LOG_MSG("GUS CS4231 write read=%u",reg);
 
         if (init) return 0x80;
 
@@ -1654,7 +1654,7 @@ __force_inline Bitu read_gus(Bitu port,Bitu iolen) {
                 myGUS.lastIRQStatusPollAt = t;
                 myGUS.lastIRQStatusPollRapidCount++;
                 if (myGUS.clearTCIfPollingIRQStatus && (myGUS.IRQStatus & 0x80) && myGUS.lastIRQStatusPollRapidCount >= 500) {
-                    LOG(LOG_MISC,LOG_DEBUG)("GUS: Clearing DMA TC IRQ status, DOS application appears to be stuck");
+                    DEBUG_LOG_MSG("GUS: Clearing DMA TC IRQ status, DOS application appears to be stuck");
                     myGUS.lastIRQStatusPollRapidCount = 0;
                     myGUS.lastIRQStatusPollAt = t;
                     myGUS.IRQStatus &= 0x7F;
@@ -1895,8 +1895,8 @@ __force_inline void write_gus(Bitu port,Bitu val,Bitu iolen) {
                 // NTS: This emulation does not use the second DMA channel... yet... which is why we do not bother
                 //      unregistering and reregistering the second DMA channel.
 
-                /* TODO implement DMA
-                GetDMAChannel(myGUS.dma1)->Register_Callback(0); // FIXME: On DMA conflict this could mean kicking other devices off!
+                ///* TODO implement DMA
+                // GetDMAChannel(myGUS.dma1)->Register_Callback(0); // FIXME: On DMA conflict this could mean kicking other devices off!
 
                 // NTS: Contrary to an earlier commit, DMA channel 0 is not a valid choice
                 if (dmatable[val & 0x7] != 0)
@@ -1907,15 +1907,16 @@ __force_inline void write_gus(Bitu port,Bitu val,Bitu iolen) {
                 else if (dmatable[(val >> 3) & 0x7] != 0)
                     myGUS.dma2 = dmatable[(val >> 3) & 0x7];
 
-                GetDMAChannel(myGUS.dma1)->Register_Callback(GUS_DMA_Callback);
+                // TODO implement DMA callback
+                // GetDMAChannel(myGUS.dma1)->Register_Callback(GUS_DMA_Callback);
 
-                LOG(LOG_MISC,LOG_DEBUG)("GUS DMA reprogrammed: DMA1 %d, DMA2 %d",(int)myGUS.dma1,(int)myGUS.dma2);
+                DEBUG_LOG_MSG("GUS DMA reprogrammed: DMA1 %d, DMA2 %d",(int)myGUS.dma1,(int)myGUS.dma2);
 
                 // NTS: The Windows 3.1 Gravis Ultrasound drivers will program the same DMA channel into both without setting the "combining" bit,
                 //      even though their own SDK says not to, when Windows starts up. But it then immediately reprograms it normally, so no bus
                 //      conflicts actually occur. Strange.
                 gus_warn_dma_conflict = (!(val & 0x40) && (val & 7) == ((val >> 3) & 7));
-                */ // TODO implement DMA
+                //*/ // TODO implement DMA
             }
         }
         else {
@@ -2006,14 +2007,15 @@ __force_inline void write_gus(Bitu port,Bitu val,Bitu iolen) {
     }
 }
 
-#if 0 // TODO implement DMA
+//#if 0 // TODO implement DMA
 static constexpr Bitu GUS_Master_Clock = 617400; /* NOTE: This is 1000000Hz / 1.619695497. Seems to be a common base rate within the hardware. */
 static constexpr Bitu GUS_DMA_Event_transfer = 16; /* DMA words (8 or 16-bit) per interval */
 static constexpr Bitu GUS_DMA_Events_per_sec = 44100 / 4; /* cheat a little, to improve emulation performance */
-static constexpr uint32_t GUS_DMA_Event_interval = 1000.0 / GUS_DMA_Events_per_sec;
-static constexpr uint32_t GUS_DMA_Event_interval_init = 1 / 44100;
+static constexpr uint32_t GUS_DMA_Event_interval = 1000000 / GUS_DMA_Events_per_sec;
+static constexpr uint32_t GUS_DMA_Event_interval_init = 1000000 / 44100;
 static bool GUS_DMA_Active = false;
 
+#if 0 // we aren't going to do it this way
 void GUS_Update_DMA_Event_transfer() {
     /* NTS: From the GUS SDK, bits 3-4 of DMA Control divide the ISA DMA transfer rate down from "approx 650KHz".
      *      Bits 3-4 are documented as "DMA Rate divisor" */
@@ -2021,8 +2023,9 @@ void GUS_Update_DMA_Event_transfer() {
     GUS_DMA_Event_transfer &= ~1u; /* make sure it's word aligned in case of 16-bit PCM */
     if (GUS_DMA_Event_transfer == 0) GUS_DMA_Event_transfer = 2;
 }
+#endif
 
-void GUS_DMA_Event_Transfer(DmaChannel *chan,Bitu dmawords) {
+void GUS_DMA_Event_Transfer(/*DmaChannel *chan,*/Bitu dmawords) {
     Bitu dmaaddr = (Bitu)(myGUS.dmaAddr << 4ul) + (Bitu)myGUS.dmaAddrOffset;
     Bitu dmalimit = myGUS.memsize;
     unsigned int docount = 0;
@@ -2083,6 +2086,8 @@ void GUS_DMA_Event_Transfer(DmaChannel *chan,Bitu dmawords) {
      *        Noted: Prior to this hack, the samples played by Star Control II sounded more random and often involved leftover
      *               sample data in GUS RAM, where with this fix, the music now sounds identical to what is played when using
      *               it's Sound Blaster support. */
+    // we don't care about this because we are always 8-bit DMA
+#if 0
     if (myGUS.dma1 < 4/*8-bit DMA channel*/ && (myGUS.DMAControl & 0x44) == 0x04/*8-bit PCM, 16-bit DMA*/)
         dma16xlate = false; /* Star Control II hack: 8-bit PCM, 8-bit DMA, ignore the bit that says it's 16-bit wide */
     else
@@ -2099,23 +2104,59 @@ void GUS_DMA_Event_Transfer(DmaChannel *chan,Bitu dmawords) {
         dmaaddr = (holdAddr | dmaaddr);
         dmalimit = ((dmaaddr & 0xc0000L) | 0x3FFFFL) + 1;
     }
+#endif
 
+#if 0 // ehhhhhhh
     if (dmaaddr < dmalimit)
         docount = (unsigned int)(dmalimit - dmaaddr);
 
-    docount /= (chan->DMA16+1u);
+    // docount /= (chan->DMA16+1u);
     if (docount > (chan->currcnt+1u)) docount = chan->currcnt+1u;
     if ((Bitu)docount > dmawords) docount = dmawords;
+#endif
 
     // hack: some programs especially Gravis Ultrasound MIDI playback like to upload by DMA but never clear the DMA TC flag on the DMA controller.
-    bool saved_tcount = chan->tcount;
-    chan->tcount = false;
+    // TODO let's see how this acts on "real" hardware
+    // bool saved_tcount = chan->tcount;
+    // chan->tcount = false;
 
-    if (docount > 0) {
-        if ((myGUS.DMAControl & 0x2) == 0) {
-            Bitu read=(Bitu)chan->Read((Bitu)docount,&GUSRam[dmaaddr]);
+    uint32_t dma_delay;
+    // From Interwave programmers guide:
+    // 00:0.5 μs–1.0 μs
+    // 01:6 μs–7 μs
+    // 10:6 μs–7 μs
+    // 11:13 μs–14 μs
+    // From ULTRAWRD: it's 650KHz with a divisor...
+    switch ((myGUS.DMAControl >> 3u) & 3u) {
+    case 0b00:
+        dma_delay = 1;
+        break;
+    case 0b01:
+        dma_delay = 3;
+        break;
+    case 0b10:
+        dma_delay = 6;
+        break;
+    case 0b11:
+        dma_delay = 12;
+        break;
+    }
+
+    if (true /*docount > 0*/) {
+        if ((myGUS.DMAControl & 0x2) == 0) { // transfer direction = write
+            // The write to the gus actually happens here!
+            //
+            Bitu read = DMA_Write(
+                &dma_config,
+                dmaaddr,
+                (myGUS.DMAControl & 0x80) /* invert_msb */,
+                (myGUS.DMAControl & 0x4) /* is_16bit */,
+                dma_delay
+            );
+            // Bitu read=(Bitu)chan->Read((Bitu)docount,&GUSRam[dmaaddr]);
             //Check for 16 or 8bit channel
-            read*=(chan->DMA16+1u);
+            // read*=(chan->DMA16+1u);
+            /* // this is handled in DMA_Write
             if((myGUS.DMAControl & 0x80) != 0) {
                 //Invert the MSB to convert twos compliment form
                 Bitu i;
@@ -2127,103 +2168,120 @@ void GUS_DMA_Event_Transfer(DmaChannel *chan,Bitu dmawords) {
                     for(i=dmaaddr+1;i<(dmaaddr+read);i+=2) GUSRam[i] ^= 0x80;
                 }
             }
-
+            */
             step = read;
         } else {
             //Read data out of UltraSound
+            // curl up and die, we can't support read
+            printf("DMA read isn't supported on PicoGUS... sorry\n");
+            assert(false);
+            /*
             Bitu wd = (Bitu)chan->Write((Bitu)docount,&GUSRam[dmaaddr]);
             //Check for 16 or 8bit channel
             wd*=(chan->DMA16+1u);
 
             step = wd;
+            */
         }
     }
 
     LOG_MSG("GUS DMA transfer %lu bytes, GUS RAM address 0x%lx %u-bit DMA %u-bit PCM (ctrl=0x%02x) tcount=%u",
-        (unsigned long)step,(unsigned long)dmaaddr,(myGUS.DMAControl & 0x4) ? 16 : 8,(myGUS.DMAControl & 0x40) ? 16 : 8,myGUS.DMAControl,chan->tcount);
+        (unsigned long)step,(unsigned long)dmaaddr,(myGUS.DMAControl & 0x4) ? 16 : 8,(myGUS.DMAControl & 0x40) ? 16 : 8,myGUS.DMAControl,0/*chan->tcount*/);
 
     if (step > 0) {
         dmaaddr += (unsigned int)step;
 
+        /*
         if (dma16xlate) {
             holdAddr = dmaaddr & 0xc0000L;
             dmaaddr = dmaaddr & 0x3ffffL;
             dmaaddr = dmaaddr >> 1;
             dmaaddr = (holdAddr | dmaaddr);
         }
+        */
 
         myGUS.dmaAddr = dmaaddr >> 4;
         myGUS.dmaAddrOffset = dmaaddr & 0xF;
     }
 
-    if (chan->tcount) {
+    // If we're here, tcount has been reached
+    //if (chan->tcount) {
         LOG_MSG("GUS DMA transfer hit Terminal Count, setting DMA TC IRQ pending");
 
         /* Raise the TC irq, and stop DMA */
         myGUS.DMAControl |= 0x100u; /* NTS: DOSBox SVN approach: Use bit 8 for DMA TC IRQ */
         myGUS.IRQStatus |= 0x80;
-        saved_tcount = true;
+        // saved_tcount = true;
         GUS_CheckIRQ();
-        GUS_StopDMA();
-    }
+        // GUS_StopDMA();
+    // }
 
-    chan->tcount = saved_tcount;
+    // chan->tcount = saved_tcount;
 }
-#endif // 0 // TODO implement DMA
+// #endif // 0 // TODO implement DMA
 
-#if 0 // TODO implement DMA
+// #if 0 // TODO implement DMA
+#if 0 // try non-async DMA
 void GUS_DMA_Event(Bitu val) {
     (void)val;//UNUSED
+    /* stuff that has no bearing on a real card
     DmaChannel *chan = GetDMAChannel(myGUS.dma1);
     if (chan == NULL) {
-        LOG(LOG_MISC,LOG_DEBUG)("GUS DMA event: DMA channel no longer exists, stopping DMA transfer events");
+        DEBUG_LOG_MSG("GUS DMA event: DMA channel no longer exists, stopping DMA transfer events");
         GUS_DMA_Active = false;
         return;
     }
 
     if (chan->masked) {
-        LOG(LOG_MISC,LOG_DEBUG)("GUS: Stopping DMA transfer interval, DMA masked=%u",chan->masked?1:0);
+        DEBUG_LOG_MSG("GUS: Stopping DMA transfer interval, DMA masked=%u",chan->masked?1:0);
         GUS_DMA_Active = false;
         return;
     }
+    */
 
     if (!(myGUS.DMAControl & 0x01/*DMA enable*/)) {
-        LOG(LOG_MISC,LOG_DEBUG)("GUS DMA event: DMA control 'enable DMA' bit was reset, stopping DMA transfer events");
+        DEBUG_LOG_MSG("GUS DMA event: DMA control 'enable DMA' bit was reset, stopping DMA transfer events");
         GUS_DMA_Active = false;
         return;
     }
 
-    LOG(LOG_MISC,LOG_DEBUG)("GUS DMA event: max %u DMA words. DMA: tc=%u mask=%u cnt=%u",
+    /*
+    DEBUG_LOG_MSG("GUS DMA event: max %u DMA words. DMA: tc=%u mask=%u cnt=%u",
         (unsigned int)GUS_DMA_Event_transfer,
         chan->tcount?1:0,
         chan->masked?1:0,
         chan->currcnt+1);
-    GUS_DMA_Event_Transfer(chan,GUS_DMA_Event_transfer);
+    */
+    GUS_DMA_Event_Transfer(/*chan,*/GUS_DMA_Event_transfer);
 
     if (GUS_DMA_Active) {
         /* keep going */
         PIC_AddEvent(GUS_DMA_Event,GUS_DMA_Event_interval);
     }
 }
-#endif // 0 // TODO implement DMA
+#endif // 0
+// #endif // 0 // TODO implement DMA
 
 void GUS_StopDMA() {
-    /* TODO implement DMA
+    ///* TODO implement DMA
     if (GUS_DMA_Active)
-        LOG(LOG_MISC,LOG_DEBUG)("GUS: Stopping DMA transfer interval");
+        DEBUG_LOG_MSG("GUS: Stopping DMA transfer interval");
 
-    PIC_RemoveEvents(GUS_DMA_Event);
+    puts("DMA STOPS FOR NO MAN");
+
+    // PIC_RemoveEvents(GUS_DMA_Event);
     GUS_DMA_Active = false;
-    */ // TODO implement DMA
+    //*/ // TODO implement DMA
 }
 
 void GUS_StartDMA() {
-    /* TODO implement DMA
+    ///* TODO implement DMA
     if (!GUS_DMA_Active) {
         GUS_DMA_Active = true;
-        LOG(LOG_MISC,LOG_DEBUG)("GUS: Starting DMA transfer interval");
-        PIC_AddEvent(GUS_DMA_Event,GUS_DMA_Event_interval_init);
+        DEBUG_LOG_MSG("GUS: Starting DMA transfer interval");
+        // PIC_AddEvent(GUS_DMA_Event,GUS_DMA_Event_interval_init);
 
+        /* can't do shit about this
         if (GetDMAChannel(myGUS.dma1)->masked)
             LOG(LOG_MISC,LOG_WARN)("GUS: DMA transfer interval started when channel is masked");
 
@@ -2231,22 +2289,26 @@ void GUS_StartDMA() {
             LOG(LOG_MISC,LOG_WARN)(
                 "GUS warning: Both DMA channels set to the same channel WITHOUT combining! "
                 "This is documented to cause bus conflicts on real hardware");
+        */
+        GUS_DMA_Event_Transfer(/*chan,*/GUS_DMA_Event_transfer);
     }
-    */ // TODO implement DMA
+    //*/ // TODO implement DMA
 }
 
-#if 0 // TODO implement DMA
-static void GUS_DMA_Callback(DmaChannel * chan,DMAEvent event) {
-    (void)chan;//UNUSED
+//#if 0 // TODO implement DMA
+#if 0 // we aren't going to do it this way
+static void GUS_DMA_Callback(/*DmaChannel * chan,*/DMAEvent event) {
+    // (void)chan;//UNUSED
     if (event == DMA_UNMASKED) {
-        LOG(LOG_MISC,LOG_DEBUG)("GUS: DMA unmasked");
+        DEBUG_LOG_MSG("GUS: DMA unmasked");
         if (myGUS.DMAControl & 0x01/*DMA enable*/) GUS_StartDMA();
     }
     else if (event == DMA_MASKED) {
-        LOG(LOG_MISC,LOG_DEBUG)("GUS: DMA masked. Perhaps it will stop the DMA transfer event.");
+        DEBUG_LOG_MSG("GUS: DMA masked. Perhaps it will stop the DMA transfer event.");
     }
 }
-#endif // 0 // TODO implement DMA
+#endif
+//#endif // 0 // TODO implement DMA
 
 extern void GUS_CallBack(Bitu len, int16_t* play_buffer) {
     int32_t buffer[MIXER_BUFSIZE][2];
@@ -2483,26 +2545,26 @@ public:
 #if 0 // dbx-specific
         string s_gustype = section->Get_string("gustype");
         if (s_gustype == "classic") {
-            LOG(LOG_MISC,LOG_DEBUG)("GUS: Classic emulation");
+            DEBUG_LOG_MSG("GUS: Classic emulation");
             gus_type = GUS_CLASSIC;
         }
         else if (s_gustype == "classic37") {
-            LOG(LOG_MISC,LOG_DEBUG)("GUS: Classic emulation");
+            DEBUG_LOG_MSG("GUS: Classic emulation");
             gus_type = GUS_CLASSIC;
             gus_ics_mixer = true;
         }
         else if (s_gustype == "max") {
             // UltraMAX cards do not have the ICS mixer
-            LOG(LOG_MISC,LOG_DEBUG)("GUS: MAX emulation");
+            DEBUG_LOG_MSG("GUS: MAX emulation");
             gus_type = GUS_MAX;
         }
         else if (s_gustype == "interwave") {
             // Neither do Interwave cards
-            LOG(LOG_MISC,LOG_DEBUG)("GUS: Interwave PnP emulation");
+            DEBUG_LOG_MSG("GUS: Interwave PnP emulation");
             gus_type = GUS_INTERWAVE;
         }
         else {
-            LOG(LOG_MISC,LOG_DEBUG)("GUS: Classic emulation by default");
+            DEBUG_LOG_MSG("GUS: Classic emulation by default");
             gus_type = GUS_CLASSIC;
         }
 #endif // 0 // dbx-specific
@@ -2511,7 +2573,7 @@ public:
 #if 0 // dbx-specific
         myGUS.clearTCIfPollingIRQStatus = section->Get_bool("clear dma tc irq if excess polling");
         if (myGUS.clearTCIfPollingIRQStatus)
-            LOG(LOG_MISC,LOG_DEBUG)("GUS: Will clear DMA TC IRQ if excess polling, as instructed");
+            DEBUG_LOG_MSG("GUS: Will clear DMA TC IRQ if excess polling, as instructed");
 #endif // 0 // dbx-specific
         myGUS.clearTCIfPollingIRQStatus = false;
 
@@ -2522,20 +2584,20 @@ public:
 #if 0 // dbx-specific
         myGUS.initUnmaskDMA = section->Get_bool("unmask dma");
         if (myGUS.initUnmaskDMA)
-            LOG(LOG_MISC,LOG_DEBUG)("GUS: Unmasking DMA at boot time as requested");
+            DEBUG_LOG_MSG("GUS: Unmasking DMA at boot time as requested");
 #endif // 0 // dbx-specific
         myGUS.initUnmaskDMA = false;
 
 #if 0 // dbx-specific
         myGUS.fixed_sample_rate_output = section->Get_bool("gus fixed render rate");
-        LOG(LOG_MISC,LOG_DEBUG)("GUS: using %s sample rate output",myGUS.fixed_sample_rate_output?"fixed":"realistic");
+        DEBUG_LOG_MSG("GUS: using %s sample rate output",myGUS.fixed_sample_rate_output?"fixed":"realistic");
 #endif // 0 // dbx-specific
         myGUS.fixed_sample_rate_output = false;
 
 #if 0 // dbx-specific
         myGUS.force_master_irq_enable=section->Get_bool("force master irq enable");
         if (myGUS.force_master_irq_enable)
-            LOG(LOG_MISC,LOG_DEBUG)("GUS: Master IRQ enable will be forced on as instructed");
+            DEBUG_LOG_MSG("GUS: Master IRQ enable will be forced on as instructed");
 #endif // 0 // dbx-specific
         myGUS.force_master_irq_enable = false;
 
@@ -2846,7 +2908,7 @@ void GUS_ShutDown(Section* /*sec*/) {
 void GUS_OnReset(Section *sec) {
     (void)sec;//UNUSED
     if (test == NULL && !IS_PC98_ARCH) {
-        LOG(LOG_MISC,LOG_DEBUG)("Allocating GUS emulation");
+        DEBUG_LOG_MSG("Allocating GUS emulation");
         test = new GUS(control->GetSection("gus"));
     }
 }
@@ -2862,7 +2924,7 @@ void GUS_DOS_Boot(Section *sec) {
 }
 
 void GUS_Init() {
-    LOG(LOG_MISC,LOG_DEBUG)("Initializing Gravis Ultrasound emulation");
+    DEBUG_LOG_MSG("Initializing Gravis Ultrasound emulation");
 
     AddExitFunction(AddExitFunctionFuncPair(GUS_ShutDown),true);
     AddVMEventFunction(VM_EVENT_RESET,AddVMEventFunctionFuncPair(GUS_OnReset));
