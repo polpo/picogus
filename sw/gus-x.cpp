@@ -893,6 +893,7 @@ static INLINE void GUS_CheckIRQ(void) {
         uint8_t irqstat = GUS_EffectiveIRQStatus();
 
         if (irqstat != 0 /*&& gus_prev_effective_irqstat == 0*/) {
+        // if (irqstat != 0 && gus_prev_effective_irqstat == 0) {
             /* The GUS fires an IRQ, then waits for the interrupt service routine to
              * clear all pending interrupt events before firing another one. if you
              * don't service all events, then you don't get another interrupt. */
@@ -2033,6 +2034,8 @@ void GUS_DMA_Event_Transfer(/*DmaChannel *chan,*/Bitu dmawords) {
     bool dma16xlate;
     Bitu holdAddr;
 
+    // puts("Starting DMA");
+
     // FIXME: What does the GUS do if the DMA address goes beyond the end of memory?
 
     /* is this a DMA transfer where the GUS memory address is to be translated for 16-bit PCM?
@@ -2146,13 +2149,14 @@ void GUS_DMA_Event_Transfer(/*DmaChannel *chan,*/Bitu dmawords) {
         if ((myGUS.DMAControl & 0x2) == 0) { // transfer direction = write
             // The write to the gus actually happens here!
             //
-            Bitu read = DMA_Write(
+            step = DMA_Write(
                 &dma_config,
                 dmaaddr,
                 (myGUS.DMAControl & 0x80) /* invert_msb */,
                 (myGUS.DMAControl & 0x4) /* is_16bit */,
                 dma_delay
             );
+            // uart_print_hex_u32(read);
             // Bitu read=(Bitu)chan->Read((Bitu)docount,&GUSRam[dmaaddr]);
             //Check for 16 or 8bit channel
             // read*=(chan->DMA16+1u);
@@ -2169,7 +2173,7 @@ void GUS_DMA_Event_Transfer(/*DmaChannel *chan,*/Bitu dmawords) {
                 }
             }
             */
-            step = read;
+            // step = read;
         } else {
             //Read data out of UltraSound
             // curl up and die, we can't support read
@@ -2185,8 +2189,8 @@ void GUS_DMA_Event_Transfer(/*DmaChannel *chan,*/Bitu dmawords) {
         }
     }
 
-    LOG_MSG("GUS DMA transfer %lu bytes, GUS RAM address 0x%lx %u-bit DMA %u-bit PCM (ctrl=0x%02x) tcount=%u",
-        (unsigned long)step,(unsigned long)dmaaddr,(myGUS.DMAControl & 0x4) ? 16 : 8,(myGUS.DMAControl & 0x40) ? 16 : 8,myGUS.DMAControl,0/*chan->tcount*/);
+    //LOG_MSG("GUS DMA transfer %lu bytes, GUS RAM address 0x%lx %u-bit DMA %u-bit PCM (ctrl=0x%02x) tcount=%u",
+    //    (unsigned long)step,(unsigned long)dmaaddr,(myGUS.DMAControl & 0x4) ? 16 : 8,(myGUS.DMAControl & 0x40) ? 16 : 8,myGUS.DMAControl,0/*chan->tcount*/);
 
     if (step > 0) {
         dmaaddr += (unsigned int)step;
@@ -2206,14 +2210,18 @@ void GUS_DMA_Event_Transfer(/*DmaChannel *chan,*/Bitu dmawords) {
 
     // If we're here, tcount has been reached
     //if (chan->tcount) {
-        LOG_MSG("GUS DMA transfer hit Terminal Count, setting DMA TC IRQ pending");
+        // LOG_MSG("GUS DMA transfer hit Terminal Count, setting DMA TC IRQ pending");
+        // printf("step %u\n", step);
 
         /* Raise the TC irq, and stop DMA */
         myGUS.DMAControl |= 0x100u; /* NTS: DOSBox SVN approach: Use bit 8 for DMA TC IRQ */
         myGUS.IRQStatus |= 0x80;
         // saved_tcount = true;
+        if (!(myGUS.DMAControl & 0x20)) {
+            puts("DMA end without TC IRQ enabled");
+        }
         GUS_CheckIRQ();
-        // GUS_StopDMA();
+        GUS_StopDMA();
     // }
 
     // chan->tcount = saved_tcount;
@@ -2221,8 +2229,7 @@ void GUS_DMA_Event_Transfer(/*DmaChannel *chan,*/Bitu dmawords) {
 // #endif // 0 // TODO implement DMA
 
 // #if 0 // TODO implement DMA
-#if 0 // try non-async DMA
-void GUS_DMA_Event(Bitu val) {
+uint32_t GUS_DMA_Event(Bitu val) {
     (void)val;//UNUSED
     /* stuff that has no bearing on a real card
     DmaChannel *chan = GetDMAChannel(myGUS.dma1);
@@ -2242,7 +2249,7 @@ void GUS_DMA_Event(Bitu val) {
     if (!(myGUS.DMAControl & 0x01/*DMA enable*/)) {
         DEBUG_LOG_MSG("GUS DMA event: DMA control 'enable DMA' bit was reset, stopping DMA transfer events");
         GUS_DMA_Active = false;
-        return;
+        return 0;
     }
 
     /*
@@ -2255,11 +2262,12 @@ void GUS_DMA_Event(Bitu val) {
     GUS_DMA_Event_Transfer(/*chan,*/GUS_DMA_Event_transfer);
 
     if (GUS_DMA_Active) {
+        puts("HMM NOPE??");
         /* keep going */
-        PIC_AddEvent(GUS_DMA_Event,GUS_DMA_Event_interval);
+        // PIC_AddEvent(GUS_DMA_Event,GUS_DMA_Event_interval, 2);
     }
+    return 0;
 }
-#endif // 0
 // #endif // 0 // TODO implement DMA
 
 void GUS_StopDMA() {
@@ -2267,7 +2275,7 @@ void GUS_StopDMA() {
     if (GUS_DMA_Active)
         DEBUG_LOG_MSG("GUS: Stopping DMA transfer interval");
 
-    puts("DMA STOPS FOR NO MAN");
+    // puts("DMA STOPS FOR NO MAN");
 
     // PIC_RemoveEvents(GUS_DMA_Event);
     GUS_DMA_Active = false;
@@ -2279,7 +2287,8 @@ void GUS_StartDMA() {
     if (!GUS_DMA_Active) {
         GUS_DMA_Active = true;
         DEBUG_LOG_MSG("GUS: Starting DMA transfer interval");
-        // PIC_AddEvent(GUS_DMA_Event,GUS_DMA_Event_interval_init);
+        // PIC_AddEvent(GUS_DMA_Event, GUS_DMA_Event_interval_init, 2);
+        PIC_AddEvent(GUS_DMA_Event, 2, 2);
 
         /* can't do shit about this
         if (GetDMAChannel(myGUS.dma1)->masked)
@@ -2290,7 +2299,6 @@ void GUS_StartDMA() {
                 "GUS warning: Both DMA channels set to the same channel WITHOUT combining! "
                 "This is documented to cause bus conflicts on real hardware");
         */
-        GUS_DMA_Event_Transfer(/*chan,*/GUS_DMA_Event_transfer);
     }
     //*/ // TODO implement DMA
 }

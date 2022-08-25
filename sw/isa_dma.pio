@@ -8,21 +8,24 @@
 .define public DRQ_PIN 21
 .define public TC_PIN 22
 
+; budget: 11 instructions
 .program dma_write
 .side_set 2 opt                         ; sideset bit 1 is ADS, bit 0 is IOCHRDY
-restart:
-    out null, 32                        ; wait to trigger DMA operation
-dmaloop:
+.wrap_target
+    out x, 32                           ; wait to trigger DMA operation
     set pins, 1          side 0b11      ; assert DRQ, muxes to data
     wait 0 gpio DACK_PIN side 0b11      ; DACK faling edge
     set pins, 0          side 0b11      ; deassert DRQ 
     wait 0 gpio IOW_PIN  side 0b11      ; wait for IOW assert
     in pins, 8           side 0b10      ; input data, deassert IOCHRDY if we stall on full FIFO
-    wait 1 gpio IOW_PIN  side 0b11      ; wait for IOW deassert with IOCHRDY back high
-    jmp pin restart      side 0b01      ; if TC high, transfer is over. set ADS back to addr
-    wait 1 gpio DACK_PIN side 0b01      ; DACK rising edge
-;    out null, 32         side 0b01      ; wait for system - time here varies based on GUS DMA delay
-;    jmp dmaloop          side 0b11      ; get ADS back to data, loop
+    jmp pin tc_flag      side 0b11      ; if TC high, transfer is over
+    in null, 24          side 0b11      ; write 0 to TC flag, autopush
+wait_dack:
+    wait 1 gpio DACK_PIN                ; DACK rising edge, no sideset to carry over from the IN instruction we came from
+.wrap
+tc_flag:
+    in x, 24             side 0b01      ; set TC flag, autopush, set ADS back to addr. X is full o' 1s
+    jmp wait_dack        side 0b01
 
 % c-sdk {
 static inline void dma_write_program_init(PIO pio, uint sm, uint offset) {
@@ -31,7 +34,8 @@ static inline void dma_write_program_init(PIO pio, uint sm, uint offset) {
     // Set up AD0 bus as input
     sm_config_set_in_pins(&c, AD0_PIN);
     // Autopush at 8 bits
-    sm_config_set_in_shift(&c, false, true, 8);
+    // sm_config_set_in_shift(&c, false, true, 9);
+    sm_config_set_in_shift(&c, true, true, 32);
 
     // Autopull 32 bits (condition variables)
     sm_config_set_out_shift(&c, true, true /* autopull */, 32);
@@ -40,13 +44,18 @@ static inline void dma_write_program_init(PIO pio, uint sm, uint offset) {
     pio_sm_set_consecutive_pindirs(pio, sm, IOW_PIN, 1, false);
     pio_sm_set_consecutive_pindirs(pio, sm, AD0_PIN, 8, false);
 
+    // Config DMA pins
+    sm_config_set_set_pins(&c, DRQ_PIN, 1);
+    pio_gpio_init(pio, DRQ_PIN);
+    pio_sm_set_consecutive_pindirs(pio, sm, DRQ_PIN, 1, true);
     sm_config_set_jmp_pin(&c, TC_PIN);
+    pio_sm_set_consecutive_pindirs(pio, sm, TC_PIN, 1, false);
+    pio_sm_set_consecutive_pindirs(pio, sm, DACK_PIN, 1, false);
 
     // set up IOCHRDY and ADS
-    sm_config_set_set_pins(&c, DRQ_PIN, 1);
+    sm_config_set_sideset_pins(&c, IOCHRDY_PIN);
     pio_gpio_init(pio, IOCHRDY_PIN);
     pio_gpio_init(pio, ADS_PIN);
-    pio_gpio_init(pio, DRQ_PIN);
     pio_sm_set_consecutive_pindirs(pio, sm, IOCHRDY_PIN, 2, true);
 
     // Load our configuration, and jump to the start of the program
