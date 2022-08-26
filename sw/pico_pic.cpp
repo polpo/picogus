@@ -22,6 +22,10 @@ int64_t PIC_HandleEvent(alarm_id_t id, void *user_data) {
     // printf("called event handler: %x %x, ret %d\n", event->handler, event->value, ret);
 #ifdef USE_ALARM
     // gpio_xor_mask(1u << PICO_DEFAULT_LED_PIN);
+    if (!ret) {
+        event->alarm_id = 0;
+        return 0;
+    }
     // A negative return value re-sets the alarm from the time when it initially triggered
     return -(int32_t)ret;
 #else
@@ -54,6 +58,10 @@ void PIC_RemoveEvents(PIC_EventHandler handler) {
 void PIC_Init() {
 #ifdef USE_ALARM
     alarm_pool = alarm_pool_create(2, PICO_TIME_DEFAULT_ALARM_POOL_MAX_TIMERS);
+    for (int i = 0; i < 3; ++i) {
+        timerEvents[i].alarm_id = 0;
+        timerEvents[i].handler = nullptr;
+    }
 #else
     for (int i = 0; i < 3; ++i) {
         timerEvents[i].active = false;

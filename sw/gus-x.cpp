@@ -2276,9 +2276,7 @@ void GUS_StopDMA() {
     if (GUS_DMA_Active)
         DEBUG_LOG_MSG("GUS: Stopping DMA transfer interval");
 
-    // puts("DMA STOPS FOR NO MAN");
-
-    // PIC_RemoveEvents(GUS_DMA_Event);
+    PIC_RemoveEvents(GUS_DMA_Event);
     GUS_DMA_Active = false;
     //*/ // TODO implement DMA
 }
