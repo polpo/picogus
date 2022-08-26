@@ -2009,14 +2009,13 @@ __force_inline void write_gus(Bitu port,Bitu val,Bitu iolen) {
 }
 
 //#if 0 // TODO implement DMA
+#if 0 // we aren't going to do it this way
 static constexpr Bitu GUS_Master_Clock = 617400; /* NOTE: This is 1000000Hz / 1.619695497. Seems to be a common base rate within the hardware. */
 static constexpr Bitu GUS_DMA_Event_transfer = 16; /* DMA words (8 or 16-bit) per interval */
 static constexpr Bitu GUS_DMA_Events_per_sec = 44100 / 4; /* cheat a little, to improve emulation performance */
 static constexpr uint32_t GUS_DMA_Event_interval = 1000000 / GUS_DMA_Events_per_sec;
 static constexpr uint32_t GUS_DMA_Event_interval_init = 1000000 / 44100;
-static bool GUS_DMA_Active = false;
 
-#if 0 // we aren't going to do it this way
 void GUS_Update_DMA_Event_transfer() {
     /* NTS: From the GUS SDK, bits 3-4 of DMA Control divide the ISA DMA transfer rate down from "approx 650KHz".
      *      Bits 3-4 are documented as "DMA Rate divisor" */
@@ -2025,14 +2024,15 @@ void GUS_Update_DMA_Event_transfer() {
     if (GUS_DMA_Event_transfer == 0) GUS_DMA_Event_transfer = 2;
 }
 #endif
+static bool GUS_DMA_Active = false;
 
-void GUS_DMA_Event_Transfer(/*DmaChannel *chan,*/Bitu dmawords) {
-    Bitu dmaaddr = (Bitu)(myGUS.dmaAddr << 4ul) + (Bitu)myGUS.dmaAddrOffset;
-    Bitu dmalimit = myGUS.memsize;
-    unsigned int docount = 0;
+void GUS_DMA_Event_Transfer(/*DmaChannel *chan,Bitu dmawords*/) {
+    Bitu dmaaddr = (Bitu)(myGUS.dmaAddr) << 4ul; //+ (Bitu)myGUS.dmaAddrOffset;
+    // Bitu dmalimit = myGUS.memsize;
+    // unsigned int docount = 0;
     unsigned int step = 0;
-    bool dma16xlate;
-    Bitu holdAddr;
+    // bool dma16xlate;
+    // Bitu holdAddr;
 
     // puts("Starting DMA");
 
@@ -2154,7 +2154,8 @@ void GUS_DMA_Event_Transfer(/*DmaChannel *chan,*/Bitu dmawords) {
                 dmaaddr,
                 (myGUS.DMAControl & 0x80) /* invert_msb */,
                 (myGUS.DMAControl & 0x4) /* is_16bit */,
-                dma_delay
+                dma_delay,
+                &GUS_DMA_Active
             );
             // uart_print_hex_u32(read);
             // Bitu read=(Bitu)chan->Read((Bitu)docount,&GUSRam[dmaaddr]);
@@ -2192,21 +2193,21 @@ void GUS_DMA_Event_Transfer(/*DmaChannel *chan,*/Bitu dmawords) {
     //LOG_MSG("GUS DMA transfer %lu bytes, GUS RAM address 0x%lx %u-bit DMA %u-bit PCM (ctrl=0x%02x) tcount=%u",
     //    (unsigned long)step,(unsigned long)dmaaddr,(myGUS.DMAControl & 0x4) ? 16 : 8,(myGUS.DMAControl & 0x40) ? 16 : 8,myGUS.DMAControl,0/*chan->tcount*/);
 
+        /*
     if (step > 0) {
         dmaaddr += (unsigned int)step;
 
-        /*
         if (dma16xlate) {
             holdAddr = dmaaddr & 0xc0000L;
             dmaaddr = dmaaddr & 0x3ffffL;
             dmaaddr = dmaaddr >> 1;
             dmaaddr = (holdAddr | dmaaddr);
         }
-        */
 
         myGUS.dmaAddr = dmaaddr >> 4;
         myGUS.dmaAddrOffset = dmaaddr & 0xF;
     }
+        */
 
     // If we're here, tcount has been reached
     //if (chan->tcount) {
@@ -2259,7 +2260,7 @@ uint32_t GUS_DMA_Event(Bitu val) {
         chan->masked?1:0,
         chan->currcnt+1);
     */
-    GUS_DMA_Event_Transfer(/*chan,*/GUS_DMA_Event_transfer);
+    GUS_DMA_Event_Transfer(/*chan,GUS_DMA_Event_transfer*/);
 
     if (GUS_DMA_Active) {
         puts("HMM NOPE??");
