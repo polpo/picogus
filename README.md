@@ -4,11 +4,11 @@
 
 ISA card emulation on the Raspberry Pi Pico's RP2040 microcontroller. Initially focusing on [Gravis Ultrasound (GUS)](https://en.wikipedia.org/wiki/Gravis_Ultrasound) sound card emulation, hence the name PicoGUS.
 
+Please see [the Wiki](https://github.com/polpo/picogus/wiki) for current status!
+
 ![picogus-prototype](https://user-images.githubusercontent.com/1544908/182006174-71a1792d-ac5b-4c2b-8e61-94a05a0ef55c.jpg)
 
-Please see [the Wiki](https://github.com/polpo/picogus/wiki) for current status.
-
-Looking for the original project, using Raspberry Pi 3/4? See the [pigus repo](htts://github.com/polpo/pigus).
+Looking for the original project, using Raspberry Pi 3/4? See the [pigus repo](https://github.com/polpo/pigus).
 
 See/hear PicoGUS in action on YouTube:
 
