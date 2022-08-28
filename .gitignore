@@ -1,0 +1,6 @@
+.DS_Store
+*.EXE
+*.OBJ
+build
+fp-info-cache
+PicoGUS-backups

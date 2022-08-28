@@ -7,13 +7,13 @@ set(CMAKE_CXX_STANDARD 17)
 
 # Initialise pico_sdk from installed location
 # (note this can come from environment, CMake cache etc)
-set(PICO_SDK_PATH "/Users/ian/src/pico/pico-sdk")
+set(PICO_SDK_PATH "${CMAKE_SOURCE_DIR}/../../pico/pico-sdk")
 
 # Pull in Raspberry Pi Pico SDK (must be before project)
 include(pico_sdk_import.cmake)
 include(pico_extras_import.cmake)
 
-project(sw-pico C CXX ASM)
+project(picogus C CXX ASM)
 
 # set(PICO_DEOPTIMIZED_DEBUG "1")
 set(CMAKE_BUILD_TYPE "Release")
@@ -27,9 +27,9 @@ set(PROJECT_TYPE "GUS")
 pico_sdk_init()
 
 # Add executable. Default name is the project name, version 0.1
-add_executable(sw-pico sw-pico.cpp)
+add_executable(picogus picogus.cpp)
 
-target_compile_definitions(sw-pico PRIVATE
+target_compile_definitions(picogus PRIVATE
         # compile time configuration of I2S
         #        PICO_AUDIO_I2S_MONO_INPUT=1
         USE_AUDIO_I2S=1
@@ -44,24 +44,24 @@ target_compile_definitions(sw-pico PRIVATE
 )
 
 if(PROJECT_TYPE STREQUAL "GUS")
-    target_sources(sw-pico PRIVATE gusplay.cpp pico_pic.cpp)
-    target_compile_definitions(sw-pico PRIVATE
+    target_sources(picogus PRIVATE gusplay.cpp pico_pic.cpp)
+    target_compile_definitions(picogus PRIVATE
         SOUND_GUS=1
         PSRAM=1
         # TEST_PSRAM=1
         USE_ALARM=1
         USE_SPINLOCK=1
     )
-    pico_generate_pio_header(sw-pico ${CMAKE_CURRENT_LIST_DIR}/psram_spi.pio)
+    pico_generate_pio_header(picogus ${CMAKE_CURRENT_LIST_DIR}/psram_spi.pio)
 endif()
 
 if(PROJECT_TYPE STREQUAL "OPL")
-    target_sources(sw-pico PRIVATE adlib.cpp)
+    target_sources(picogus PRIVATE adlib.cpp)
     target_link_libraries(
-        sw-pico
+        picogus
         opl
     )
-    target_compile_definitions(sw-pico PRIVATE
+    target_compile_definitions(picogus PRIVATE
         SOUND_OPL=1
         USE_EMU8950_OPL=1
     )
@@ -69,20 +69,20 @@ if(PROJECT_TYPE STREQUAL "OPL")
 endif()
 
 
-pico_set_program_name(sw-pico "sw-pico")
-pico_set_program_version(sw-pico "0.1")
+pico_set_program_name(picogus "picogus")
+pico_set_program_version(picogus "0.1")
 
-pico_enable_stdio_uart(sw-pico 0)
-pico_enable_stdio_usb(sw-pico 0)
-pico_enable_stdio_semihosting(sw-pico 0)
+pico_enable_stdio_uart(picogus 0)
+pico_enable_stdio_usb(picogus 0)
+pico_enable_stdio_semihosting(picogus 0)
 
-pico_generate_pio_header(sw-pico ${CMAKE_CURRENT_LIST_DIR}/isa_io.pio)
+pico_generate_pio_header(picogus ${CMAKE_CURRENT_LIST_DIR}/isa_io.pio)
 
 add_subdirectory(stdio_async_uart)
 
 # Add the standard library to the build
 target_link_libraries(
-    sw-pico
+    picogus
     pico_stdlib
     pico_multicore
     pico_audio_i2s
@@ -92,14 +92,14 @@ target_link_libraries(
 
 # Add any user requested libraries
 target_link_libraries(
-    sw-pico
+    picogus
     stdio_async_uart
 )
 
-pico_add_extra_outputs(sw-pico)
+pico_add_extra_outputs(picogus)
 
 add_custom_target(
     program
-    DEPENDS sw-pico
-    COMMAND openocd -f interface/picoprobe.cfg -f target/rp2040.cfg -c "program sw-pico.elf verify reset exit"
+    DEPENDS picogus
+    COMMAND openocd -f interface/picoprobe.cfg -f target/rp2040.cfg -c "program picogus.elf verify reset exit"
 )

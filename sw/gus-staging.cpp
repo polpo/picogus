@@ -46,7 +46,7 @@
 */
 #include "pico_pic.h"
 
-#include "gus.h"
+#include "gus-staging.h"
 
 extern Gus* gus;
 
