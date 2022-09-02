@@ -4,6 +4,10 @@
 
   (paper "A4")
 
+  (title_block
+    (title "PicoGUS v1.1")
+  )
+
   (lib_symbols
     (symbol "74FST3257DR2G_1" (pin_names (offset 0.762)) (in_bom yes) (on_board yes)
       (property "Reference" "IC" (id 0) (at 21.59 7.62 0)
@@ -773,32 +777,32 @@
         )
       )
     )
-    (symbol "74xx:74LS04" (in_bom yes) (on_board yes)
+    (symbol "74xx:74LS14" (pin_names (offset 1.016)) (in_bom yes) (on_board yes)
       (property "Reference" "U" (id 0) (at 0 1.27 0)
         (effects (font (size 1.27 1.27)))
       )
-      (property "Value" "74LS04" (id 1) (at 0 -1.27 0)
+      (property "Value" "74LS14" (id 1) (at 0 -1.27 0)
         (effects (font (size 1.27 1.27)))
       )
       (property "Footprint" "" (id 2) (at 0 0 0)
         (effects (font (size 1.27 1.27)) hide)
       )
-      (property "Datasheet" "http://www.ti.com/lit/gpn/sn74LS04" (id 3) (at 0 0 0)
+      (property "Datasheet" "http://www.ti.com/lit/gpn/sn74LS14" (id 3) (at 0 0 0)
         (effects (font (size 1.27 1.27)) hide)
       )
       (property "ki_locked" "" (id 4) (at 0 0 0)
         (effects (font (size 1.27 1.27)))
       )
-      (property "ki_keywords" "TTL not inv" (id 5) (at 0 0 0)
+      (property "ki_keywords" "TTL not inverter" (id 5) (at 0 0 0)
         (effects (font (size 1.27 1.27)) hide)
       )
-      (property "ki_description" "Hex Inverter" (id 6) (at 0 0 0)
+      (property "ki_description" "Hex inverter schmitt trigger" (id 6) (at 0 0 0)
         (effects (font (size 1.27 1.27)) hide)
       )
-      (property "ki_fp_filters" "DIP*W7.62mm* SSOP?14* TSSOP?14*" (id 7) (at 0 0 0)
+      (property "ki_fp_filters" "DIP*W7.62mm*" (id 7) (at 0 0 0)
         (effects (font (size 1.27 1.27)) hide)
       )
-      (symbol "74LS04_1_0"
+      (symbol "74LS14_1_0"
         (polyline
           (pts
             (xy -3.81 3.81)
@@ -818,7 +822,28 @@
           (number "2" (effects (font (size 1.27 1.27))))
         )
       )
-      (symbol "74LS04_2_0"
+      (symbol "74LS14_1_1"
+        (polyline
+          (pts
+            (xy -1.905 -1.27)
+            (xy -1.905 1.27)
+            (xy -0.635 1.27)
+          )
+          (stroke (width 0) (type default) (color 0 0 0 0))
+          (fill (type none))
+        )
+        (polyline
+          (pts
+            (xy -2.54 -1.27)
+            (xy -0.635 -1.27)
+            (xy -0.635 1.27)
+            (xy 0 1.27)
+          )
+          (stroke (width 0) (type default) (color 0 0 0 0))
+          (fill (type none))
+        )
+      )
+      (symbol "74LS14_2_0"
         (polyline
           (pts
             (xy -3.81 3.81)
@@ -838,7 +863,28 @@
           (number "4" (effects (font (size 1.27 1.27))))
         )
       )
-      (symbol "74LS04_3_0"
+      (symbol "74LS14_2_1"
+        (polyline
+          (pts
+            (xy -1.905 -1.27)
+            (xy -1.905 1.27)
+            (xy -0.635 1.27)
+          )
+          (stroke (width 0) (type default) (color 0 0 0 0))
+          (fill (type none))
+        )
+        (polyline
+          (pts
+            (xy -2.54 -1.27)
+            (xy -0.635 -1.27)
+            (xy -0.635 1.27)
+            (xy 0 1.27)
+          )
+          (stroke (width 0) (type default) (color 0 0 0 0))
+          (fill (type none))
+        )
+      )
+      (symbol "74LS14_3_0"
         (polyline
           (pts
             (xy -3.81 3.81)
@@ -858,7 +904,28 @@
           (number "6" (effects (font (size 1.27 1.27))))
         )
       )
-      (symbol "74LS04_4_0"
+      (symbol "74LS14_3_1"
+        (polyline
+          (pts
+            (xy -1.905 -1.27)
+            (xy -1.905 1.27)
+            (xy -0.635 1.27)
+          )
+          (stroke (width 0) (type default) (color 0 0 0 0))
+          (fill (type none))
+        )
+        (polyline
+          (pts
+            (xy -2.54 -1.27)
+            (xy -0.635 -1.27)
+            (xy -0.635 1.27)
+            (xy 0 1.27)
+          )
+          (stroke (width 0) (type default) (color 0 0 0 0))
+          (fill (type none))
+        )
+      )
+      (symbol "74LS14_4_0"
         (polyline
           (pts
             (xy -3.81 3.81)
@@ -878,7 +945,28 @@
           (number "9" (effects (font (size 1.27 1.27))))
         )
       )
-      (symbol "74LS04_5_0"
+      (symbol "74LS14_4_1"
+        (polyline
+          (pts
+            (xy -1.905 -1.27)
+            (xy -1.905 1.27)
+            (xy -0.635 1.27)
+          )
+          (stroke (width 0) (type default) (color 0 0 0 0))
+          (fill (type none))
+        )
+        (polyline
+          (pts
+            (xy -2.54 -1.27)
+            (xy -0.635 -1.27)
+            (xy -0.635 1.27)
+            (xy 0 1.27)
+          )
+          (stroke (width 0) (type default) (color 0 0 0 0))
+          (fill (type none))
+        )
+      )
+      (symbol "74LS14_5_0"
         (polyline
           (pts
             (xy -3.81 3.81)
@@ -898,7 +986,28 @@
           (number "11" (effects (font (size 1.27 1.27))))
         )
       )
-      (symbol "74LS04_6_0"
+      (symbol "74LS14_5_1"
+        (polyline
+          (pts
+            (xy -1.905 -1.27)
+            (xy -1.905 1.27)
+            (xy -0.635 1.27)
+          )
+          (stroke (width 0) (type default) (color 0 0 0 0))
+          (fill (type none))
+        )
+        (polyline
+          (pts
+            (xy -2.54 -1.27)
+            (xy -0.635 -1.27)
+            (xy -0.635 1.27)
+            (xy 0 1.27)
+          )
+          (stroke (width 0) (type default) (color 0 0 0 0))
+          (fill (type none))
+        )
+      )
+      (symbol "74LS14_6_0"
         (polyline
           (pts
             (xy -3.81 3.81)
@@ -918,7 +1027,28 @@
           (number "13" (effects (font (size 1.27 1.27))))
         )
       )
-      (symbol "74LS04_7_0"
+      (symbol "74LS14_6_1"
+        (polyline
+          (pts
+            (xy -1.905 -1.27)
+            (xy -1.905 1.27)
+            (xy -0.635 1.27)
+          )
+          (stroke (width 0) (type default) (color 0 0 0 0))
+          (fill (type none))
+        )
+        (polyline
+          (pts
+            (xy -2.54 -1.27)
+            (xy -0.635 -1.27)
+            (xy -0.635 1.27)
+            (xy 0 1.27)
+          )
+          (stroke (width 0) (type default) (color 0 0 0 0))
+          (fill (type none))
+        )
+      )
+      (symbol "74LS14_7_0"
         (pin power_in line (at 0 12.7 270) (length 5.08)
           (name "VCC" (effects (font (size 1.27 1.27))))
           (number "14" (effects (font (size 1.27 1.27))))
@@ -928,7 +1058,7 @@
           (number "7" (effects (font (size 1.27 1.27))))
         )
       )
-      (symbol "74LS04_7_1"
+      (symbol "74LS14_7_1"
         (rectangle (start -5.08 7.62) (end 5.08 -7.62)
           (stroke (width 0.254) (type default) (color 0 0 0 0))
           (fill (type background))
@@ -3647,7 +3777,7 @@
     (stroke (width 0) (type default) (color 0 0 0 0))
     (uuid 4a4b8101-5156-4807-b11f-ec76e740f13e)
   )
-  (wire (pts (xy 128.27 33.655) (xy 128.27 40.005))
+  (wire (pts (xy 128.27 35.56) (xy 128.27 40.005))
     (stroke (width 0) (type default) (color 0 0 0 0))
     (uuid 4c619ac7-d339-42a2-8ca3-29b5dd4d830d)
   )
@@ -3879,7 +4009,7 @@
     (stroke (width 0) (type default) (color 0 0 0 0))
     (uuid ac418447-a42b-4601-86cd-3b6e0f608668)
   )
-  (wire (pts (xy 140.97 40.005) (xy 145.415 40.005))
+  (wire (pts (xy 140.97 40.005) (xy 146.05 40.005))
     (stroke (width 0) (type default) (color 0 0 0 0))
     (uuid b1203f25-70c4-4464-85de-676d064f3160)
   )
@@ -5311,7 +5441,7 @@
     (in_bom yes) (on_board yes)
     (uuid 233d2739-7a24-4382-adbe-243fe761d5ad)
     (property "Reference" "D1" (id 0) (at 137.16 33.655 0))
-    (property "Value" "D_Schottky" (id 1) (at 137.16 36.195 0))
+    (property "Value" "1A 20V Schottky" (id 1) (at 137.16 36.195 0))
     (property "Footprint" "Diode_SMD:D_SOD-123F" (id 2) (at 137.16 40.005 0)
       (effects (font (size 1.27 1.27)) hide)
     )
@@ -5338,17 +5468,17 @@
     (pin "1" (uuid e56bdcde-e923-4d98-b2e8-3001f405bcd8))
   )
 
-  (symbol (lib_id "power:PWR_FLAG") (at 128.27 33.655 0) (unit 1)
+  (symbol (lib_id "power:PWR_FLAG") (at 128.27 35.56 0) (unit 1)
     (in_bom yes) (on_board yes) (fields_autoplaced)
     (uuid 2ae12d62-4262-477d-afdc-6d7e67e64a2a)
-    (property "Reference" "#FLG0101" (id 0) (at 128.27 31.75 0)
+    (property "Reference" "#FLG0101" (id 0) (at 128.27 33.655 0)
       (effects (font (size 1.27 1.27)) hide)
     )
-    (property "Value" "PWR_FLAG" (id 1) (at 128.27 27.94 0))
-    (property "Footprint" "" (id 2) (at 128.27 33.655 0)
+    (property "Value" "PWR_FLAG" (id 1) (at 128.27 29.845 0))
+    (property "Footprint" "" (id 2) (at 128.27 35.56 0)
       (effects (font (size 1.27 1.27)) hide)
     )
-    (property "Datasheet" "~" (id 3) (at 128.27 33.655 0)
+    (property "Datasheet" "~" (id 3) (at 128.27 35.56 0)
       (effects (font (size 1.27 1.27)) hide)
     )
     (pin "1" (uuid 0fa9f2b9-e1f3-44df-9af3-6993fde6325e))
@@ -5442,7 +5572,7 @@
     (pin "2" (uuid 185ce906-23aa-402a-bc4a-e1bd949ff4d2))
   )
 
-  (symbol (lib_id "74xx:74LS04") (at 181.61 134.62 0) (unit 3)
+  (symbol (lib_id "74xx:74LS14") (at 181.61 134.62 0) (unit 3)
     (in_bom yes) (on_board yes) (fields_autoplaced)
     (uuid 33a80e77-67dd-46af-b3ea-8496f47f88f0)
     (property "Reference" "U5" (id 0) (at 181.61 125.73 0))
@@ -5450,7 +5580,7 @@
     (property "Footprint" "Package_SO:SOIC-14_3.9x8.7mm_P1.27mm" (id 2) (at 181.61 134.62 0)
       (effects (font (size 1.27 1.27)) hide)
     )
-    (property "Datasheet" "http://www.ti.com/lit/gpn/sn74LS04" (id 3) (at 181.61 134.62 0)
+    (property "Datasheet" "https://www.ti.com/lit/gpn/sn74lvc14a" (id 3) (at 181.61 134.62 0)
       (effects (font (size 1.27 1.27)) hide)
     )
     (pin "1" (uuid 74cf2e50-1775-445a-bad2-9c46954f23d4))
@@ -5499,7 +5629,7 @@
     (property "Footprint" "Package_SO:TSSOP-20_4.4x6.5mm_P0.65mm" (id 2) (at 132.715 131.445 0)
       (effects (font (size 1.27 1.27)) hide)
     )
-    (property "Datasheet" "https://assets.nexperia.com/documents/data-sheet/74HC_HCT244.pdf" (id 3) (at 132.715 131.445 0)
+    (property "Datasheet" "https://assets.nexperia.com/documents/data-sheet/74LVC_LVCH244A.pdf" (id 3) (at 132.715 131.445 0)
       (effects (font (size 1.27 1.27)) hide)
     )
     (pin "1" (uuid b323ceac-25b5-4a42-892b-57138b22da37))
@@ -5528,11 +5658,11 @@
     (in_bom yes) (on_board yes) (fields_autoplaced)
     (uuid 3b49dd0d-4207-44f7-9b8e-2651f2f5fcd8)
     (property "Reference" "I2S_DAC1" (id 0) (at 233.045 69.215 0))
-    (property "Value" "I2S_DAC" (id 1) (at 233.045 71.755 0))
+    (property "Value" "GY PCM5102" (id 1) (at 233.045 71.755 0))
     (property "Footprint" "PiGUS library:GY-PCM5102" (id 2) (at 232.41 92.71 0)
       (effects (font (size 1.27 1.27)) hide)
     )
-    (property "Datasheet" "~" (id 3) (at 232.41 92.71 0)
+    (property "Datasheet" "https://github.com/dwhinham/mt32-pi/wiki/GY-PCM5102-DAC-module" (id 3) (at 232.41 92.71 0)
       (effects (font (size 1.27 1.27)) hide)
     )
     (pin "1" (uuid 208728b0-4c20-4e48-94f7-b7e83a0336ba))
@@ -5571,7 +5701,7 @@
     (pin "2" (uuid 2bdcabdd-1a5c-411e-8322-ca39479189d9))
   )
 
-  (symbol (lib_id "74xx:74LS04") (at 181.61 114.3 0) (unit 2)
+  (symbol (lib_id "74xx:74LS14") (at 181.61 114.3 0) (unit 2)
     (in_bom yes) (on_board yes) (fields_autoplaced)
     (uuid 3ea4058a-2b01-4028-960d-82677ce99ad2)
     (property "Reference" "U5" (id 0) (at 181.61 105.41 0))
@@ -5579,7 +5709,7 @@
     (property "Footprint" "Package_SO:SOIC-14_3.9x8.7mm_P1.27mm" (id 2) (at 181.61 114.3 0)
       (effects (font (size 1.27 1.27)) hide)
     )
-    (property "Datasheet" "http://www.ti.com/lit/gpn/sn74LS04" (id 3) (at 181.61 114.3 0)
+    (property "Datasheet" "https://www.ti.com/lit/gpn/sn74lvc14a" (id 3) (at 181.61 114.3 0)
       (effects (font (size 1.27 1.27)) hide)
     )
     (pin "1" (uuid dcb0378d-1e30-4bfd-b8b7-f8c7e0a3a5c8))
@@ -5697,7 +5827,7 @@
     (property "Footprint" "Package_SO:SOIC-14_3.9x8.7mm_P1.27mm" (id 2) (at 196.85 116.84 0)
       (effects (font (size 1.27 1.27)) hide)
     )
-    (property "Datasheet" "http://www.ti.com/lit/gpn/sn74ls00" (id 3) (at 196.85 116.84 0)
+    (property "Datasheet" "http://www.ti.com/lit/gpn/sn74lvc00a" (id 3) (at 196.85 116.84 0)
       (effects (font (size 1.27 1.27)) hide)
     )
     (pin "1" (uuid 6e796c32-a3e6-460e-a6fb-e56b3f6d8555))
@@ -5732,7 +5862,7 @@
     (pin "1" (uuid f700eabf-1ac8-4543-b59f-1c581ef2371c))
   )
 
-  (symbol (lib_id "74xx:74LS04") (at 228.6 141.605 0) (unit 6)
+  (symbol (lib_id "74xx:74LS14") (at 228.6 141.605 0) (unit 6)
     (in_bom yes) (on_board yes) (fields_autoplaced)
     (uuid 49c60d3b-c341-4476-9240-b36ab6bd6a7d)
     (property "Reference" "U5" (id 0) (at 228.6 132.08 0))
@@ -5740,7 +5870,7 @@
     (property "Footprint" "Package_SO:SOIC-14_3.9x8.7mm_P1.27mm" (id 2) (at 228.6 141.605 0)
       (effects (font (size 1.27 1.27)) hide)
     )
-    (property "Datasheet" "http://www.ti.com/lit/gpn/sn74LS04" (id 3) (at 228.6 141.605 0)
+    (property "Datasheet" "https://www.ti.com/lit/gpn/sn74lvc14a" (id 3) (at 228.6 141.605 0)
       (effects (font (size 1.27 1.27)) hide)
     )
     (pin "1" (uuid 84f9832d-38c4-44de-b9b9-8fb290770379))
@@ -5783,7 +5913,7 @@
     (property "Footprint" "Package_SO:SOIC-14_3.9x8.7mm_P1.27mm" (id 2) (at 243.84 144.145 0)
       (effects (font (size 1.27 1.27)) hide)
     )
-    (property "Datasheet" "http://www.ti.com/lit/gpn/sn74ls00" (id 3) (at 243.84 144.145 0)
+    (property "Datasheet" "http://www.ti.com/lit/gpn/sn74lvc00a" (id 3) (at 243.84 144.145 0)
       (effects (font (size 1.27 1.27)) hide)
     )
     (pin "1" (uuid b11e4df4-cc96-4b17-8c52-e5f34ca48bee))
@@ -5989,7 +6119,7 @@
     (property "Footprint" "Package_SO:SOIC-14_3.9x8.7mm_P1.27mm" (id 2) (at 243.84 158.115 0)
       (effects (font (size 1.27 1.27)) hide)
     )
-    (property "Datasheet" "http://www.ti.com/lit/gpn/sn74ls00" (id 3) (at 243.84 158.115 0)
+    (property "Datasheet" "http://www.ti.com/lit/gpn/sn74lvc00a" (id 3) (at 243.84 158.115 0)
       (effects (font (size 1.27 1.27)) hide)
     )
     (pin "1" (uuid 52a3fcec-b4fd-4b36-a7f9-b549c584b0b0))
@@ -6071,7 +6201,7 @@
     (pin "1" (uuid 6a346107-8e6f-43b5-a64a-31ac0f5c1bda))
   )
 
-  (symbol (lib_id "74xx:74LS04") (at 265.43 144.145 0) (unit 1)
+  (symbol (lib_id "74xx:74LS14") (at 265.43 144.145 0) (unit 1)
     (in_bom yes) (on_board yes) (fields_autoplaced)
     (uuid 6ee69b11-7dbf-419f-969d-9d2eb424896a)
     (property "Reference" "U5" (id 0) (at 265.43 134.62 0))
@@ -6079,7 +6209,7 @@
     (property "Footprint" "Package_SO:SOIC-14_3.9x8.7mm_P1.27mm" (id 2) (at 265.43 144.145 0)
       (effects (font (size 1.27 1.27)) hide)
     )
-    (property "Datasheet" "http://www.ti.com/lit/gpn/sn74LS04" (id 3) (at 265.43 144.145 0)
+    (property "Datasheet" "https://www.ti.com/lit/gpn/sn74lvc14a" (id 3) (at 265.43 144.145 0)
       (effects (font (size 1.27 1.27)) hide)
     )
     (pin "1" (uuid eab42883-2e4e-4fc1-ba70-3be6e95f6754))
@@ -6099,12 +6229,12 @@
   )
 
   (symbol (lib_id "Memory_RAM:ESP-PSRAM32") (at 172.085 43.815 0) (unit 1)
-    (in_bom yes) (on_board yes) (fields_autoplaced)
+    (in_bom yes) (on_board yes)
     (uuid 7320db56-5ec0-4bb2-b9b7-1cabf8a75396)
-    (property "Reference" "U8" (id 0) (at 163.195 42.5449 0)
+    (property "Reference" "U8" (id 0) (at 173.355 29.21 0)
       (effects (font (size 1.27 1.27)) (justify right))
     )
-    (property "Value" "ESP-PSRAM32" (id 1) (at 163.195 45.0849 0)
+    (property "Value" "APS6404L-3SQR-SN" (id 1) (at 191.135 31.75 0)
       (effects (font (size 1.27 1.27)) (justify right))
     )
     (property "Footprint" "Package_SO:SOIC-8_3.9x4.9mm_P1.27mm" (id 2) (at 172.085 59.055 0)
@@ -6190,7 +6320,7 @@
     (pin "2" (uuid 269c3262-8120-4c77-86cf-096f23144ef3))
   )
 
-  (symbol (lib_id "74xx:74LS04") (at 147.32 180.34 0) (unit 5)
+  (symbol (lib_id "74xx:74LS14") (at 147.32 180.34 0) (unit 5)
     (in_bom yes) (on_board yes) (fields_autoplaced)
     (uuid 7d750da2-1502-4474-b52f-dd69e9a3ee37)
     (property "Reference" "U5" (id 0) (at 147.32 171.45 0))
@@ -6198,7 +6328,7 @@
     (property "Footprint" "Package_SO:SOIC-14_3.9x8.7mm_P1.27mm" (id 2) (at 147.32 180.34 0)
       (effects (font (size 1.27 1.27)) hide)
     )
-    (property "Datasheet" "http://www.ti.com/lit/gpn/sn74LS04" (id 3) (at 147.32 180.34 0)
+    (property "Datasheet" "https://www.ti.com/lit/gpn/sn74lvc14a" (id 3) (at 147.32 180.34 0)
       (effects (font (size 1.27 1.27)) hide)
     )
     (pin "1" (uuid 1e411b56-4b7c-4fcc-adc1-64f5d9f12cd1))
@@ -6245,7 +6375,7 @@
     (property "Footprint" "Package_SO:SOIC-14_3.9x8.7mm_P1.27mm" (id 2) (at 95.885 179.07 0)
       (effects (font (size 1.27 1.27)) hide)
     )
-    (property "Datasheet" "http://www.ti.com/lit/gpn/sn74ls00" (id 3) (at 95.885 179.07 0)
+    (property "Datasheet" "http://www.ti.com/lit/gpn/sn74lvc00a" (id 3) (at 95.885 179.07 0)
       (effects (font (size 1.27 1.27)) hide)
     )
     (pin "1" (uuid b615f132-b163-4889-91d5-7deef298757a))
@@ -6401,7 +6531,7 @@
     (pin "1" (uuid 2527d6bc-3b62-4765-a4c1-6aaa0e15b03c))
   )
 
-  (symbol (lib_id "74xx:74LS04") (at 225.425 160.655 0) (unit 4)
+  (symbol (lib_id "74xx:74LS14") (at 225.425 160.655 0) (unit 4)
     (in_bom yes) (on_board yes) (fields_autoplaced)
     (uuid 9821afe5-c249-4180-8c1e-afc153507a7c)
     (property "Reference" "U5" (id 0) (at 225.425 151.13 0))
@@ -6409,7 +6539,7 @@
     (property "Footprint" "Package_SO:SOIC-14_3.9x8.7mm_P1.27mm" (id 2) (at 225.425 160.655 0)
       (effects (font (size 1.27 1.27)) hide)
     )
-    (property "Datasheet" "http://www.ti.com/lit/gpn/sn74LS04" (id 3) (at 225.425 160.655 0)
+    (property "Datasheet" "https://www.ti.com/lit/gpn/sn74lvc14a" (id 3) (at 225.425 160.655 0)
       (effects (font (size 1.27 1.27)) hide)
     )
     (pin "1" (uuid ff92d773-9382-4e7c-a447-2d4dabcadbda))
@@ -6670,7 +6800,7 @@
     (property "Footprint" "Package_SO:SOIC-14_3.9x8.7mm_P1.27mm" (id 2) (at 196.85 132.08 0)
       (effects (font (size 1.27 1.27)) hide)
     )
-    (property "Datasheet" "http://www.ti.com/lit/gpn/sn74ls00" (id 3) (at 196.85 132.08 0)
+    (property "Datasheet" "http://www.ti.com/lit/gpn/sn74lvc00a" (id 3) (at 196.85 132.08 0)
       (effects (font (size 1.27 1.27)) hide)
     )
     (pin "1" (uuid 13f749eb-2d17-4e0c-9ae4-43ed43e0d252))
@@ -6879,7 +7009,7 @@
     (pin "1" (uuid 3d605ea0-6b16-4677-be74-a64f929e8f52))
   )
 
-  (symbol (lib_id "74xx:74LS04") (at 84.455 179.07 0) (unit 7)
+  (symbol (lib_id "74xx:74LS14") (at 84.455 179.07 0) (unit 7)
     (in_bom yes) (on_board yes)
     (uuid e84f9417-05c8-4897-bf35-a35bd6ee8959)
     (property "Reference" "U5" (id 0) (at 74.93 189.23 0)
@@ -6891,7 +7021,7 @@
     (property "Footprint" "Package_SO:SOIC-14_3.9x8.7mm_P1.27mm" (id 2) (at 84.455 179.07 0)
       (effects (font (size 1.27 1.27)) hide)
     )
-    (property "Datasheet" "http://www.ti.com/lit/gpn/sn74LS04" (id 3) (at 84.455 179.07 0)
+    (property "Datasheet" "https://www.ti.com/lit/gpn/sn74lvc14a" (id 3) (at 84.455 179.07 0)
       (effects (font (size 1.27 1.27)) hide)
     )
     (pin "1" (uuid 62e356e9-0332-43f9-b2f5-c8e7ace953fb))
@@ -6978,17 +7108,17 @@
     (pin "1" (uuid 5d0afb72-2b8f-45f4-a60a-0685e952f550))
   )
 
-  (symbol (lib_id "power:+5V") (at 145.415 40.005 0) (unit 1)
+  (symbol (lib_id "power:+5V") (at 146.05 40.005 0) (unit 1)
     (in_bom yes) (on_board yes)
     (uuid f1846ac3-b3e8-4373-8ca2-deac92d82e53)
-    (property "Reference" "#PWR0117" (id 0) (at 145.415 43.815 0)
+    (property "Reference" "#PWR0117" (id 0) (at 146.05 43.815 0)
       (effects (font (size 1.27 1.27)) hide)
     )
-    (property "Value" "+5V" (id 1) (at 145.415 34.925 90))
-    (property "Footprint" "" (id 2) (at 145.415 40.005 0)
+    (property "Value" "+5V" (id 1) (at 146.05 34.925 90))
+    (property "Footprint" "" (id 2) (at 146.05 40.005 0)
       (effects (font (size 1.27 1.27)) hide)
     )
-    (property "Datasheet" "" (id 3) (at 145.415 40.005 0)
+    (property "Datasheet" "" (id 3) (at 146.05 40.005 0)
       (effects (font (size 1.27 1.27)) hide)
     )
     (pin "1" (uuid d61e0255-1b4e-40cd-9710-e10d63f43626))
@@ -7275,7 +7405,7 @@
       (reference "C10") (unit 1) (value "1uF") (footprint "Capacitor_SMD:C_0805_2012Metric")
     )
     (path "/233d2739-7a24-4382-adbe-243fe761d5ad"
-      (reference "D1") (unit 1) (value "D_Schottky") (footprint "Diode_SMD:D_SOD-123F")
+      (reference "D1") (unit 1) (value "1A 20V Schottky") (footprint "Diode_SMD:D_SOD-123F")
     )
     (path "/638aa721-d04b-4f05-9bb4-4f533030aaba"
       (reference "H1") (unit 1) (value "MountingHole_3.2mm_M3_Pad") (footprint "MountingHole:MountingHole_3.2mm_M3_Pad")
@@ -7284,7 +7414,7 @@
       (reference "H2") (unit 1) (value "MountingHole_3.2mm_M3_Pad") (footprint "MountingHole:MountingHole_3.2mm_M3_Pad")
     )
     (path "/3b49dd0d-4207-44f7-9b8e-2651f2f5fcd8"
-      (reference "I2S_DAC1") (unit 1) (value "I2S_DAC") (footprint "PiGUS library:GY-PCM5102")
+      (reference "I2S_DAC1") (unit 1) (value "GY PCM5102") (footprint "PiGUS library:GY-PCM5102")
     )
     (path "/6eb41fb3-b788-4205-94e5-202ceec2641b"
       (reference "J1") (unit 1) (value "IRQDMA_JP") (footprint "Connector_PinHeader_2.54mm:PinHeader_2x09_P2.54mm_Vertical")
@@ -7371,7 +7501,7 @@
       (reference "U7") (unit 1) (value "74LVC1G00") (footprint "Package_TO_SOT_SMD:SOT-23-5")
     )
     (path "/7320db56-5ec0-4bb2-b9b7-1cabf8a75396"
-      (reference "U8") (unit 1) (value "ESP-PSRAM32") (footprint "Package_SO:SOIC-8_3.9x4.9mm_P1.27mm")
+      (reference "U8") (unit 1) (value "APS6404L-3SQR-SN") (footprint "Package_SO:SOIC-8_3.9x4.9mm_P1.27mm")
     )
     (path "/e23594a8-cca3-45b5-b6bc-143afd77699a"
       (reference "U9") (unit 1) (value "74LVC1G06") (footprint "Package_TO_SOT_SMD:SOT-23-5")
