@@ -11,7 +11,7 @@
 #include "dosbox-x-compat.h"
 #endif
 
-#define IRQ_PIN 19 // TODO don't spread around pin definitions like this
+#define IRQ_PIN 21 // TODO don't spread around pin definitions like this
 
 typedef uint32_t (* PIC_EventHandler)(Bitu val);
 

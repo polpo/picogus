@@ -292,7 +292,7 @@ int main()
     //gpio_disable_pulls(IOCHRDY_PIN);
     // gpio_put(IOCHRDY_PIN, 1);
     // gpio_init(IOCHRDY_PIN);
-    gpio_pull_up(IOCHRDY_PIN);
+    gpio_pull_down(IOCHRDY_PIN);
     gpio_set_dir(IOCHRDY_PIN, GPIO_OUT);
     // gpio_put(IOCHRDY_PIN, 1);
 

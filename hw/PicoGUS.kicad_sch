@@ -5389,7 +5389,7 @@
     (property "Reference" "J5" (id 0) (at 260.35 45.0849 0)
       (effects (font (size 1.27 1.27)) (justify right))
     )
-    (property "Value" "MIDI TRS OUT" (id 1) (at 260.35 47.6249 0)
+    (property "Value" "SJ1-3535NG" (id 1) (at 260.35 47.6249 0)
       (effects (font (size 1.27 1.27)) (justify right))
     )
     (property "Footprint" "Connector_Audio:Jack_3.5mm_CUI_SJ1-3535NG_Horizontal" (id 2) (at 252.73 49.53 0)
@@ -7426,7 +7426,7 @@
       (reference "J3") (unit 1) (value "Bus_ISA_8bit") (footprint "PiGUS library:BUS_PC")
     )
     (path "/0d2f3cc5-550c-45f8-9b59-26cc057f1a72"
-      (reference "J5") (unit 1) (value "MIDI TRS OUT") (footprint "Connector_Audio:Jack_3.5mm_CUI_SJ1-3535NG_Horizontal")
+      (reference "J5") (unit 1) (value "SJ1-3535NG") (footprint "Connector_Audio:Jack_3.5mm_CUI_SJ1-3535NG_Horizontal")
     )
     (path "/eaf321b0-a2d0-4bbd-b4fc-3a33e017f9bc"
       (reference "J6") (unit 1) (value "UART_TX") (footprint "Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical")
