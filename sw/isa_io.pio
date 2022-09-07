@@ -46,7 +46,7 @@ static inline void iow_program_init(PIO pio, uint sm, uint offset) {
     pio_gpio_init(pio, IOCHRDY_PIN);
     pio_gpio_init(pio, ADS_PIN);
     pio_sm_set_consecutive_pindirs(pio, sm, IOCHRDY_PIN, 2, true);
-    pio_sm_set_pins_with_mask(pio, sm, 1u << IOCHRDY_PIN, 1u << IOCHRDY_PIN);
+    pio_sm_set_pins_with_mask(pio, sm, 0, 1u << IOCHRDY_PIN);
     pio_sm_set_pins_with_mask(pio, sm, 0, 1u << ADS_PIN);
 
     // JMP on DACK so we can ignore iow during DMA write
