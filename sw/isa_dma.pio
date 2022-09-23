@@ -14,14 +14,14 @@
 .wrap_target
     out x, 32                           ; wait to trigger DMA operation
     set pins, 1          side 0b10      ; assert DRQ, muxes to data
-    wait 0 gpio DACK_PIN side 0b10      ; DACK faling edge
+    wait 1 gpio DACK_PIN side 0b10      ; DACK faling edge
     set pins, 0          side 0b10      ; deassert DRQ 
     wait 0 gpio IOW_PIN  side 0b10      ; wait for IOW assert
     in pins, 8           side 0b11      ; input data, deassert IOCHRDY if we stall on full FIFO
     jmp pin tc_flag      side 0b10      ; if TC high, transfer is over
     in null, 24          side 0b10      ; write 0 to TC flag, autopush
 wait_dack:
-    wait 1 gpio DACK_PIN                ; DACK rising edge, no sideset to carry over from the IN instruction we came from
+    wait 0 gpio DACK_PIN                ; DACK rising edge, no sideset to carry over from the IN instruction we came from
 .wrap
 tc_flag:
     in x, 24             side 0b00      ; set TC flag, autopush, set ADS back to addr. X is full o' 1s

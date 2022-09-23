@@ -61,7 +61,7 @@ uint32_t value;
 
 
 __force_inline void handle_iow(void) {
-    iow_read = pio_sm_get_blocking(pio0, iow_sm); //>> 16;
+    iow_read = pio_sm_get(pio0, iow_sm); //>> 16;
     // printf("IOW: %x\n", iow_read);
     port = (iow_read >> 8) & 0x3FF;
 #ifdef SOUND_GUS
@@ -80,7 +80,7 @@ __force_inline void handle_iow(void) {
         // }
         // Tell PIO that we are done
         pio_sm_put(pio0, iow_sm, 0x0u);
-        //printf("GUS IOW: port: %x value: %x\n", port, value);
+        // printf("GUS IOW: port: %x value: %x\n", port, value);
         // gpio_xor_mask(1u << LED_PIN);
         // puts("IOW");
         // uart_print_hex_u32(port);
@@ -113,7 +113,7 @@ __force_inline void handle_iow(void) {
 }
 
 __force_inline void handle_ior(void) {
-    ior_read = pio_sm_get_blocking(pio0, ior_sm); //>> 16;
+    ior_read = pio_sm_get(pio0, ior_sm); //>> 16;
     port = ior_read & 0x3FF;
     // printf("IOR: %x\n", port);
 #ifdef SOUND_GUS
@@ -141,19 +141,16 @@ __force_inline void handle_ior(void) {
 }
 
 #ifdef USE_IRQ
-void isr(void) {
+void iow_isr(void) {
     /* //printf("ints %x\n", pio0->ints0); */
-    if (pio0->ints0 & PIO_INTR_SM0_RXNEMPTY_LSB) {
-        /* //printf("ints iow %x\n", pio0->ints0); */
-        handle_iow();
-        pio_interrupt_clear(pio0, PIO_INTR_SM0_RXNEMPTY_LSB);
-    }
-    if (pio0->ints0 & PIO_INTR_SM1_RXNEMPTY_LSB) {
-        /* //printf("ints ior %x\n", pio0->ints0); */
-        handle_ior();
-        pio_interrupt_clear(pio0, PIO_INTR_SM1_RXNEMPTY_LSB);
-    }
-    /* irq_clear(PIO0_IRQ_0); */
+    handle_iow();
+    // pio_interrupt_clear(pio0, pio_intr_sm0_rxnempty_lsb);
+    irq_clear(PIO0_IRQ_0);
+}
+void ior_isr(void) {
+    handle_ior();
+    // pio_interrupt_clear(pio0, PIO_INTR_SM0_RXNEMPTY_LSB);
+    irq_clear(PIO0_IRQ_1);
 }
 #endif
 
@@ -174,7 +171,7 @@ int main()
     // set_sys_clock_khz(200000, true);
     // Use hacked set_sys_clock_khz to keep SPI clock high - see clock_pll.h for details
     // gset_sys_clock_khz(266000, true);
-    set_sys_clock_khz(270000, true);
+    set_sys_clock_khz(280000, true);
     // vreg_set_voltage(VREG_VOLTAGE_1_20);
 
     // stdio_init_all();
@@ -197,16 +194,6 @@ int main()
     alarm_pool_init_default();
     gpio_init(IRQ_PIN);
     gpio_set_dir(IRQ_PIN, GPIO_OUT);
-
-#ifdef USE_IRQ
-    puts("Enabling IRQ");
-    const int irq = PIO0_IRQ_0;
-    pio_set_irq0_source_mask_enabled(pio0, PIO_INTR_SM0_RXNEMPTY_LSB | PIO_INTR_SM1_RXNEMPTY_LSB | PIO_INTR_SM2_RXNEMPTY_LSB | PIO_INTR_SM3_RXNEMPTY_LSB, true);
-    irq_set_enabled(irq, false);
-    irq_set_priority(irq, PICO_HIGHEST_IRQ_PRIORITY);
-    irq_set_exclusive_handler(irq, isr);
-    irq_set_enabled(irq, true);
-#endif
 
 #ifdef PSRAM
     puts("Initing PSRAM...");
@@ -310,14 +297,32 @@ int main()
 
     PIO pio = pio0;
 
-    uint ior_offset = pio_add_program(pio, &ior_program);
-    ior_sm = pio_claim_unused_sm(pio, true);
-
     uint iow_offset = pio_add_program(pio, &iow_program);
     iow_sm = pio_claim_unused_sm(pio, true);
+    printf("iow sm: %u\n", iow_sm);
+
+    uint ior_offset = pio_add_program(pio, &ior_program);
+    ior_sm = pio_claim_unused_sm(pio, true);
+    printf("ior sm: %u\n", ior_sm);
 
     ior_program_init(pio, ior_sm, ior_offset);
     iow_program_init(pio, iow_sm, iow_offset);
+
+#ifdef USE_IRQ
+    puts("Enabling IRQ");
+    // iow irq
+    irq_set_enabled(PIO0_IRQ_0, false);
+    pio_set_irq0_source_enabled(pio0, pis_sm0_rx_fifo_not_empty, true);
+    irq_set_priority(PIO0_IRQ_0, PICO_HIGHEST_IRQ_PRIORITY);
+    irq_set_exclusive_handler(PIO0_IRQ_0, iow_isr);
+    irq_set_enabled(PIO0_IRQ_0, true);
+    // ior irq
+    irq_set_enabled(PIO0_IRQ_1, false);
+    pio_set_irq1_source_enabled(pio0, pis_sm1_rx_fifo_not_empty, true);
+    irq_set_priority(PIO0_IRQ_1, PICO_HIGHEST_IRQ_PRIORITY);
+    irq_set_exclusive_handler(PIO0_IRQ_1, ior_isr);
+    irq_set_enabled(PIO0_IRQ_1, true);
+#endif
 
     puts("Initing ISA DMA PIO...");
     dma_config = DMA_init(pio);

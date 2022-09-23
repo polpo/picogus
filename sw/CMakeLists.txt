@@ -48,9 +48,9 @@ if(PROJECT_TYPE STREQUAL "GUS")
     target_compile_definitions(picogus PRIVATE
         SOUND_GUS=1
         PSRAM=1
-        TEST_PSRAM=1
+        # TEST_PSRAM=1
         USE_ALARM=1
-        USE_SPINLOCK=1
+        # USE_SPINLOCK=1
     )
     pico_generate_pio_header(picogus ${CMAKE_CURRENT_LIST_DIR}/psram_spi.pio)
 endif()

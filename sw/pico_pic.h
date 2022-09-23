@@ -32,12 +32,15 @@ extern alarm_pool_t* alarm_pool;
 
 int64_t PIC_HandleEvent(alarm_id_t id, void *user_data);
 
-__force_inline void PIC_ActivateIRQ(Bitu irq) {
+int64_t clear_irq(alarm_id_t id, void *user_data);
+
+__force_inline void PIC_ActivateIRQ(void) {
     // puts("activate irq");
     gpio_put(IRQ_PIN, 1); 
+    // alarm_pool_add_alarm_in_us(alarm_pool, 500, clear_irq, 0, true);
 }
 
-__force_inline void PIC_DeActivateIRQ(Bitu irq) {
+__force_inline void PIC_DeActivateIRQ(void) {
     gpio_put(IRQ_PIN, 0); 
 }
 

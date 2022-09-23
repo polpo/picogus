@@ -898,7 +898,7 @@ static INLINE void GUS_CheckIRQ(void) {
              * clear all pending interrupt events before firing another one. if you
              * don't service all events, then you don't get another interrupt. */
                 // puts("activateirq");
-                PIC_ActivateIRQ(myGUS.irq1);
+                PIC_ActivateIRQ();
 
                 /* no fancy stuff
                 if (gus_warn_irq_conflict)
@@ -908,7 +908,7 @@ static INLINE void GUS_CheckIRQ(void) {
                 */ // no fancy stuff
         } else if (gus_prev_effective_irqstat != 0) {
             // puts("deactivateirq");
-            PIC_DeActivateIRQ(myGUS.irq1);
+            PIC_DeActivateIRQ();
         }
 
         gus_prev_effective_irqstat = irqstat;
@@ -1790,6 +1790,7 @@ __force_inline void write_gus(Bitu port,Bitu val,Bitu iolen) {
         if (val & 0x80) {
             myGUS.timers[0].reached=false;
             myGUS.timers[1].reached=false;
+            GUS_CheckIRQ();
             return;
         }
         myGUS.timers[0].masked=(val & 0x40)>0;
@@ -2157,7 +2158,7 @@ void GUS_DMA_Event_Transfer(/*DmaChannel *chan,Bitu dmawords*/) {
                 dma_delay,
                 &GUS_DMA_Active
             );
-            // uart_print_hex_u32(read);
+            uart_print_hex_u32(step);
             // Bitu read=(Bitu)chan->Read((Bitu)docount,&GUSRam[dmaaddr]);
             //Check for 16 or 8bit channel
             // read*=(chan->DMA16+1u);
@@ -2281,7 +2282,7 @@ void GUS_StopDMA() {
     //*/ // TODO implement DMA
 }
 
-void GUS_StartDMA() {
+__force_inline void GUS_StartDMA() {
     ///* TODO implement DMA
     if (!GUS_DMA_Active) {
         GUS_DMA_Active = true;

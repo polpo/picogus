@@ -34,7 +34,7 @@ __force_inline size_t DMA_Write(dma_inst_t* dma, uint32_t dmaaddr, bool invert_m
     size_t read_num = 0, total_read = 0;
     uint32_t dma_data;
     uint32_t cur_addr = dmaaddr;
-    // printf("DMA_Write pio %u sm %u dmaaddr %u delay %u\n", dma->pio, dma->sm, dmaaddr, delay);
+    /* printf("DMA_Write pio %u sm %u dmaaddr %u delay %u\n", dma->pio, dma->sm, dmaaddr, delay); */
     while (total_read < 65536) { // absolute max ISA DMA read count is 65536
         pio_sm_put_blocking(dma->pio, dma->sm, 0xffffffffu);  // Write 1s to kick off DMA process. note that these 1s are used to set TC flag in PIO!
         // putchar('.');
@@ -53,13 +53,10 @@ __force_inline size_t DMA_Write(dma_inst_t* dma, uint32_t dmaaddr, bool invert_m
         // psram_write8(&psram_spi, cur_addr++, dma_data8);
         // uart_print_hex_u32(dma_data);
         if (dma_data & 0x100u || !*dma_active) { // if TC flag is set
-            // flush unwritten DMA data
-            // stdio_uart_out_chars("!", 1);
-            /*
-            for (size_t i = read_num; i >= 0; --i) {
-                psram_write8(&psram_spi, cur_addr + 3 - i, dma_data8[i]);
+            if (!*dma_active) {
+                puts("Stopped because dma_active is false");
             }
-            */
+            // flush unwritten DMA data
             // if read_num = 0, write 1 byte
             // if read_num = 1, write 2 bytes
             // if read_num = 2, write 3 bytes
@@ -67,7 +64,6 @@ __force_inline size_t DMA_Write(dma_inst_t* dma, uint32_t dmaaddr, bool invert_m
             for (size_t i = 0; i <= read_num; ++i) {
                 psram_write8(&psram_spi, cur_addr + i, dma_data8[i]);
             }
-            // psram_write32(&psram_spi, cur_addr, dma_data32);
             return total_read;
         }
         if (read_num == 3) {
