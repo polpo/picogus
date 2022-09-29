@@ -13,9 +13,13 @@
 
 #define IRQ_PIN 21 // TODO don't spread around pin definitions like this
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef uint32_t (* PIC_EventHandler)(Bitu val);
 
-struct PIC_TimerEvent {
+typedef struct {
     PIC_EventHandler handler;
     Bitu value;
 #ifdef USE_ALARM
@@ -24,7 +28,7 @@ struct PIC_TimerEvent {
     uint32_t deadline;
     bool active;
 #endif
-};
+} PIC_TimerEvent;
 
 extern PIC_TimerEvent timerEvents[3];
 
@@ -72,5 +76,9 @@ __force_inline void PIC_HandleEvents() {
             PIC_HandleEvent(0, &timerEvents[i]);
         }
     }
+}
+#endif
+
+#ifdef __cplusplus
 }
 #endif

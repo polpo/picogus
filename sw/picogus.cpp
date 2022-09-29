@@ -6,8 +6,10 @@
 // #include "hardware/vreg.h"
 #include "hardware/regs/vreg_and_chip_reset.h"
 
-
+#ifndef SOUND_MPU
 #include "stdio_async_uart.h"
+#endif 
+
 /*
 #define UART_TX_PIN (0)
 #define UART_RX_PIN (1)
@@ -47,6 +49,10 @@ dma_inst_t dma_config;
 constexpr uint16_t GUS_PORT = 0x240u;
 constexpr uint16_t GUS_PORT_TEST = GUS_PORT >> 4 | 0x10;
 void play_gus(void);
+#endif
+
+#ifdef SOUND_MPU
+#include "mpu401/export.h"
 #endif
 
 constexpr uint LED_PIN = PICO_DEFAULT_LED_PIN;
@@ -110,6 +116,28 @@ __force_inline void handle_iow(void) {
         pio_sm_put(pio0, iow_sm, 0x0u);
     }
 #endif // SOUND_OPL
+#ifdef SOUND_MPU
+    switch (port) {
+    case 0x330:
+        pio_sm_put(pio0, iow_sm, 0xffffffffu);
+        value = iow_read & 0xFF;
+        // printf("MPU IOW: port: %x value: %x\n", port, value);
+        MPU401_WriteData(value);
+        // Tell PIO that we are done
+        pio_sm_put(pio0, iow_sm, 0x0u);
+        break;
+    case 0x331:
+        pio_sm_put(pio0, iow_sm, 0xffffffffu);
+        MPU401_WriteCommand(iow_read & 0xFF);
+        // printf("MPU IOW: port: %x value: %x\n", port, value);
+        __dsb();
+        // Tell PIO that we are done
+        pio_sm_put(pio0, iow_sm, 0x0u);
+        break;
+    default:
+        pio_sm_put(pio0, iow_sm, 0x0u);
+    }
+#endif // SOUND_OPL
 }
 
 __force_inline void handle_ior(void) {
@@ -133,6 +161,19 @@ __force_inline void handle_ior(void) {
         pio_sm_put(pio0, ior_sm, 0x00ffff00u | value);
         // printf("GUS IOR: port: %x value: %x\n", port, value);
         // gpio_xor_mask(1u << LED_PIN);
+    } else {
+        // Reset PIO
+        pio_sm_put(pio0, ior_sm, 0x0u);
+    }
+#endif
+#ifdef SOUND_MPU
+    if (port == 0x331) {
+        // Tell PIO to wait for data
+        pio_sm_put(pio0, ior_sm, 0xffffffffu);
+        value = MPU401_ReadData();
+        // printf("MPU IOR: port: %x value: %x\n", port, value);
+        // OR with 0x00ffff00 is required to set pindirs in the PIO
+        pio_sm_put(pio0, ior_sm, 0x00ffff00u | value);
     } else {
         // Reset PIO
         pio_sm_put(pio0, ior_sm, 0x0u);
@@ -175,7 +216,11 @@ int main()
     // vreg_set_voltage(VREG_VOLTAGE_1_20);
 
     // stdio_init_all();
+#ifndef SOUND_MPU
     stdio_async_uart_init_full(UART_ID, BAUD_RATE, UART_TX_PIN, UART_RX_PIN);
+#else
+    stdio_init_all();
+#endif
 
     puts("PicoGUS booting!");
 
@@ -191,9 +236,20 @@ int main()
     gpio_init(LED_PIN);
     gpio_set_dir(LED_PIN, GPIO_OUT);
 
-    alarm_pool_init_default();
+    // alarm_pool_init_default();
     gpio_init(IRQ_PIN);
     gpio_set_dir(IRQ_PIN, GPIO_OUT);
+
+#ifdef SOUND_MPU
+    puts("Initing MIDI UART...");
+    uart_init(UART_ID, 31250);
+    uart_set_translate_crlf(UART_ID, false);
+    uart_set_format(UART_ID, 8, 1, UART_PARITY_NONE);
+    gpio_set_drive_strength(UART_TX_PIN, GPIO_DRIVE_STRENGTH_12MA);
+    gpio_set_function(UART_TX_PIN, GPIO_FUNC_UART);
+    busy_wait_ms(1000);
+    MPU401_Init();
+#endif
 
 #ifdef PSRAM
     puts("Initing PSRAM...");
@@ -324,8 +380,10 @@ int main()
     irq_set_enabled(PIO0_IRQ_1, true);
 #endif
 
+#ifdef SOUND_GUS
     puts("Initing ISA DMA PIO...");
     dma_config = DMA_init(pio);
+#endif
 
     gpio_xor_mask(1u << LED_PIN);
 
@@ -347,6 +405,9 @@ int main()
 #endif
 #ifndef USE_ALARM
         PIC_HandleEvents();
+#endif
+#ifdef SOUND_MPU
+        send_midi_byte();				// see if we need to send a byte	
 #endif
     }
 }

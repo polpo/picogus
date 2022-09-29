@@ -20,8 +20,9 @@ set(CMAKE_BUILD_TYPE "Release")
 set(PICO_COPY_TO_RAM 1)
 #set(SKIP_PICO_MALLOC 1)
 
-set(PROJECT_TYPE "GUS")
+# set(PROJECT_TYPE "GUS")
 # set(PROJECT_TYPE "OPL")
+set(PROJECT_TYPE "MPU")
 
 # Initialise the Raspberry Pi Pico SDK
 pico_sdk_init()
@@ -44,7 +45,7 @@ target_compile_definitions(picogus PRIVATE
 )
 
 if(PROJECT_TYPE STREQUAL "GUS")
-    target_sources(picogus PRIVATE gusplay.cpp pico_pic.cpp)
+    target_sources(picogus PRIVATE gusplay.cpp pico_pic.c)
     target_compile_definitions(picogus PRIVATE
         SOUND_GUS=1
         PSRAM=1
@@ -68,12 +69,23 @@ if(PROJECT_TYPE STREQUAL "OPL")
     add_subdirectory(opl)
 endif()
 
+if(PROJECT_TYPE STREQUAL "MPU")
+    target_compile_definitions(picogus PRIVATE
+        SOUND_MPU=1
+        USE_ALARM=1
+    )
+    target_sources(picogus PRIVATE
+        pico_pic.c
+        mpu401/mpu401.c
+        mpu401/midi.c
+    )
+endif()
 
 pico_set_program_name(picogus "picogus")
 pico_set_program_version(picogus "0.1")
 
 pico_enable_stdio_uart(picogus 0)
-pico_enable_stdio_usb(picogus 0)
+pico_enable_stdio_usb(picogus 1)
 pico_enable_stdio_semihosting(picogus 0)
 
 pico_generate_pio_header(picogus ${CMAKE_CURRENT_LIST_DIR}/isa_io.pio)
