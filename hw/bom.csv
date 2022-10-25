@@ -1,0 +1,22 @@
+Mfr. #,Manufacturer,Mouser #,Digi-Key #,Customer #,Description,Order Qty.,Notes
+APS6404L-3SQR-SN,AP Memory Technology,878-APS6404L-3SQR-SN,706-IS66WVS1M8BLL-104NLI-ND,U8,"DRAM IoT RAM 64Mb QSPI (x1,x4) SDR 133/84MHz, RBX, 3V, Ind. Temp., SOP8",1,"Subst IPUS IPS6404, Lyontek LY68L640, Espressif ESP-PSRAM64H, Adafruit 4677"
+SN74CB3T3257PWR,Texas Instruments,595-SN74CB3T3257PWR,296-17850-1-ND,"U3,U4","Encoders, Decoders, Multiplexers & Demultiplexers 4-Bit 1-OF-2 FET Mltplx/Demultplxr",2,
+SN74CB3T3245PWR,Texas Instruments,595-SN74CB3T3245PW,296-18196-1-ND,U2,Digital Bus Switch ICs 8-Bit FET 2.5/3.3V Lo-Vltg Bus Switch ,1,
+74LVC14AS14-13,Diodes Incorporated,621-74LVC14AS14-13,74LVC14AS14-13DICT-ND,U5,Inverters HEX INV Schmitt 1.65V to 5.5V 24mA,1,Subst any 74LVC14
+SJ1-3535NG,CUI Devices,490-SJ1-3535NG,CP1-3535NG-ND,J5,Phone Connectors Audio Jacks,1,"Yellow jacks on AliExpress, search PJ-325"
+SN74LVC1G00DBVR,Texas Instruments,595-SN74LVC1G00DBVR,74LVC1G00W5-7DICT-ND,U7,Logic Gates 2-Input,1,Subst any 74LVC1G00
+SN74LVC1G06DBVR,Texas Instruments,595-SN74LVC1G06DBVR,296-8483-1-ND,U9,Buffers & Line Drivers Single Invert w/OD,1,Subst any 74LVC1G06
+10129381-918001BLF,FCI / Amphenol,649-1012938191801BLF,609-10129381-918001BLF-ND,J1,Headers & Wire Housings HEADER DR VT TH 2X9-10129381-918001BLF,1,Subst any 2x9 2.54mm pin header
+M20-9771246,Harwin,855-M20-9771246,M20-9771246-ND,"I2S_DAC1,J6",Headers & Wire Housings 12 SIL VERTICAL PIN HEADER TIN,1,"Cut into 6, 4, 2 pin sections"
+860010272003,Wurth Elektronik,710-860010272003,732-8700-1-ND,"C1,C2",Aluminum Electrolytic Capacitors - Radial Leaded WCAP-ATG8 47uF 10V 20% Radial,2,Subst any 47uF electrolytic cap w/ 2mm lead spacing
+C0805C104M5RACTU,KEMET,80-C0805C104M5R,399-C0805C104M5RAC7800CT-ND,"C3,C4,C5,C6,C7,C8,C9",Multilayer Ceramic Capacitors MLCC - SMD/SMT 50V 0.1uF X7R 0805 20%,7,Subst any X7R 0.1uF 0805 ceramic cap
+C0805C105K3RAC7210,KEMET, 80-C0805C105K3R7210,399-C0805C105K3RAC7210CT-ND,C10,Multilayer Ceramic Capacitors MLCC - SMD/SMT 25V 1uF X7R 0805 10%,1,Subst any X7R 1uF 0805 ceramic cap
+RC0805FR-1010KL,YAGEO,603-RC0805FR-1010KL,13-RC0805FR-1010KLCT-ND,"R1,R2",Thick Film Resistors - SMD 10 kOhms 250 mW 0805 1%,2,Subst any 10kOhm 0.25w 0805 resistor
+SG73P2ATTD100J,KOA Speer,660-SG73P2ATTD100J,2019-SG73P2ATTD100JCT-ND,R3,"10 Ohms ±5% 0.25W, 1/4W Chip Resistor 0805",1,Subst any 10Ohm 0.5w 0805 resistor
+RK73B2ATTD330J,KOA Speer,660-SG73P2ATTD33R0F,2019-SG73P2ATTD33R0FCT-ND,R4,"33 Ohms ±1% 0.25W, 1/4W Chip Resistor 0805",1,Subst any 33Ohm 0.25w 0805 resistor
+2508051027Y1,Fair-Rite,623-2508051027Y1,1934-1009-1-ND,"L1,L2",Ferrite Beads MultLyr Chip Bead 1000 OHM 0805 1000mA,2,Subst any 1kOhm @ 100Mhz 0805 ferrite bead
+"PMEG2010ER,115",Nexperia,771-PMEG2010ER115,1727-5192-1-ND,D1,Schottky Diodes & Rectifiers PMEG2010ER/SOD123W/SOD2,1,Subst any 1A 20V Schottky SOD123 diode
+9202-1,Keystone Electronics,534-9202-1,36-9202-ND,,Circuit Board Hardware - PCB PC BRKT MODEM ISA,1,"9202 has no holes, 9202-1 has large rectangular cutout"
+102110537,Raspberry Pi,713-102110537,2648-SC0915CT-ND,U1,Single Board Computers Raspberry Pi Pico,1,Pico W and Pico H also work
+74LVC00AD-Q100J,Nexperia,771-74LVC00AD-Q100J,1727-3075-1-ND,U6,Logic Gates 74LVC00AD-Q100/SOT108/SO14,1,Subst any 74LVC00
+GY-PCM5102,Generic,,,I2S_DAC1,GY PCM5102 DAC module,1,"Find on Amazon, eBay, AliExpress"
