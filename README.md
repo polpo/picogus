@@ -6,7 +6,7 @@ ISA card emulation on the Raspberry Pi Pico's RP2040 microcontroller. Initially 
 
 Current status: Beta! See the [main wiki page](https://github.com/polpo/picogus/wiki) for current status and the [compatibility list](https://github.com/polpo/picogus/wiki/Compatibility-list) for support status of various DOS programs. This project has a heavy demoscene focus due to the GUS's history so that's what I've concentrated on.
 
-Want to make your own beta PicoGUS? See the [build guide](https://github.com/polpo/picogus/wiki/Building-your-PicoGUS). **Important caveat**: due to the specs of the Pico, assumptions made by programms written to use the GUS, the imprecise nature of emulation, and the varying specs of retro DOS PC hardware, some things will likely never be perfect. **This is still a work in progress.**
+Want to make your own beta PicoGUS? See the [build guide](https://github.com/polpo/picogus/wiki/Building-your-PicoGUS). **Important caveat**: due to the specs of the Pico, assumptions made by programs written to use the GUS, the imprecise nature of emulation, and the varying specs of retro DOS PC hardware, some things will likely never be perfect. **This is still a work in progress.**
 
 ![PicoGUS v1.1 beta PCB](https://user-images.githubusercontent.com/1544908/197922769-fbc45c85-0fd3-4b5a-896e-0c56e5fa171e.jpg)
 
