@@ -4,15 +4,17 @@
 
 ISA card emulation on the Raspberry Pi Pico's RP2040 microcontroller. Initially focusing on [Gravis Ultrasound (GUS)](https://en.wikipedia.org/wiki/Gravis_Ultrasound) sound card emulation, hence the name PicoGUS.
 
-Please see [the Wiki](https://github.com/polpo/picogus/wiki) for current status!
+Current status: Beta! See the [main wiki page](https://github.com/polpo/picogus/wiki) for current status and the [compatibility list](https://github.com/polpo/picogus/wiki/Compatibility-list) for support status of various DOS programs. This project has a heavy demoscene focus due to the GUS's history so that's what I've concentrated on.
 
-![picogus-prototype](https://user-images.githubusercontent.com/1544908/182006174-71a1792d-ac5b-4c2b-8e61-94a05a0ef55c.jpg)
+Want to make your own beta PicoGUS? See the [build guide](https://github.com/polpo/picogus/wiki/Building-your-PicoGUS). **Important caveat**: due to the specs of the Pico, assumptions made by programms written to use the GUS, the imprecise nature of emulation, and the varying specs of retro DOS PC hardware, some things will likely never be perfect. **This is still a work in progress.**
+
+![PicoGUS v1.1 beta PCB](https://user-images.githubusercontent.com/1544908/197922769-fbc45c85-0fd3-4b5a-896e-0c56e5fa171e.jpg)
 
 Looking for the original project, using Raspberry Pi 3/4? See the [pigus repo](https://github.com/polpo/pigus).
 
 See/hear PicoGUS in action on YouTube:
 
-[![Watch the video](https://img.youtube.com/vi/rZopvkDTv08/hqdefault.jpg)](https://youtu.be/rZopvkDTv08)
+[![Watch the video](https://img.youtube.com/vi/h4iWSnTc9Ag/hqdefault.jpg)](https://youtu.be/h4iWSnTc9Ag)
 
 ## Open Source Credits
 
