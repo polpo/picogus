@@ -23,6 +23,7 @@ See/hear PicoGUS in action on YouTube:
 * `stdio_async_uart` from [PicoCart64](https://github.com/kbeckmann/PicoCart64)
 * `gus-x.cpp` adapted from [DOSBox-X](https://github.com/joncampbell123/dosbox-x)
 * OPL/AdLib emulation from [rp2040-doom](https://github.com/kilograham/rp2040-doom)
+* MPU-401 emulation from [HardMPU](https://github.com/ab0tj/HardMPU)
 
 ## License
 
