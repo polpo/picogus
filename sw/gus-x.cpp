@@ -30,6 +30,10 @@
 extern pio_spi_inst_t psram_spi;
 #endif
 
+// #include "hardware/sync.h"
+// spin_lock_t* gus_spin;
+#include "pico/mutex.h"
+mutex_t gus_mtx;
 /*
 #include "dosbox.h"
 #include "inout.h"
@@ -924,6 +928,8 @@ __force_inline static void CheckVoiceIrq(void) {
 
     if (myGUS.RampIRQ) myGUS.IRQStatus|=0x40;
     if (myGUS.WaveIRQ) myGUS.IRQStatus|=0x20;
+    // mega hack
+    // PIC_DeActivateIRQ();
     GUS_CheckIRQ();
     for (;;) {
         uint32_t check=(1u << myGUS.IRQChan);
@@ -931,6 +937,11 @@ __force_inline static void CheckVoiceIrq(void) {
         myGUS.IRQChan++;
         if (myGUS.IRQChan>=myGUS.ActiveChannels) myGUS.IRQChan=0;
     }
+}
+
+uint32_t CheckVoiceIrq_async(Bitu val) {
+    CheckVoiceIrq();
+    return 0;
 }
 
 __force_inline static uint16_t ExecuteReadRegister(void) {
@@ -1013,7 +1024,10 @@ __force_inline static uint16_t ExecuteReadRegister(void) {
         myGUS.RampIRQ&=~mask;
         myGUS.WaveIRQ&=~mask;
         myGUS.IRQStatus&=0x9f;
-        CheckVoiceIrq();
+        // mega hack
+        // PIC_DeActivateIRQ();
+        // CheckVoiceIrq();
+        PIC_AddEvent(CheckVoiceIrq_async, 2, 3);
         return (uint16_t)(tmpreg << 8);
     default:
 #if LOG_GUS
@@ -1024,15 +1038,21 @@ __force_inline static uint16_t ExecuteReadRegister(void) {
 }
 
 static uint32_t GUS_TimerEvent(Bitu val) {
+    // putchar('-');
+    // mutex_enter_blocking(&gus_mtx); 
     if (!myGUS.timers[val].masked) myGUS.timers[val].reached=true;
     if (myGUS.timers[val].raiseirq) {
         myGUS.IRQStatus|=0x4 << val;
         GUS_CheckIRQ();
     }
     if (myGUS.timers[val].running) {
+        mutex_exit(&gus_mtx);
+        // putchar('.');
         return myGUS.timers[val].delay;  // Keep timer running
         // PIC_AddEvent(GUS_TimerEvent,myGUS.timers[val].delay,val);
     }
+    // mutex_exit(&gus_mtx);
+    // putchar('.');
     return 0;  // Stop timer
 }
 
@@ -1215,17 +1235,17 @@ __force_inline static void ExecuteGlobRegister(void) {
         if (!myGUS.timers[0].raiseirq) myGUS.IRQStatus&=~0x04;
         myGUS.timers[1].raiseirq=(myGUS.TimerControl & 0x08)>0;
         if (!myGUS.timers[1].raiseirq) myGUS.IRQStatus&=~0x08;
-        // if (!myGUS.timers[0].raiseirq && !myGUS.timers[1].raiseirq) {
+        if (!myGUS.timers[0].raiseirq && !myGUS.timers[1].raiseirq) {
             GUS_CheckIRQ();
-        // }
+        }
         break;
     case 0x46:  // Timer 1 control
         myGUS.timers[0].value = (uint8_t)(myGUS.gRegData>>8);
-        myGUS.timers[0].delay = (0x100 - myGUS.timers[0].value) * 80;
+        myGUS.timers[0].delay = ((0x100 - myGUS.timers[0].value) * 80) - 5;
         break;
     case 0x47:  // Timer 2 control
         myGUS.timers[1].value = (uint8_t)(myGUS.gRegData>>8);
-        myGUS.timers[1].delay = (0x100 - myGUS.timers[1].value) * 320;
+        myGUS.timers[1].delay = ((0x100 - myGUS.timers[1].value) * 320) - 5;
         break;
     case 0x49:  // DMA sampling control register
         myGUS.SampControl = (uint8_t)(myGUS.gRegData>>8);
@@ -1617,6 +1637,8 @@ __force_inline Bitu read_gus(Bitu port,Bitu iolen) {
     uint16_t reg16;
 
     (void)iolen;//UNUSED
+                //
+    // mutex_enter_blocking(&gus_mtx);
 //  LOG_MSG("read from gus port %x",port);
 
     /* 12-bit ISA decode (FIXME: Check GUS MAX ISA card to confirm)
@@ -1671,6 +1693,7 @@ __force_inline Bitu read_gus(Bitu port,Bitu iolen) {
 
         /* NTS: Contrary to some false impressions, GUS hardware does not report "one at a time", it really is a bitmask.
          *      I had the funny idea you read this register "one at a time" just like reading the IRQ reason bits of the RS-232 port --J.C. */
+        // mutex_exit(&gus_mtx);
         return GUS_EffectiveIRQStatus();
     case 0x208:
         uint8_t tmptime;
@@ -1680,16 +1703,19 @@ __force_inline Bitu read_gus(Bitu port,Bitu iolen) {
         if (tmptime & 0x60) tmptime |= (1 << 7);
         if (myGUS.IRQStatus & 0x04) tmptime|=(1 << 2);
         if (myGUS.IRQStatus & 0x08) tmptime|=(1 << 1);
+        // mutex_exit(&gus_mtx);
         return tmptime;
     case 0x20a:
+        // mutex_exit(&gus_mtx);
         return adlib_commandreg;
     case 0x20f:
-        if (gus_type >= GUS_MAX || gus_ics_mixer)
-            return 0x02; /* <- FIXME: What my GUS MAX returns. What does this mean? */
+        // mutex_exit(&gus_mtx);
         return ~0ul; // should not happen
     case 0x302:
+        // mutex_exit(&gus_mtx);
         return myGUS.gRegSelectData;
     case 0x303:
+        // mutex_exit(&gus_mtx);
         return myGUS.gRegSelectData;
     case 0x304:
         /*if (iolen==2) reg16 = ExecuteReadRegister() & 0xffff;
@@ -1698,6 +1724,7 @@ __force_inline Bitu read_gus(Bitu port,Bitu iolen) {
         //if (gus_type < GUS_INTERWAVE) // Versions prior to the Interwave will reflect last I/O to 3X2-3X5 when read back from 3X3
             myGUS.gRegSelectData = reg16/* & 0xFF*/;
 
+        // mutex_exit(&gus_mtx);
         return reg16;
     case 0x305:
         reg16 = ExecuteReadRegister() >> 8;
@@ -1705,15 +1732,18 @@ __force_inline Bitu read_gus(Bitu port,Bitu iolen) {
         // if (gus_type < GUS_INTERWAVE) // Versions prior to the Interwave will reflect last I/O to 3X2-3X5 when read back from 3X3
             myGUS.gRegSelectData = reg16 & 0xFF;
 
+        // mutex_exit(&gus_mtx);
         return reg16;
     case 0x307:
         if((myGUS.gDramAddr & myGUS.gDramAddrMask) < myGUS.memsize) {
+            // mutex_exit(&gus_mtx);
 #ifdef PSRAM
             return psram_read8(&psram_spi, myGUS.gDramAddr & myGUS.gDramAddrMask);
 #else
             return GUSRam[myGUS.gDramAddr & myGUS.gDramAddrMask];
 #endif
         } else {
+            // mutex_exit(&gus_mtx);
             return 0;
         }
     case 0x306:
@@ -1734,11 +1764,13 @@ __force_inline Bitu read_gus(Bitu port,Bitu iolen) {
         break;
     }
 
+    // mutex_exit(&gus_mtx);
     return 0xff;
 }
 
 
 __force_inline void write_gus(Bitu port,Bitu val,Bitu iolen) {
+    // mutex_enter_blocking(&gus_mtx);
 //  LOG_MSG("Write gus port %x val %x",port,val);
 
     /* 12-bit ISA decode (FIXME: Check GUS MAX ISA card to confirm)
@@ -1781,7 +1813,8 @@ __force_inline void write_gus(Bitu port,Bitu val,Bitu iolen) {
         myGUS.gRegControl = 0;
         myGUS.mixControl = (uint8_t)val;
         myGUS.ChangeIRQDMA = true;
-        return;
+        // return;
+        break;
     case 0x208:
         adlib_commandreg = (uint8_t)val;
         break;
@@ -1791,7 +1824,8 @@ __force_inline void write_gus(Bitu port,Bitu val,Bitu iolen) {
             myGUS.timers[0].reached=false;
             myGUS.timers[1].reached=false;
             GUS_CheckIRQ();
-            return;
+            // return;
+            break;
         }
         myGUS.timers[0].masked=(val & 0x40)>0;
         myGUS.timers[1].masked=(val & 0x20)>0;
@@ -2007,6 +2041,7 @@ __force_inline void write_gus(Bitu port,Bitu val,Bitu iolen) {
 #endif
         break;
     }
+    // mutex_exit(&gus_mtx);
 }
 
 //#if 0 // TODO implement DMA
@@ -2322,11 +2357,14 @@ extern void GUS_CallBack(Bitu len, int16_t* play_buffer) {
     int32_t buffer[MIXER_BUFSIZE][2];
     memset(buffer, 0, len * sizeof(buffer[0]));
 
+    // putchar('g');
+    // mutex_enter_blocking(&gus_mtx);
     if ((GUS_reset_reg & 0x01/*!master reset*/) == 0x01) {
         for (Bitu i = 0; i < myGUS.ActiveChannels; i++) {
             guschan[i]->generateSamples(buffer[0], len);
         }
     }
+    // mutex_exit(&gus_mtx);
 
     // FIXME: I wonder if the GF1 chip DAC had more than 16 bits precision
     //        to render louder than 100% volume without clipping, and if so,
@@ -2398,7 +2436,10 @@ extern void GUS_CallBack(Bitu len, int16_t* play_buffer) {
 
     // TODO copy samples to play buffer
     // gus_chan->AddSamples_s32(len, buffer[0]);
+    // mutex_enter_blocking(&gus_mtx);
     CheckVoiceIrq();
+    // mutex_exit(&gus_mtx);
+    // putchar('o');
 }
 
 // Generate logarithmic to linear volume conversion tables
@@ -2899,6 +2940,10 @@ static GUS* test = NULL;
 void GUS_OnReset() {
     LOG_MSG("Allocating GUS emulation");
     test = new GUS();
+
+    // int spin_id = spin_lock_claim_unused(true);
+    // gus_spin = spin_lock_init(spin_id);
+    mutex_init(&gus_mtx);
 }
 #if 0 // dosbox-x specific startup/shutdown
 

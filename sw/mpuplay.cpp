@@ -30,7 +30,7 @@ bi_decl(bi_3pins_with_names(PICO_AUDIO_I2S_DATA_PIN, "I2S DIN", PICO_AUDIO_I2S_C
 #define SAMPLES_PER_BUFFER 1024
 #else
 #include "gus-x.h"
-#define SAMPLES_PER_BUFFER 16
+#define SAMPLES_PER_BUFFER 256
 #endif
 
 
@@ -106,7 +106,6 @@ void play_gus() {
 #ifdef DOSBOX_STAGING
         gus->AudioCallback(buffer->max_sample_count, samples);
 #else
-        __dsb();
         GUS_CallBack(buffer->max_sample_count, samples);
 #endif
         /*

@@ -26,7 +26,7 @@ struct PIC_TimerEvent {
 #endif
 };
 
-extern PIC_TimerEvent timerEvents[3];
+extern PIC_TimerEvent timerEvents[4];
 
 extern alarm_pool_t* alarm_pool;
 
@@ -67,7 +67,7 @@ void PIC_Init(void);
 
 #ifndef USE_ALARM
 __force_inline void PIC_HandleEvents() {
-    for (int i = 0; i < 3; ++i) {
+    for (int i = 0; i < 4; ++i) {
         if (timerEvents[i].active && timerEvents[i].deadline <= time_us_32()) {
             PIC_HandleEvent(0, &timerEvents[i]);
         }

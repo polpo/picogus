@@ -61,25 +61,43 @@ uint32_t value;
 
 
 __force_inline void handle_iow(void) {
+    bool iochrdy_on;
     iow_read = pio_sm_get(pio0, iow_sm); //>> 16;
     // printf("IOW: %x\n", iow_read);
     port = (iow_read >> 8) & 0x3FF;
 #ifdef SOUND_GUS
     if ((port >> 4 | 0x10) == GUS_PORT_TEST) {
-        pio_sm_put(pio0, iow_sm, 0xffffffffu);
+        switch (port) {
+        case 0x342:
+        case 0x343:
+        case 0x344:
+            // Fast write, don't set iochrdy by writing 0
+            iochrdy_on = false;
+            pio_sm_put(pio0, iow_sm, 0x0u);
+            break;
+        default:
+            // Slow write, set iochrdy by writing non-0
+            iochrdy_on = true;
+            pio_sm_put(pio0, iow_sm, 0xffffffffu);
+            break;
+        }
         value = iow_read & 0xFF;
         // uint32_t write_begin = time_us_32();
+        __dsb();
 #ifdef DOSBOX_STAGING
         gus->WriteToPort(port, value, io_width_t::byte); // 3x4 supports 16-bit transfers but PiGUS doesn't! force byte
 #else                                                         
         write_gus(port, value, 1 /* always an 8 bit write */);
 #endif
+        __dsb();
         // uint32_t write_elapsed = time_us_32() - write_begin;
         // if (write_elapsed > 1) {
         //     printf("long write to port %x, (sel reg %x), took %d us\n", port, gus->selected_register, write_elapsed);
         // }
         // Tell PIO that we are done
-        pio_sm_put(pio0, iow_sm, 0x0u);
+        if (iochrdy_on) {
+            pio_sm_put(pio0, iow_sm, 0x0u);
+        }
         // printf("GUS IOW: port: %x value: %x\n", port, value);
         // gpio_xor_mask(1u << LED_PIN);
         // puts("IOW");
@@ -126,6 +144,7 @@ __force_inline void handle_ior(void) {
 #ifdef DOSBOX_STAGING
             value = gus->ReadFromPort(port, io_width_t::byte);
 #else 
+            __dsb();
             value = read_gus(port, 1);
 #endif
         }

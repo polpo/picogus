@@ -5,7 +5,7 @@
 #include <cstdio>
 
 // A fixed pool of only 3 events for now. gus-x only has 3 different timer events - two timers and one DMA
-PIC_TimerEvent timerEvents[3];
+PIC_TimerEvent timerEvents[4];
 
 alarm_pool_t* alarm_pool;
 
@@ -30,7 +30,7 @@ int64_t PIC_HandleEvent(alarm_id_t id, void *user_data) {
         return ret;
     }
     // A negative return value re-sets the alarm from the time when it initially triggered
-    return -(int32_t)ret;
+    return -(int64_t)ret;
 #else
     if (ret) {
         event->deadline = time_us_32() + ret;
@@ -43,7 +43,7 @@ int64_t PIC_HandleEvent(alarm_id_t id, void *user_data) {
 
 void PIC_RemoveEvents(PIC_EventHandler handler) {
     // puts("removeevents");
-    for (int i = 0; i < 3; ++i) {
+    for (int i = 0; i < 4; ++i) {
         if (timerEvents[i].handler == handler) {
 #ifdef USE_ALARM
             if (timerEvents[i].alarm_id) {
@@ -62,7 +62,7 @@ void PIC_Init() {
 #ifdef USE_ALARM
     alarm_pool = alarm_pool_create(2, PICO_TIME_DEFAULT_ALARM_POOL_MAX_TIMERS);
     irq_set_priority(TIMER_IRQ_2, PICO_HIGHEST_IRQ_PRIORITY);
-    for (int i = 0; i < 3; ++i) {
+    for (int i = 0; i < 4; ++i) {
         timerEvents[i].alarm_id = 0;
         timerEvents[i].handler = nullptr;
     }
