@@ -17,9 +17,6 @@ pio_spi_inst_t psram_spi;
 #define UART_ID     uart0
 #define BAUD_RATE   115200
 
-#include "isa_dma.h"
-dma_inst_t dma_config;
-
 #ifdef SOUND_OPL
 #include "opl.h"
 
@@ -35,6 +32,9 @@ extern "C" unsigned int OPL_Pico_PortRead(opl_port_t);
 Gus* gus;
 #else
 #include "gus-x.cpp"
+
+#include "isa_dma.h"
+dma_inst_t dma_config;
 #endif
 
 constexpr uint16_t GUS_PORT = 0x240u;
@@ -355,16 +355,16 @@ int main()
     irq_set_enabled(PIO0_IRQ_1, true);
 #endif
 
-// #ifdef SOUND_GUS
+#ifdef SOUND_GUS
     puts("Initing ISA DMA PIO...");
     dma_config = DMA_init(pio);
-// #endif
+#endif
 
     gpio_xor_mask(1u << LED_PIN);
 
-    /*
+#ifndef USE_ALARM
     PIC_Init();
-    */
+#endif
 
     for (;;) {
 #ifndef USE_IRQ

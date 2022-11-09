@@ -29,10 +29,9 @@ pico_sdk_init()
 
 # Add executable. Default name is the project name, version 0.1
 add_executable(picogus picogus.cpp)
+pico_set_program_version(picogus "0.0.1")
 
-target_compile_definitions(picogus PRIVATE
-        # compile time configuration of I2S
-        #        PICO_AUDIO_I2S_MONO_INPUT=1
+add_compile_definitions(
         USE_AUDIO_I2S=1
         PICO_AUDIO_I2S_DATA_PIN=16
         PICO_AUDIO_I2S_CLOCK_PIN_BASE=17
@@ -46,6 +45,7 @@ target_compile_definitions(picogus PRIVATE
 )
 
 if(PROJECT_TYPE STREQUAL "GUS")
+    pico_set_program_name(picogus "picogus-gus")
     target_sources(picogus PRIVATE gusplay.cpp pico_pic.cpp)
     target_compile_definitions(picogus PRIVATE
         SOUND_GUS=1
@@ -57,7 +57,7 @@ if(PROJECT_TYPE STREQUAL "GUS")
 endif()
 
 if(PROJECT_TYPE STREQUAL "OPL")
-    target_sources(picogus PRIVATE adlib.cpp)
+    target_sources(picogus PRIVATE adlibplay.cpp)
     target_link_libraries(
         picogus
         opl
@@ -70,10 +70,6 @@ if(PROJECT_TYPE STREQUAL "OPL")
     add_subdirectory(opl)
 endif()
 
-
-pico_set_program_name(picogus "picogus")
-pico_set_program_version(picogus "0.1")
-
 pico_enable_stdio_uart(picogus 0)
 pico_enable_stdio_usb(picogus 0)
 pico_enable_stdio_semihosting(picogus 0)
@@ -81,9 +77,6 @@ pico_enable_stdio_semihosting(picogus 0)
 pico_generate_pio_header(picogus ${CMAKE_CURRENT_LIST_DIR}/isa_io.pio)
 pico_generate_pio_header(picogus ${CMAKE_CURRENT_LIST_DIR}/isa_dma.pio)
 
-add_subdirectory(stdio_async_uart)
-
-# Add the standard library to the build
 target_link_libraries(
     picogus
     pico_stdlib
@@ -93,7 +86,7 @@ target_link_libraries(
     hardware_pll
 )
 
-# Add any user requested libraries
+add_subdirectory(stdio_async_uart)
 target_link_libraries(
     picogus
     stdio_async_uart
