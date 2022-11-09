@@ -54,9 +54,13 @@ if(PROJECT_TYPE STREQUAL "GUS")
         # USE_SPINLOCK=1
     )
     pico_generate_pio_header(picogus ${CMAKE_CURRENT_LIST_DIR}/psram_spi.pio)
+    pico_enable_stdio_uart(picogus 0)
+    pico_enable_stdio_usb(picogus 0)
+    pico_enable_stdio_semihosting(picogus 0)
 endif()
 
 if(PROJECT_TYPE STREQUAL "OPL")
+    pico_set_program_name(picogus "picogus-adlib")
     target_sources(picogus PRIVATE adlibplay.cpp)
     target_link_libraries(
         picogus
@@ -68,9 +72,13 @@ if(PROJECT_TYPE STREQUAL "OPL")
         EMU8950_ASM=1
     )
     add_subdirectory(opl)
+    pico_enable_stdio_uart(picogus 0)
+    pico_enable_stdio_usb(picogus 0)
+    pico_enable_stdio_semihosting(picogus 0)
 endif()
 
 if(PROJECT_TYPE STREQUAL "MPU")
+    pico_set_program_name(picogus "picogus-mpu401")
     target_compile_definitions(picogus PRIVATE
         SOUND_MPU=1
         USE_ALARM=1
@@ -80,14 +88,11 @@ if(PROJECT_TYPE STREQUAL "MPU")
         mpu401/mpu401.c
         mpu401/midi.c
     )
+    # Use USB stdio because UART is used by MIDI
+    pico_enable_stdio_uart(picogus 0)
+    pico_enable_stdio_usb(picogus 1)
+    pico_enable_stdio_semihosting(picogus 0)
 endif()
-
-pico_set_program_name(picogus "picogus")
-pico_set_program_version(picogus "0.1")
-
-pico_enable_stdio_uart(picogus 0)
-pico_enable_stdio_usb(picogus 1)
-pico_enable_stdio_semihosting(picogus 0)
 
 pico_generate_pio_header(picogus ${CMAKE_CURRENT_LIST_DIR}/isa_io.pio)
 pico_generate_pio_header(picogus ${CMAKE_CURRENT_LIST_DIR}/isa_dma.pio)
