@@ -25,7 +25,7 @@
 bi_decl(bi_3pins_with_names(PICO_AUDIO_I2S_DATA_PIN, "I2S DIN", PICO_AUDIO_I2S_CLOCK_PIN_BASE, "I2S BCK", PICO_AUDIO_I2S_CLOCK_PIN_BASE+1, "I2S LRCK"));
 #endif
 
-#define SAMPLES_PER_BUFFER 1024
+#define SAMPLES_PER_BUFFER 64
 
 struct audio_buffer_pool *init_audio() {
 
@@ -48,7 +48,7 @@ struct audio_buffer_pool *init_audio() {
             .data_pin = PICO_AUDIO_I2S_DATA_PIN,
             .clock_pin_base = PICO_AUDIO_I2S_CLOCK_PIN_BASE,
             .dma_channel = 6,
-            .pio_sm = 0,
+            .pio_sm = 1,
     };
 
     output_format = audio_i2s_setup(&audio_format, &config);
@@ -73,6 +73,7 @@ void play_adlib() {
     for (;;) {
         struct audio_buffer *buffer = take_audio_buffer(ap, true);
         OPL_Pico_Mix_callback(buffer);
+        // putchar((unsigned char)buffer->buffer->bytes[1]);
         give_audio_buffer(ap, buffer);
     }
 }

@@ -3,22 +3,7 @@
 #include "pico/multicore.h"
 #include "hardware/pio.h"
 #include "hardware/irq.h"
-// #include "hardware/vreg.h"
 #include "hardware/regs/vreg_and_chip_reset.h"
-
-
-#include "stdio_async_uart.h"
-/*
-#define UART_TX_PIN (0)
-#define UART_RX_PIN (1)
-#define UART_ID     uart0
-*/
-#define UART_TX_PIN (28)
-#define UART_RX_PIN (-1)
-#define UART_ID     uart0
-#define BAUD_RATE   115200
-
-// #include "clock_pll.h"
 
 #ifdef PSRAM
 #include "psram_spi.h"
@@ -26,12 +11,22 @@ pio_spi_inst_t psram_spi;
 #endif
 #include "isa_io.pio.h"
 
+#include "stdio_async_uart.h"
+// UART_TX_PIN is defined in isa_io.pio.h
+#define UART_RX_PIN (-1)
+#define UART_ID     uart0
+#define BAUD_RATE   115200
+
+#include "isa_dma.h"
+dma_inst_t dma_config;
+
 #ifdef SOUND_OPL
 #include "opl.h"
 
 void play_adlib(void);
 extern "C" int OPL_Pico_Init(unsigned int);
 extern "C" void OPL_Pico_PortWrite(opl_port_t, unsigned int);
+extern "C" unsigned int OPL_Pico_PortRead(opl_port_t);
 #endif
 
 #ifdef SOUND_GUS
@@ -39,8 +34,6 @@ extern "C" void OPL_Pico_PortWrite(opl_port_t, unsigned int);
 #include "gus.h"
 Gus* gus;
 #else
-#include "isa_dma.h"
-dma_inst_t dma_config;
 #include "gus-x.cpp"
 #endif
 
@@ -63,6 +56,7 @@ uint32_t value;
 __force_inline void handle_iow(void) {
     bool iochrdy_on;
     iow_read = pio_sm_get(pio0, iow_sm); //>> 16;
+    // printf("%x", iow_read);
     // printf("IOW: %x\n", iow_read);
     port = (iow_read >> 8) & 0x3FF;
 #ifdef SOUND_GUS
@@ -84,6 +78,7 @@ __force_inline void handle_iow(void) {
         value = iow_read & 0xFF;
         // uint32_t write_begin = time_us_32();
         __dsb();
+        // printf("%x", iow_read);
 #ifdef DOSBOX_STAGING
         gus->WriteToPort(port, value, io_width_t::byte); // 3x4 supports 16-bit transfers but PiGUS doesn't! force byte
 #else                                                         
@@ -112,16 +107,19 @@ __force_inline void handle_iow(void) {
 #ifdef SOUND_OPL
     switch (port) {
     case 0x388:
-        pio_sm_put(pio0, iow_sm, 0xffffffffu);
+        pio_sm_put(pio0, iow_sm, 0x0u);
         OPL_Pico_PortWrite(OPL_REGISTER_PORT, iow_read & 0xFF);
         // Tell PIO that we are done
-        pio_sm_put(pio0, iow_sm, 0x0u);
+        // putchar(iow_read & 0xFF);
+        // printf("%x", iow_read);
         break;
     case 0x389:
         pio_sm_put(pio0, iow_sm, 0xffffffffu);
         OPL_Pico_PortWrite(OPL_DATA_PORT, iow_read & 0xFF);
         __dsb();
         // Tell PIO that we are done
+        // putchar(iow_read & 0xFF);
+        // printf("%x", iow_read);
         pio_sm_put(pio0, iow_sm, 0x0u);
         break;
     default:
@@ -134,7 +132,7 @@ __force_inline void handle_ior(void) {
     ior_read = pio_sm_get(pio0, ior_sm); //>> 16;
     port = ior_read & 0x3FF;
     // printf("IOR: %x\n", port);
-#ifdef SOUND_GUS
+#if defined(SOUND_GUS)
     if ((port >> 4 | 0x10) == GUS_PORT_TEST) {
         // Tell PIO to wait for data
         pio_sm_put(pio0, ior_sm, 0xffffffffu);
@@ -156,6 +154,20 @@ __force_inline void handle_ior(void) {
         // Reset PIO
         pio_sm_put(pio0, ior_sm, 0x0u);
     }
+#elif defined(SOUND_OPL)
+    if (port == 0x388) {
+        // Tell PIO to wait for data
+        pio_sm_put(pio0, ior_sm, 0xffffffffu);
+        value = OPL_Pico_PortRead(OPL_REGISTER_PORT);
+        // OR with 0x00ffff00 is required to set pindirs in the PIO
+        pio_sm_put(pio0, ior_sm, 0x00ffff00u | value);
+    } else {
+        // Reset PIO
+        pio_sm_put(pio0, ior_sm, 0x0u);
+    }
+#else
+    // Reset PIO
+    pio_sm_put(pio0, ior_sm, 0x0u);
 #endif
 }
 
@@ -189,7 +201,7 @@ int main()
     // Overclock!
     // set_sys_clock_khz(200000, true);
     // Use hacked set_sys_clock_khz to keep SPI clock high - see clock_pll.h for details
-    // gset_sys_clock_khz(266000, true);
+    // set_sys_clock_khz(266000, true);
     set_sys_clock_khz(280000, true);
     // vreg_set_voltage(VREG_VOLTAGE_1_20);
 
@@ -343,8 +355,10 @@ int main()
     irq_set_enabled(PIO0_IRQ_1, true);
 #endif
 
+// #ifdef SOUND_GUS
     puts("Initing ISA DMA PIO...");
     dma_config = DMA_init(pio);
+// #endif
 
     gpio_xor_mask(1u << LED_PIN);
 

@@ -28,6 +28,7 @@
 #include "pico/audio_i2s.h"
 #include "pico/util/pheap.h"
 #include "hardware/gpio.h"
+#include "hardware/timer.h"
 /* #include "i_picosound.h" */
 
 #if USE_WOODY_OPL
@@ -332,7 +333,7 @@ int OPL_Pico_Init(unsigned int port_base)
     return 1;
 }
 
-static unsigned int OPL_Pico_PortRead(opl_port_t port)
+unsigned int OPL_Pico_PortRead(opl_port_t port)
 {
     unsigned int result = 0;
 
@@ -342,13 +343,16 @@ static unsigned int OPL_Pico_PortRead(opl_port_t port)
     }
 
 #if !EMU8950_NO_TIMER
-    if (timer1.enabled && current_time > timer1.expire_time)
+    __dsb();
+    // Use time_us_64 as current_time gets updated coarsely as the mix callback is called
+    uint64_t pico_time = time_us_64();
+    if (timer1.enabled && pico_time > timer1.expire_time)
     {
         result |= 0x80;   // Either have expired
         result |= 0x40;   // Timer 1 has expired
     }
 
-    if (timer2.enabled && current_time > timer2.expire_time)
+    if (timer2.enabled && pico_time > timer2.expire_time)
     {
         result |= 0x80;   // Either have expired
         result |= 0x20;   // Timer 2 has expired
@@ -368,7 +372,8 @@ static void OPLTimer_CalculateEndTime(opl_timer_t *timer)
     if (timer->enabled)
     {
         tics = 0x100 - timer->value;
-        timer->expire_time = current_time
+
+        timer->expire_time = time_us_64()
                            + ((uint64_t) tics * OPL_SECOND) / timer->rate;
     }
 }
@@ -381,6 +386,7 @@ static void WriteRegister(unsigned int reg_num, unsigned int value)
         case OPL_REG_TIMER1:
             timer1.value = value;
             OPLTimer_CalculateEndTime(&timer1);
+            //printf("timer1 set");
             break;
 
         case OPL_REG_TIMER2:

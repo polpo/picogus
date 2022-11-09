@@ -20,8 +20,9 @@ set(CMAKE_BUILD_TYPE "Release")
 set(PICO_COPY_TO_RAM 1)
 #set(SKIP_PICO_MALLOC 1)
 
-set(PROJECT_TYPE "GUS")
-# set(PROJECT_TYPE "OPL")
+if(NOT PROJECT_TYPE)
+    set(PROJECT_TYPE "GUS")
+endif()
 
 # Initialise the Raspberry Pi Pico SDK
 pico_sdk_init()
@@ -40,6 +41,7 @@ target_compile_definitions(picogus PRIVATE
         PICO_DEFAULT_UART_RX_PIN=-1
         PICO_AUDIO_I2S_PIO=1
         # USE_IRQ=1
+        USE_ALARM=1
         PICO_STDIO_USB_CONNECT_WAIT_TIMEOUT_MS=5000000
 )
 
@@ -49,7 +51,6 @@ if(PROJECT_TYPE STREQUAL "GUS")
         SOUND_GUS=1
         PSRAM=1
         # TEST_PSRAM=1
-        USE_ALARM=1
         # USE_SPINLOCK=1
     )
     pico_generate_pio_header(picogus ${CMAKE_CURRENT_LIST_DIR}/psram_spi.pio)
@@ -64,6 +65,7 @@ if(PROJECT_TYPE STREQUAL "OPL")
     target_compile_definitions(picogus PRIVATE
         SOUND_OPL=1
         USE_EMU8950_OPL=1
+        EMU8950_ASM=1
     )
     add_subdirectory(opl)
 endif()
@@ -104,3 +106,5 @@ add_custom_target(
     DEPENDS picogus
     COMMAND openocd -f interface/picoprobe.cfg -f target/rp2040.cfg -c "program picogus.elf verify reset exit"
 )
+
+unset(PROJECT_TYPE CACHE)
