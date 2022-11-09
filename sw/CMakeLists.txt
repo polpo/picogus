@@ -46,7 +46,7 @@ add_compile_definitions(
 
 if(PROJECT_TYPE STREQUAL "GUS")
     pico_set_program_name(picogus "picogus-gus")
-    target_sources(picogus PRIVATE gusplay.cpp pico_pic.cpp)
+    target_sources(picogus PRIVATE gusplay.cpp pico_pic.c)
     target_compile_definitions(picogus PRIVATE
         SOUND_GUS=1
         PSRAM=1
@@ -70,8 +70,23 @@ if(PROJECT_TYPE STREQUAL "OPL")
     add_subdirectory(opl)
 endif()
 
+if(PROJECT_TYPE STREQUAL "MPU")
+    target_compile_definitions(picogus PRIVATE
+        SOUND_MPU=1
+        USE_ALARM=1
+    )
+    target_sources(picogus PRIVATE
+        pico_pic.c
+        mpu401/mpu401.c
+        mpu401/midi.c
+    )
+endif()
+
+pico_set_program_name(picogus "picogus")
+pico_set_program_version(picogus "0.1")
+
 pico_enable_stdio_uart(picogus 0)
-pico_enable_stdio_usb(picogus 0)
+pico_enable_stdio_usb(picogus 1)
 pico_enable_stdio_semihosting(picogus 0)
 
 pico_generate_pio_header(picogus ${CMAKE_CURRENT_LIST_DIR}/isa_io.pio)

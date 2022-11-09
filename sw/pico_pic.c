@@ -2,7 +2,7 @@
 
 #include "pico/time.h"
 
-#include <cstdio>
+#include <stdio.h>
 
 // A fixed pool of only 3 events for now. gus-x only has 3 different timer events - two timers and one DMA
 PIC_TimerEvent timerEvents[4];
@@ -64,13 +64,13 @@ void PIC_Init() {
     irq_set_priority(TIMER_IRQ_2, PICO_HIGHEST_IRQ_PRIORITY);
     for (int i = 0; i < 4; ++i) {
         timerEvents[i].alarm_id = 0;
-        timerEvents[i].handler = nullptr;
+        timerEvents[i].handler = 0;
     }
 #else
     for (int i = 0; i < 3; ++i) {
         timerEvents[i].active = false;
         timerEvents[i].deadline = UINT32_MAX;
-        timerEvents[i].handler = nullptr;
+        timerEvents[i].handler = 0;
     }
 #endif
 }
