@@ -38,19 +38,19 @@ int64_t PIC_HandleEvent(alarm_id_t id, void *user_data);
 
 int64_t clear_irq(alarm_id_t id, void *user_data);
 
-__force_inline void PIC_ActivateIRQ(void) {
+static __force_inline void PIC_ActivateIRQ(void) {
     // puts("activate irq");
     gpio_put(IRQ_PIN, 1); 
     // alarm_pool_add_alarm_in_us(alarm_pool, 500, clear_irq, 0, true);
 }
 
-__force_inline void PIC_DeActivateIRQ(void) {
+static __force_inline void PIC_DeActivateIRQ(void) {
     gpio_put(IRQ_PIN, 0); 
 }
 
 // void PIC_AddEvent(PIC_EventHandler handler, uint32_t delay, Bitu val=0);
 
-__force_inline void PIC_AddEvent(PIC_EventHandler handler, uint32_t delay, Bitu val) {
+static __force_inline void PIC_AddEvent(PIC_EventHandler handler, uint32_t delay, Bitu val) {
     // printf("add event: %x %x %d\n", handler, val, delay);
     timerEvents[val].handler = handler;
     timerEvents[val].value = val;
@@ -70,7 +70,7 @@ void PIC_RemoveEvents(PIC_EventHandler handler);
 void PIC_Init(void);
 
 #ifndef USE_ALARM
-__force_inline void PIC_HandleEvents() {
+static __force_inline void PIC_HandleEvents() {
     for (int i = 0; i < 4; ++i) {
         if (timerEvents[i].active && timerEvents[i].deadline <= time_us_32()) {
             PIC_HandleEvent(0, &timerEvents[i]);

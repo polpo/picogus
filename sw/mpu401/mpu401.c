@@ -28,6 +28,7 @@
  *
  */
 
+#include <stdio.h>
 #include "hardware/uart.h"
 
 /* SOFTMPU: Moved exported functions & types to header */
@@ -582,7 +583,7 @@ static void UpdateConductor(void) {
 
 uint32_t MPU401_Event(Bitu val) {
 	/* SOFTMPU */
-    putc('.');
+    putchar('.');
 	Bit8u i;
 	Bitu new_time;
 	if (mpu.mode==M_UART) return 0;
