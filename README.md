@@ -14,7 +14,9 @@ Looking for the original project, using Raspberry Pi 3/4? See the [pigus repo](h
 
 See/hear PicoGUS in action on YouTube:
 
-[![Watch the video](https://img.youtube.com/vi/h4iWSnTc9Ag/hqdefault.jpg)](https://youtu.be/h4iWSnTc9Ag)
+[![Watch the September 2022 Update](https://img.youtube.com/vi/h4iWSnTc9Ag/hqdefault.jpg)](https://youtu.be/h4iWSnTc9Ag)
+
+[![Watch the November 2022 Update](https://img.youtube.com/vi/CkJvkJVRscQ/hqdefault.jpg)](https://youtu.be/CkJvkJVRscQ)
 
 ## Open Source Credits
 
