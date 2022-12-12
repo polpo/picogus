@@ -5,20 +5,23 @@
 
 
 void banner(void) {
-    printf("PiGUSinit v0.0.1\n\n");
+    printf("PicoGUSinit v0.1.0\n");
+    printf("(c) 2022 Ian Scott - licensed under the GNU GPL v2\n\n");
 }
 
 
 void usage(void) {
-    fprintf(stderr, "usage: pgusinit [/?]\n");
+    fprintf(stderr, "usage: pgusinit [/?] [/a n]\n");
     fprintf(stderr, "\n");
     fprintf(stderr, "Options:\n");
-    fprintf(stderr, "\t/? - show this message\n");
+    fprintf(stderr, "\t/?   - show this message\n");
+    fprintf(stderr, "\t/a n - set audio buffer to n samples. Default: 16, Min: 8, Max: 256\n");
+    fprintf(stderr, "\t       (tweaking this can help demos that hang or have audio glitches)\n");
     fprintf(stderr, "\n");
     fprintf(stderr, "The ULTRASND environment variable must be set in the following format:\n");
     fprintf(stderr, "\tset ULTRASND=xxx,y,n,z,n\n");
     fprintf(stderr, "Where xxx = port, y = DMA, z = IRQ. n is ignored.\n");
-    fprintf(stderr, "Port is configured via config file on the Raspberry Pi; DMA and IRQ via jumper.\n");
+    fprintf(stderr, "Port is hardcoded to 240 in PicoGUS firmware; DMA and IRQ configued via jumper.\n");
 }
 
 
@@ -29,15 +32,30 @@ void err_ultrasnd(void) {
 
 
 void err_pigus(void) {
-    fprintf(stderr, "ERROR: no PiGUS detected!\n"); 
+    fprintf(stderr, "ERROR: no PicoGUS detected!\n"); 
 }
 
 
 int main(int argc, char* argv[]) {
+    int e;
+    unsigned short buffer_size = 0;
+
     banner();
     if (strcmp(argv[1], "/?") == 0) {
         usage();
         return 0;
+    }
+
+    if (strcmp(argv[1], "/a") == 0) {
+        if (argc != 3) {
+            usage();
+            return 255;
+        }
+        e = sscanf(argv[2], "%hu", &buffer_size);
+        if (e != 1 || buffer_size < 8 || buffer_size > 256) {
+            usage();
+            return 3;
+        }
     }
 
     char* ultrasnd = getenv("ULTRASND");
@@ -50,7 +68,7 @@ int main(int argc, char* argv[]) {
     unsigned short port;
     unsigned char irq;
     unsigned char dma;
-    int e = sscanf(ultrasnd, "%hx,%hhu,%*hhu,%hhu,%*hhu", &port, &irq, &dma);
+    e = sscanf(ultrasnd, "%hx,%hhu,%*hhu,%hhu,%*hhu", &port, &irq, &dma);
     if (e != 3) {
         err_ultrasnd();
         return 2;
@@ -74,7 +92,7 @@ int main(int argc, char* argv[]) {
     }
     printf("GUS-like card detected...\n");
 
-    // Get magic value from port on PiGUS that is not on real GUS
+    // Get magic value from port on PicoGUS that is not on real GUS
     if (inp(port + 0x2) != 0xDD) {
         err_pigus();
         return 99;
@@ -86,7 +104,12 @@ int main(int argc, char* argv[]) {
     outp(port + 0x103, 0x4C);
     // Master reset to run. DAC enable and IRQ enable will be done by the application.
     outp(port + 0x105, 0x1);
+
+    if (buffer_size) {
+        outp(port + 0x2, (unsigned char)(buffer_size - 1));
+        printf("Audio buffer size set to %u samples\n", buffer_size);
+    }
     
-    printf("PiGUS detected and initialized!\n");
+    printf("PicoGUS detected and initialized!\n");
     return 0;
 }

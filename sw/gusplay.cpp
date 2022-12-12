@@ -30,9 +30,8 @@ bi_decl(bi_3pins_with_names(PICO_AUDIO_I2S_DATA_PIN, "I2S DIN", PICO_AUDIO_I2S_C
 #define SAMPLES_PER_BUFFER 1024
 #else
 #include "gus-x.h"
-#define SAMPLES_PER_BUFFER 16
+#define SAMPLES_PER_BUFFER 256
 #endif
-
 
 struct audio_buffer_pool *init_audio() {
 
@@ -105,9 +104,10 @@ void play_gus() {
         // uint32_t gus_audio_begin = time_us_32();
 #ifdef DOSBOX_STAGING
         gus->AudioCallback(buffer->max_sample_count, samples);
+        buffer->sample_count = buffer->max_sample_count;
 #else
         __dsb();
-        GUS_CallBack(buffer->max_sample_count, samples);
+        buffer->sample_count = GUS_CallBack(buffer->max_sample_count, samples);
 #endif
         /*
         uint32_t gus_audio_elapsed = time_us_32() - gus_audio_begin;
@@ -120,7 +120,6 @@ void play_gus() {
             }
         }
         */
-        buffer->sample_count = buffer->max_sample_count;
         // gpio_xor_mask(1u << PICO_DEFAULT_LED_PIN);
         give_audio_buffer(ap, buffer);
     }

@@ -30,10 +30,8 @@
 extern pio_spi_inst_t psram_spi;
 #endif
 
-// #include "hardware/sync.h"
-// spin_lock_t* gus_spin;
-#include "pico/mutex.h"
-mutex_t gus_mtx;
+#include "pico/critical_section.h"
+critical_section_t gus_crit;
 /*
 #include "dosbox.h"
 #include "inout.h"
@@ -152,6 +150,8 @@ static enum GUSType gus_type = GUS_CLASSIC;
 static bool gus_ics_mixer = false;
 static bool gus_warn_irq_conflict = false;
 static bool gus_warn_dma_conflict = false;
+
+static uint32_t buffer_size = 16;
 
 #if 0 // dbx-specific
 static IO_Callout_t gus_iocallout = IO_Callout_t_none;
@@ -487,8 +487,11 @@ class GUSChannels {
                 }
 
                 if (endcondition) {
-                    if (WaveCtrl & WCTRL_IRQENABLED) /* generate an IRQ if requested */
+                    if (WaveCtrl & WCTRL_IRQENABLED) /* generate an IRQ if requested */ {
+                        critical_section_enter_blocking(&gus_crit);
                         myGUS.WaveIRQ |= irqmask;
+                        critical_section_exit(&gus_crit);
+                    }
 
                     if ((RampCtrl & WCTRL_16BIT/*roll over*/) && !(WaveCtrl & WCTRL_LOOP)) {
                         /* "3.11. Rollover feature
@@ -525,8 +528,11 @@ class GUSChannels {
                 else
                     endcondition = (WaveAddr >= WaveEnd)?true:false;
 
-                if (endcondition)
+                if (endcondition) {
+                    critical_section_enter_blocking(&gus_crit);
                     myGUS.WaveIRQ |= irqmask;
+                    critical_section_exit(&gus_crit);
+                }
             }
         }
         INLINE void UpdateVolumes(void) {
@@ -556,7 +562,9 @@ class GUSChannels {
             }
             /* Generate an IRQ if needed */
             if (RampCtrl & 0x20) {
+                critical_section_enter_blocking(&gus_crit);
                 myGUS.RampIRQ|=irqmask;
+                critical_section_exit(&gus_crit);
             }
             /* Check for looping */
             if (RampCtrl & 0x08) {
@@ -626,7 +634,6 @@ class GUSChannels {
                     if ((GUS_reset_reg & 0x02/*DAC enable*/) == 0x02) {
                         stream[i << 1] += tmpsamp * VolLeft;
                         stream[(i << 1) + 1] += tmpsamp * VolRight;
-
                         WaveUpdate();
                         RampUpdate();
                     }
@@ -868,7 +875,6 @@ static void GUSReset(void) {
 
 __force_inline static uint8_t GUS_EffectiveIRQStatus(void) {
     uint8_t ret = 0;
-
     /* Behavior observed on real GUS hardware: Master IRQ enable bit 2 of the reset register affects only voice/wave
      * IRQ signals from the GF1. It does not affect the DMA terminal count interrupt nor does it affect the Adlib timers.
      * This is how "Juice" by Psychic Link is able to play music by GUS timer even though the demo never enables the
@@ -886,7 +892,6 @@ __force_inline static uint8_t GUS_EffectiveIRQStatus(void) {
         ret |= (myGUS.IRQStatus & 0x60/*Wave/Ramp IRQ*/);
 
     /* TODO: MIDI IRQ? */
-
     return ret;
 }
 
@@ -920,9 +925,11 @@ static INLINE void GUS_CheckIRQ(void) {
 }
 
 __force_inline static void CheckVoiceIrq(void) {
+    critical_section_enter_blocking(&gus_crit);
     Bitu totalmask=(myGUS.RampIRQ|myGUS.WaveIRQ) & myGUS.ActiveMask;
     if (!totalmask) {
         GUS_CheckIRQ();
+        critical_section_exit(&gus_crit);
         return;
     }
 
@@ -933,10 +940,14 @@ __force_inline static void CheckVoiceIrq(void) {
     GUS_CheckIRQ();
     for (;;) {
         uint32_t check=(1u << myGUS.IRQChan);
-        if (totalmask & check) return;
+        if (totalmask & check) {
+            critical_section_exit(&gus_crit);
+            return;
+        }
         myGUS.IRQChan++;
         if (myGUS.IRQChan>=myGUS.ActiveChannels) myGUS.IRQChan=0;
     }
+    critical_section_exit(&gus_crit);
 }
 
 uint32_t CheckVoiceIrq_async(Bitu val) {
@@ -1026,8 +1037,8 @@ __force_inline static uint16_t ExecuteReadRegister(void) {
         myGUS.IRQStatus&=0x9f;
         // mega hack
         // PIC_DeActivateIRQ();
-        // CheckVoiceIrq();
-        PIC_AddEvent(CheckVoiceIrq_async, 2, 3);
+        CheckVoiceIrq();
+        // PIC_AddEvent(CheckVoiceIrq_async, 2, 3);
         return (uint16_t)(tmpreg << 8);
     default:
 #if LOG_GUS
@@ -1039,19 +1050,18 @@ __force_inline static uint16_t ExecuteReadRegister(void) {
 
 static uint32_t GUS_TimerEvent(Bitu val) {
     // putchar('-');
-    // mutex_enter_blocking(&gus_mtx); 
+    critical_section_enter_blocking(&gus_crit);
     if (!myGUS.timers[val].masked) myGUS.timers[val].reached=true;
     if (myGUS.timers[val].raiseirq) {
         myGUS.IRQStatus|=0x4 << val;
         GUS_CheckIRQ();
     }
     if (myGUS.timers[val].running) {
-        mutex_exit(&gus_mtx);
+        critical_section_exit(&gus_crit);
         // putchar('.');
         return myGUS.timers[val].delay;  // Keep timer running
-        // PIC_AddEvent(GUS_TimerEvent,myGUS.timers[val].delay,val);
     }
-    // mutex_exit(&gus_mtx);
+    critical_section_exit(&gus_crit);
     // putchar('.');
     return 0;  // Stop timer
 }
@@ -1638,7 +1648,6 @@ __force_inline Bitu read_gus(Bitu port,Bitu iolen) {
 
     (void)iolen;//UNUSED
                 //
-    // mutex_enter_blocking(&gus_mtx);
 //  LOG_MSG("read from gus port %x",port);
 
     /* 12-bit ISA decode (FIXME: Check GUS MAX ISA card to confirm)
@@ -1693,7 +1702,6 @@ __force_inline Bitu read_gus(Bitu port,Bitu iolen) {
 
         /* NTS: Contrary to some false impressions, GUS hardware does not report "one at a time", it really is a bitmask.
          *      I had the funny idea you read this register "one at a time" just like reading the IRQ reason bits of the RS-232 port --J.C. */
-        // mutex_exit(&gus_mtx);
         return GUS_EffectiveIRQStatus();
     case 0x208:
         uint8_t tmptime;
@@ -1703,19 +1711,14 @@ __force_inline Bitu read_gus(Bitu port,Bitu iolen) {
         if (tmptime & 0x60) tmptime |= (1 << 7);
         if (myGUS.IRQStatus & 0x04) tmptime|=(1 << 2);
         if (myGUS.IRQStatus & 0x08) tmptime|=(1 << 1);
-        // mutex_exit(&gus_mtx);
         return tmptime;
     case 0x20a:
-        // mutex_exit(&gus_mtx);
         return adlib_commandreg;
     case 0x20f:
-        // mutex_exit(&gus_mtx);
         return ~0ul; // should not happen
     case 0x302:
-        // mutex_exit(&gus_mtx);
         return myGUS.gRegSelectData;
     case 0x303:
-        // mutex_exit(&gus_mtx);
         return myGUS.gRegSelectData;
     case 0x304:
         /*if (iolen==2) reg16 = ExecuteReadRegister() & 0xffff;
@@ -1724,7 +1727,6 @@ __force_inline Bitu read_gus(Bitu port,Bitu iolen) {
         //if (gus_type < GUS_INTERWAVE) // Versions prior to the Interwave will reflect last I/O to 3X2-3X5 when read back from 3X3
             myGUS.gRegSelectData = reg16/* & 0xFF*/;
 
-        // mutex_exit(&gus_mtx);
         return reg16;
     case 0x305:
         reg16 = ExecuteReadRegister() >> 8;
@@ -1732,18 +1734,15 @@ __force_inline Bitu read_gus(Bitu port,Bitu iolen) {
         // if (gus_type < GUS_INTERWAVE) // Versions prior to the Interwave will reflect last I/O to 3X2-3X5 when read back from 3X3
             myGUS.gRegSelectData = reg16 & 0xFF;
 
-        // mutex_exit(&gus_mtx);
         return reg16;
     case 0x307:
         if((myGUS.gDramAddr & myGUS.gDramAddrMask) < myGUS.memsize) {
-            // mutex_exit(&gus_mtx);
 #ifdef PSRAM
             return psram_read8(&psram_spi, myGUS.gDramAddr & myGUS.gDramAddrMask);
 #else
             return GUSRam[myGUS.gDramAddr & myGUS.gDramAddrMask];
 #endif
         } else {
-            // mutex_exit(&gus_mtx);
             return 0;
         }
     case 0x306:
@@ -1764,13 +1763,11 @@ __force_inline Bitu read_gus(Bitu port,Bitu iolen) {
         break;
     }
 
-    // mutex_exit(&gus_mtx);
     return 0xff;
 }
 
 
 __force_inline void write_gus(Bitu port,Bitu val,Bitu iolen) {
-    // mutex_enter_blocking(&gus_mtx);
 //  LOG_MSG("Write gus port %x val %x",port,val);
 
     /* 12-bit ISA decode (FIXME: Check GUS MAX ISA card to confirm)
@@ -1814,6 +1811,10 @@ __force_inline void write_gus(Bitu port,Bitu val,Bitu iolen) {
         myGUS.mixControl = (uint8_t)val;
         myGUS.ChangeIRQDMA = true;
         // return;
+        break;
+    case 0x202:
+        // PICOGUS special port to set audio buffer size
+        buffer_size = val + 1;
         break;
     case 0x208:
         adlib_commandreg = (uint8_t)val;
@@ -2041,7 +2042,6 @@ __force_inline void write_gus(Bitu port,Bitu val,Bitu iolen) {
 #endif
         break;
     }
-    // mutex_exit(&gus_mtx);
 }
 
 //#if 0 // TODO implement DMA
@@ -2353,18 +2353,17 @@ static void GUS_DMA_Callback(/*DmaChannel * chan,*/DMAEvent event) {
 #endif
 //#endif // 0 // TODO implement DMA
 
-extern void GUS_CallBack(Bitu len, int16_t* play_buffer) {
-    int32_t buffer[MIXER_BUFSIZE][2];
-    memset(buffer, 0, len * sizeof(buffer[0]));
+int32_t buffer[MIXER_BUFSIZE][2];
+extern uint32_t GUS_CallBack(Bitu max_len, int16_t* play_buffer) {
+    uint32_t render_samples = buffer_size;
+    memset(buffer, 0, render_samples * sizeof(buffer[0]));
 
     // putchar('g');
-    // mutex_enter_blocking(&gus_mtx);
     if ((GUS_reset_reg & 0x01/*!master reset*/) == 0x01) {
         for (Bitu i = 0; i < myGUS.ActiveChannels; i++) {
-            guschan[i]->generateSamples(buffer[0], len);
+            guschan[i]->generateSamples(buffer[0], render_samples);
         }
     }
-    // mutex_exit(&gus_mtx);
 
     // FIXME: I wonder if the GF1 chip DAC had more than 16 bits precision
     //        to render louder than 100% volume without clipping, and if so,
@@ -2392,7 +2391,7 @@ extern void GUS_CallBack(Bitu len, int16_t* play_buffer) {
     //        --J.C.
 
     Bitu play_i = 0;
-    for (Bitu i = 0; i < len; i++) {
+    for (Bitu i = 0; i < render_samples; i++) {
         buffer[i][0] >>= (VOL_SHIFT * AutoAmp) >> 9;
         buffer[i][1] >>= (VOL_SHIFT * AutoAmp) >> 9;
         bool dampenedAutoAmp = false;
@@ -2436,10 +2435,9 @@ extern void GUS_CallBack(Bitu len, int16_t* play_buffer) {
 
     // TODO copy samples to play buffer
     // gus_chan->AddSamples_s32(len, buffer[0]);
-    // mutex_enter_blocking(&gus_mtx);
     CheckVoiceIrq();
-    // mutex_exit(&gus_mtx);
     // putchar('o');
+    return render_samples;
 }
 
 // Generate logarithmic to linear volume conversion tables
@@ -2941,9 +2939,7 @@ void GUS_OnReset() {
     LOG_MSG("Allocating GUS emulation");
     test = new GUS();
 
-    // int spin_id = spin_lock_claim_unused(true);
-    // gus_spin = spin_lock_init(spin_id);
-    mutex_init(&gus_mtx);
+    critical_section_init(&gus_crit);
 }
 #if 0 // dosbox-x specific startup/shutdown
 
