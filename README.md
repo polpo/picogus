@@ -8,6 +8,8 @@ Current status: Beta! See the [main wiki page](https://github.com/polpo/picogus/
 
 Want to make your own beta PicoGUS? See the [build guide](https://github.com/polpo/picogus/wiki/Building-your-PicoGUS). **Important caveat**: due to the specs of the Pico, assumptions made by programs written to use the GUS, the imprecise nature of emulation, and the varying specs of retro DOS PC hardware, some things will likely never be perfect. **This is still a work in progress.**
 
+Have a PicoGUS and want to use it? See the [configuring and using your PicoGUS guide](https://github.com/polpo/picogus/wiki/Configuring-and-using-your-PicoGUS).
+
 ![PicoGUS v1.1 beta PCB](https://user-images.githubusercontent.com/1544908/197922769-fbc45c85-0fd3-4b5a-896e-0c56e5fa171e.jpg)
 
 Looking for the original project, using Raspberry Pi 3/4? See the [pigus repo](https://github.com/polpo/pigus).
