@@ -29,7 +29,7 @@ pico_sdk_init()
 
 # Add executable. Default name is the project name, version 0.1
 add_executable(picogus picogus.cpp)
-pico_set_program_version(picogus "0.0.1")
+pico_set_program_version(picogus "0.1.0")
 
 add_compile_definitions(
         USE_AUDIO_I2S=1
