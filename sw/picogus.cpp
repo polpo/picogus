@@ -57,6 +57,7 @@ __force_inline void handle_iow(void) {
 #ifdef SOUND_GUS
     if ((port >> 4 | 0x10) == GUS_PORT_TEST) {
         switch (port) {
+        case GUS_PORT + 0x8:
         case GUS_PORT + 0x102:
         case GUS_PORT + 0x103:
         case GUS_PORT + 0x104:
