@@ -234,6 +234,20 @@ class GUSChannels {
         int32_t VolLeft;
         int32_t VolRight;
 
+        struct sample_cache_8 {
+            // Signed so it can hold -1 for invalid address
+            int32_t addr;
+            uint16_t data;
+        };
+        mutable sample_cache_8 cache_8;
+
+        struct sample_cache_16 {
+            // Signed so it can hold -1 for invalid address
+            int32_t addr;
+            uint32_t data;
+        };
+        mutable sample_cache_16 cache_16;
+
         GUSChannels(uint8_t num) { 
             channum = num;
             irqmask = 1u << num;
@@ -254,6 +268,13 @@ class GUSChannels {
             PanLeft = 0;
             PanRight = 0;
             PanPot = 0x7;
+            cache_8 = {-1, 0};
+            cache_16 = {-1, 0};
+        }
+
+        void ClearCache(void) {
+            cache_8.addr = -1;
+            cache_16.addr = -1;
         }
 
         INLINE int32_t LoadSample8(const uint32_t addr/*memory address without fractional bits*/) const {
@@ -290,7 +311,17 @@ class GUSChannels {
         };
 
         INLINE sample32_pair LoadSamples8(const uint32_t addr/*memory address without fractional bits*/) const {
-            uint8_t_pair p = { .data16 = psram_read16(&psram_spi, addr & 0xFFFFFu/*1MB*/) };
+            uint8_t_pair p;
+            if (cache_8.addr == addr) {
+                // putchar('.');
+                p.data16 = cache_8.data;
+            } else {
+                // putchar('!');
+                p.data16 = psram_read16(&psram_spi, addr & 0xFFFFFu/*1MB*/);
+                cache_8.addr = addr;
+                cache_8.data = p.data16;
+            }
+            // uint8_t_pair p = { .data16 = psram_read16(&psram_spi, addr & 0xFFFFFu/*1MB*/) };
             return (struct sample32_pair){
                 .low = (int8_t)p.data8[0] << int32_t(8),
                 .high = (int8_t)p.data8[1] << int32_t(8)
@@ -299,7 +330,17 @@ class GUSChannels {
 
         INLINE sample32_pair LoadSamples16(const uint32_t addr/*memory address without fractional bits*/) const {
             const uint32_t adjaddr = (addr & 0xC0000u/*256KB bank*/) | ((addr & 0x1FFFFu) << 1u/*16-bit sample value within bank*/);
-            uint16_t_pair p = { .data32 = psram_read32(&psram_spi, adjaddr) };
+            uint16_t_pair p;
+            if (cache_16.addr == addr) {
+                // putchar('.');
+                p.data32 = cache_16.data;
+            } else {
+                // putchar('!');
+                p.data32 = psram_read32(&psram_spi, adjaddr);
+                cache_16.addr = addr;
+                cache_16.data = p.data32;
+            }
+            // uint16_t_pair p = { .data32 = psram_read32(&psram_spi, adjaddr) };
             return (struct sample32_pair){
                 .low = (int16_t)p.data16[0],
                 .high = (int16_t)p.data16[1]
@@ -705,6 +746,7 @@ static void GUSReset(void) {
             guschan[i]->WriteWaveCtrl(0x1);
             guschan[i]->WriteRampCtrl(0x1);
             guschan[i]->WritePanPot(0x7);
+            guschan[i]->ClearCache();
         }
 
         // Stop DMA
