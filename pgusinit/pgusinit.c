@@ -5,7 +5,7 @@
 
 
 void banner(void) {
-    printf("PicoGUSinit v0.1.0\n");
+    printf("PicoGUSinit v0.1.1\n");
     printf("(c) 2022 Ian Scott - licensed under the GNU GPL v2\n\n");
 }
 
@@ -105,10 +105,11 @@ int main(int argc, char* argv[]) {
     // Master reset to run. DAC enable and IRQ enable will be done by the application.
     outp(port + 0x105, 0x1);
 
-    if (buffer_size) {
-        outp(port + 0x2, (unsigned char)(buffer_size - 1));
-        printf("Audio buffer size set to %u samples\n", buffer_size);
+    if (!buffer_size) {
+        buffer_size = 16;
     }
+    outp(port + 0x2, (unsigned char)(buffer_size - 1));
+    printf("Audio buffer size set to %u samples\n", buffer_size);
     
     printf("PicoGUS detected and initialized!\n");
     return 0;
