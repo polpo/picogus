@@ -45,11 +45,15 @@ add_compile_definitions(
 )
 
 if(PROJECT_TYPE STREQUAL "GUS")
+    if(NOT GUS_PORT)
+        set(GUS_PORT "0x240")
+    endif()
     pico_set_program_name(picogus "picogus-gus")
     target_sources(picogus PRIVATE gusplay.cpp pico_pic.c)
     target_compile_definitions(picogus PRIVATE
         SOUND_GUS=1
         PSRAM=1
+        GUS_PORT=${GUS_PORT}
         # TEST_PSRAM=1
         # USE_SPINLOCK=1
     )
@@ -121,3 +125,4 @@ add_custom_target(
 )
 
 unset(PROJECT_TYPE CACHE)
+unset(GUS_PORT CACHE)

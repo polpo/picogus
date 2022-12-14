@@ -25,13 +25,8 @@
 bi_decl(bi_3pins_with_names(PICO_AUDIO_I2S_DATA_PIN, "I2S DIN", PICO_AUDIO_I2S_CLOCK_PIN_BASE, "I2S BCK", PICO_AUDIO_I2S_CLOCK_PIN_BASE+1, "I2S LRCK"));
 #endif
 
-#ifdef DOSBOX_STAGING
-#include "gus.h"
-#define SAMPLES_PER_BUFFER 1024
-#else
 #include "gus-x.h"
 #define SAMPLES_PER_BUFFER 256
-#endif
 
 struct audio_buffer_pool *init_audio() {
 
@@ -69,10 +64,6 @@ struct audio_buffer_pool *init_audio() {
     return producer_pool;
 }
 
-#ifdef DOSBOX_STAGING
-extern Gus *gus;
-#endif
-
 void play_gus() {
     puts("starting core 1");
     uint32_t start, end;
@@ -84,13 +75,8 @@ void play_gus() {
 
     struct audio_buffer_pool *ap = init_audio();
     for (;;) {
-#ifdef DOSBOX_STAGING
-        // uint8_t active_voices = gus->active_voices;
-        uint32_t playback_rate = gus->playback_rate;
-#else
         // uint8_t active_voices = GUS_activeChannels();
         uint32_t playback_rate = GUS_basefreq();
-#endif
         // if GUS sample rate changed
         if (ap->format->sample_freq != playback_rate) {
             // printf("changing sample rate to %d", playback_rate);
@@ -102,13 +88,8 @@ void play_gus() {
         int16_t *samples = (int16_t *) buffer->buffer->bytes;
 
         // uint32_t gus_audio_begin = time_us_32();
-#ifdef DOSBOX_STAGING
-        gus->AudioCallback(buffer->max_sample_count, samples);
-        buffer->sample_count = buffer->max_sample_count;
-#else
         __dsb();
         buffer->sample_count = GUS_CallBack(buffer->max_sample_count, samples);
-#endif
         /*
         uint32_t gus_audio_elapsed = time_us_32() - gus_audio_begin;
         if (active_voices) {

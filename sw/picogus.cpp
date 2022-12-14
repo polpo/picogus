@@ -29,17 +29,11 @@ extern "C" unsigned int OPL_Pico_PortRead(opl_port_t);
 #endif
 
 #ifdef SOUND_GUS
-#ifdef DOSBOX_STAGING
-#include "gus.h"
-Gus* gus;
-#else
 #include "gus-x.cpp"
 
 #include "isa_dma.h"
 dma_inst_t dma_config;
-#endif
 
-constexpr uint16_t GUS_PORT = 0x240u;
 constexpr uint16_t GUS_PORT_TEST = GUS_PORT >> 4 | 0x10;
 void play_gus(void);
 #endif
@@ -53,24 +47,19 @@ constexpr uint LED_PIN = PICO_DEFAULT_LED_PIN;
 static uint iow_sm;
 static uint ior_sm;
 static uint ior_write_sm;
-uint32_t iow_read;
-uint32_t ior_read;
-uint16_t port;
-uint32_t value;
-
 
 __force_inline void handle_iow(void) {
     bool iochrdy_on;
-    iow_read = pio_sm_get(pio0, iow_sm); //>> 16;
+    uint32_t iow_read = pio_sm_get(pio0, iow_sm); //>> 16;
     // printf("%x", iow_read);
     // printf("IOW: %x\n", iow_read);
-    port = (iow_read >> 8) & 0x3FF;
+    uint16_t port = (iow_read >> 8) & 0x3FF;
 #ifdef SOUND_GUS
     if ((port >> 4 | 0x10) == GUS_PORT_TEST) {
         switch (port) {
-        case 0x342:
-        case 0x343:
-        case 0x344:
+        case GUS_PORT + 0x102:
+        case GUS_PORT + 0x103:
+        case GUS_PORT + 0x104:
             // Fast write, don't set iochrdy by writing 0
             iochrdy_on = false;
             pio_sm_put(pio0, iow_sm, 0x0u);
@@ -81,16 +70,11 @@ __force_inline void handle_iow(void) {
             pio_sm_put(pio0, iow_sm, 0xffffffffu);
             break;
         }
-        value = iow_read & 0xFF;
+        uint32_t value = iow_read & 0xFF;
         // uint32_t write_begin = time_us_32();
         __dsb();
         // printf("%x", iow_read);
-#ifdef DOSBOX_STAGING
-        gus->WriteToPort(port, value, io_width_t::byte); // 3x4 supports 16-bit transfers but PiGUS doesn't! force byte
-#else                                                         
-        write_gus(port, value, 1 /* always an 8 bit write */);
-#endif
-        __dsb();
+        write_gus(port, value);
         // uint32_t write_elapsed = time_us_32() - write_begin;
         // if (write_elapsed > 1) {
         //     printf("long write to port %x, (sel reg %x), took %d us\n", port, gus->selected_register, write_elapsed);
@@ -99,6 +83,7 @@ __force_inline void handle_iow(void) {
         if (iochrdy_on) {
             pio_sm_put(pio0, iow_sm, 0x0u);
         }
+        __dsb();
         // printf("GUS IOW: port: %x value: %x\n", port, value);
         // gpio_xor_mask(1u << LED_PIN);
         // puts("IOW");
@@ -136,16 +121,15 @@ __force_inline void handle_iow(void) {
     switch (port) {
     case 0x330:
         pio_sm_put(pio0, iow_sm, 0xffffffffu);
-        value = iow_read & 0xFF;
-        // printf("MPU IOW: port: %x value: %x\n", port, value);
-        MPU401_WriteData(value);
+        // printf("MPU IOW: port: %x value: %x\n", port, iow_read & 0xFF);
+        MPU401_WriteData(iow_read & 0xFF);
         // Tell PIO that we are done
         pio_sm_put(pio0, iow_sm, 0x0u);
         break;
     case 0x331:
         pio_sm_put(pio0, iow_sm, 0xffffffffu);
         MPU401_WriteCommand(iow_read & 0xFF);
-        // printf("MPU IOW: port: %x value: %x\n", port, value);
+        // printf("MPU IOW: port: %x value: %x\n", port, iow_read & 0xFF);
         __dsb();
         // Tell PIO that we are done
         pio_sm_put(pio0, iow_sm, 0x0u);
@@ -157,22 +141,19 @@ __force_inline void handle_iow(void) {
 }
 
 __force_inline void handle_ior(void) {
-    ior_read = pio_sm_get(pio0, ior_sm); //>> 16;
-    port = ior_read & 0x3FF;
+    uint32_t ior_read = pio_sm_get(pio0, ior_sm);
+    uint16_t port = ior_read & 0x3FF;
     // printf("IOR: %x\n", port);
 #if defined(SOUND_GUS)
     if ((port >> 4 | 0x10) == GUS_PORT_TEST) {
         // Tell PIO to wait for data
         pio_sm_put(pio0, ior_sm, 0xffffffffu);
+        uint32_t value;
         if (port == 0x242) {
             value = 0xdd;
         } else {
-#ifdef DOSBOX_STAGING
-            value = gus->ReadFromPort(port, io_width_t::byte);
-#else 
             __dsb();
-            value = read_gus(port, 1);
-#endif
+            value = read_gus(port);
         }
         // OR with 0x00ffff00 is required to set pindirs in the PIO
         pio_sm_put(pio0, ior_sm, 0x00ffff00u | value);
@@ -186,7 +167,7 @@ __force_inline void handle_ior(void) {
     if (port == 0x388) {
         // Tell PIO to wait for data
         pio_sm_put(pio0, ior_sm, 0xffffffffu);
-        value = OPL_Pico_PortRead(OPL_REGISTER_PORT);
+        uint32_t value = OPL_Pico_PortRead(OPL_REGISTER_PORT);
         // OR with 0x00ffff00 is required to set pindirs in the PIO
         pio_sm_put(pio0, ior_sm, 0x00ffff00u | value);
     } else {
@@ -201,7 +182,7 @@ __force_inline void handle_ior(void) {
     if (port == 0x331) {
         // Tell PIO to wait for data
         pio_sm_put(pio0, ior_sm, 0xffffffffu);
-        value = MPU401_ReadData();
+        uint32_t value = MPU401_ReadData();
         // printf("MPU IOR: port: %x value: %x\n", port, value);
         // OR with 0x00ffff00 is required to set pindirs in the PIO
         pio_sm_put(pio0, ior_sm, 0x00ffff00u | value);
@@ -349,11 +330,7 @@ int main()
 
 #ifdef SOUND_GUS
     puts("Creating GUS");
-#ifdef DOSBOX_STAGING
-    gus = new Gus(GUS_PORT, nullptr, nullptr);
-#else
-    GUS_OnReset();
-#endif
+    GUS_OnReset(GUS_PORT);
     multicore_launch_core1(&play_gus);
 #endif
 
