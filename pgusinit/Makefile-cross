@@ -1,0 +1,8 @@
+CC = wcl
+CFLAGS = -bt=dos -za99
+
+pgusinit.exe: pgusinit.c
+	$(CC) $(CFLAGS) $<
+
+clean:
+	rm -f $(bin)
