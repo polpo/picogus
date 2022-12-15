@@ -150,7 +150,7 @@ __force_inline void handle_ior(void) {
         // Tell PIO to wait for data
         pio_sm_put(pio0, ior_sm, 0xffffffffu);
         uint32_t value;
-        if (port == 0x242) {
+        if (port == GUS_PORT + 0x2) {
             value = 0xdd;
         } else {
             __dsb();
