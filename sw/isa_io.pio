@@ -7,6 +7,7 @@
 .define public UART_TX_PIN 28
 .define public DACK_PIN 19
 
+; 10 instructions
 .program iow
 .side_set 2 opt                   ; sideset bit 1 is ADS, bit 0 is IOCHRDY
 restart:
@@ -17,7 +18,6 @@ restart:
 read_addr:
     in pins, 10 [3]     side 0b10 ; Read address and flip mux simultaneously.. yolo
     nop [3]             side 0b10 ; Wait more for mux to switch; max 3 because of optional sideset
-;    nop [3]             side 0b10 ; wait more... it kills me to burn NOPs like this
     in pins, 8          side 0b10 ; Read data
     out X, 32           side 0b00 ; get condition from handle_iow, set muxes back to address
     jmp !X restart      side 0b00 ; if we get a 0 condition from handle_iow, it's not an interesting address
@@ -59,6 +59,7 @@ static inline void iow_program_init(PIO pio, uint sm, uint offset) {
 }
 %}
 
+; 10 instructions
 .program ior
 .side_set 2 opt                   ; sideset bit 1 is ADS, bit 0 is IOCHRDY
 restart:

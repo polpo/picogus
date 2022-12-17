@@ -145,8 +145,7 @@ struct GFGus {
     uint8_t gUltraMAXControl;
     uint16_t DMAControl; /* NTS: bit 8 for DMA TC IRQ status. Only bits [7:0] exist on real hardware.
                 We're taking the DOSBox SVN approach here (https://sourceforge.net/p/dosbox/code-0/4387/#diff-2) */
-    uint16_t dmaAddr;
-    uint8_t dmaAddrOffset; /* bits 0-3 of the addr */
+    uint32_t dmaAddr;
     uint8_t TimerControl;
     uint8_t SampControl;
     uint8_t mixControl;
@@ -619,11 +618,10 @@ void DEBUG_PrintGUS() { //debugger "GUS" command
                         myGUS.gCurChannel,
                         myGUS.gUltraMAXControl,
                         myGUS.gRegControl);
-        LOG_MSG("DMActrl=%02x (TC=%u) dmaAddr=%04x%01x timerctl=%02x sampctl=%02x mixctl=%02x activech=%u (want=%u) DACrate=%uHz",
+        LOG_MSG("DMActrl=%02x (TC=%u) dmaAddr=%06x timerctl=%02x sampctl=%02x mixctl=%02x activech=%u (want=%u) DACrate=%uHz",
                         myGUS.DMAControl&0xFF,
                         (myGUS.DMAControl&0x100)?1:0,
                         myGUS.dmaAddr,
-                        myGUS.dmaAddrOffset,
                         myGUS.TimerControl,
                         myGUS.SampControl,
                         myGUS.mixControl,
@@ -791,7 +789,6 @@ static void GUSReset(void) {
         myGUS.dmaAddr = 0;
         myGUS.irqenabled = 0;
         myGUS.gRegControl = 0;
-        myGUS.dmaAddrOffset = 0;
         myGUS.gDramAddr = 0;
         myGUS.gRegData = 0;
 
@@ -927,7 +924,7 @@ __force_inline static uint16_t ExecuteReadRegister(void) {
         GUS_CheckIRQ();
         return (uint16_t)(tmpreg << 8);
     case 0x42:  // Dma address register
-        return myGUS.dmaAddr;
+        return myGUS.dmaAddr >> 0x4u;
     case 0x45:  // Timer control register.  Identical in operation to Adlib's timer
         return (uint16_t)(myGUS.TimerControl << 8);
         break;
@@ -1161,8 +1158,7 @@ __force_inline static void ExecuteGlobRegister(void) {
         else GUS_StopDMA();
         break;
     case 0x42:  // Gravis DRAM DMA address register
-        myGUS.dmaAddr = myGUS.gRegData;
-        myGUS.dmaAddrOffset = 0;
+        myGUS.dmaAddr = myGUS.gRegData << 0x4u;
         break;
     case 0x43:  // LSB Peek/poke DRAM position
         myGUS.gDramAddr = (0xff0000 & myGUS.gDramAddr) | ((uint32_t)myGUS.gRegData);
@@ -1517,194 +1513,50 @@ void GUS_Update_DMA_Event_transfer() {
 }
 #endif
 static bool GUS_DMA_Active = false;
+// static unsigned int GUS_DMA_step = 0;
 
 void GUS_DMA_Event_Transfer(/*DmaChannel *chan,Bitu dmawords*/) {
-    Bitu dmaaddr = (Bitu)(myGUS.dmaAddr) << 4ul; //+ (Bitu)myGUS.dmaAddrOffset;
+    // Bitu dmaaddr = (Bitu)(myGUS.dmaAddr) << 4ul; //+ (Bitu)myGUS.dmaAddrOffset;
     // Bitu dmalimit = myGUS.memsize;
     // unsigned int docount = 0;
-    unsigned int step = 0;
-    // bool dma16xlate;
-    // Bitu holdAddr;
-
-    // puts("Starting DMA");
-
-    // FIXME: What does the GUS do if the DMA address goes beyond the end of memory?
-
-    /* is this a DMA transfer where the GUS memory address is to be translated for 16-bit PCM?
-     * Note that there is plenty of code out there that transfers 16-bit PCM with 8-bit DMA,
-     * and such transfers DO NOT involve the memory address translation.
-     *
-     * MODE    XLATE?    NOTE
-     * 0x00    NO        8-bit PCM, 8-bit DMA (Most DOS programs)
-     * 0x04    DEPENDS   8-bit PCM, 16-bit DMA (Star Control II, see comments below)
-     * 0x40    NO        16-bit PCM, 8-bit DMA (Windows 3.1, Quake, for 16-bit PCM over 8-bit DMA)
-     * 0x44    YES       16-bit PCM, 16-bit DMA (Windows 3.1, Quake, for 16-bit PCM over 16-bit DMA)
-     *
-     * Mode 0x04 is marked DEPENDS. It DEPENDS on whether the assigned DMA channel is 8-bit (NO) or 16-bit (YES).
-     * Mode 0x04 does not appear to be used by any other DOS application or Windows drivers, only by an erratic
-     * bug in Star Control II. FIXME: But, what does REAL hardware do? Drag out the old Pentium 100MHz with the
-     * GUS classic and test! --J.C.
-     *
-     * Star Control II has a bug where, if the GUS DMA channel is 8-bit (DMA channel 0-3), it will upload
-     * it's samples to GUS RAM, one DMA transfer per sample, and sometimes set bit 2. Setting bit 2 incorrectly
-     * tells the GUS it's a 16-bit wide DMA transfer when the DMA channel is 8-bit. But, if the DMA channel is
-     * 16-bit (DMA channel 5-7), Star Control II will correctly set bit 2 in all cases and samples will
-     * transfer correctly to GUS RAM.
-     * */
-
-    /* FIXME: So, if the GUS DMA channel is 8-bit and Star Control II writes mode 0x04 (8-bit PCM, 16-bit DMA), what does the GF1 do?
-     *        I'm guessing so far that something happens within the GF1 to transfer as 8-bit anyway, clearly the developers of Star Control II
-     *        did not hear any audible sign that an invalid DMA control was being used. Perhaps the hardware engineers of the GF1 figured
-     *        out that case and put something in the silicon to ignore the invalid DMA control state. I won't have any answers until
-     *        I pull out an old Pentium box with a GUS classic and check. --J.C.
-     *
-     *        DMA transfers noted by Star Control II that are the reason for this hack (gusdma=1):
-     *
-     *        LOG:  157098507 DEBUG MISC:GUS DMA: terminal count reached. DMAControl=0x21
-     *        LOG:  157098507 DEBUG MISC:GUS DMA transfer 1981 bytes, GUS RAM address 0x0 8-bit DMA 8-bit PCM (ctrl=0x21)
-     *        LOG:  157098507 DEBUG MISC:GUS DMA: terminal count reached. DMAControl=0x21
-     *        LOG:  157100331 DEBUG MISC:GUS DMA: terminal count reached. DMAControl=0x21
-     *        LOG:  157100331 DEBUG MISC:GUS DMA transfer 912 bytes, GUS RAM address 0x7c0 8-bit DMA 8-bit PCM (ctrl=0x21)
-     *        LOG:  157100331 DEBUG MISC:GUS DMA: terminal count reached. DMAControl=0x21
-     *        LOG:  157100470 DEBUG MISC:GUS DMA: terminal count reached. DMAControl=0x25
-     *        LOG:  157100470 DEBUG MISC:GUS DMA transfer 1053 bytes, GUS RAM address 0xb50 16-bit DMA 8-bit PCM (ctrl=0x25)    <-- What?
-     *        LOG:  157100470 DEBUG MISC:GUS DMA: terminal count reached. DMAControl=0x25
-     *        LOG:  157102251 DEBUG MISC:GUS DMA: terminal count reached. DMAControl=0x21
-     *        LOG:  157102251 DEBUG MISC:GUS DMA transfer 1597 bytes, GUS RAM address 0xf80 8-bit DMA 8-bit PCM (ctrl=0x21)
-     *        LOG:  157102251 DEBUG MISC:GUS DMA: terminal count reached. DMAControl=0x21
-     *        LOG:  157104064 DEBUG MISC:GUS DMA: terminal count reached. DMAControl=0x21
-     *        LOG:  157104064 DEBUG MISC:GUS DMA transfer 2413 bytes, GUS RAM address 0x15c0 8-bit DMA 8-bit PCM (ctrl=0x21)
-     *        LOG:  157104064 DEBUG MISC:GUS DMA: terminal count reached. DMAControl=0x21
-     *
-     *        (end list)
-     *
-     *        Noted: Prior to this hack, the samples played by Star Control II sounded more random and often involved leftover
-     *               sample data in GUS RAM, where with this fix, the music now sounds identical to what is played when using
-     *               it's Sound Blaster support. */
-    // we don't care about this because we are always 8-bit DMA
-#if 0
-    if (myGUS.dma1 < 4/*8-bit DMA channel*/ && (myGUS.DMAControl & 0x44) == 0x04/*8-bit PCM, 16-bit DMA*/)
-        dma16xlate = false; /* Star Control II hack: 8-bit PCM, 8-bit DMA, ignore the bit that says it's 16-bit wide */
-    else
-        dma16xlate = (myGUS.DMAControl & 0x4) ? true : false;
-
-    if (dma16xlate) {
-        // 16-bit wide DMA. The GUS SDK specifically mentions that 16-bit DMA is translated
-        // to GUS RAM the same way you translate the play pointer. Eugh. But this allows
-        // older demos to work properly even if you set the GUS DMA to a 16-bit channel (5)
-        // instead of the usual 8-bit channel (1).
-        holdAddr = dmaaddr & 0xc0000L;
-        dmaaddr = dmaaddr & 0x1ffffL;
-        dmaaddr = dmaaddr << 1;
-        dmaaddr = (holdAddr | dmaaddr);
-        dmalimit = ((dmaaddr & 0xc0000L) | 0x3FFFFL) + 1;
-    }
-#endif
-
-#if 0 // ehhhhhhh
-    if (dmaaddr < dmalimit)
-        docount = (unsigned int)(dmalimit - dmaaddr);
-
-    // docount /= (chan->DMA16+1u);
-    if (docount > (chan->currcnt+1u)) docount = chan->currcnt+1u;
-    if ((Bitu)docount > dmawords) docount = dmawords;
-#endif
 
     // hack: some programs especially Gravis Ultrasound MIDI playback like to upload by DMA but never clear the DMA TC flag on the DMA controller.
     // TODO let's see how this acts on "real" hardware
     // bool saved_tcount = chan->tcount;
     // chan->tcount = false;
 
-    uint32_t dma_delay;
-    // From Interwave programmers guide:
-    // 00:0.5 μs–1.0 μs
-    // 01:6 μs–7 μs
-    // 10:6 μs–7 μs
-    // 11:13 μs–14 μs
-    // From ULTRAWRD: it's 650KHz with a divisor...
-    switch ((myGUS.DMAControl >> 3u) & 3u) {
-    case 0b00:
-        dma_delay = 1;
-        break;
-    case 0b01:
-        dma_delay = 3;
-        break;
-    case 0b10:
-        dma_delay = 6;
-        break;
-    case 0b11:
-        dma_delay = 12;
-        break;
-    }
-
-    if (true /*docount > 0*/) {
-        if ((myGUS.DMAControl & 0x2) == 0) { // transfer direction = write
-            // The write to the gus actually happens here!
-            //
-            step = DMA_Write(
-                &dma_config,
-                dmaaddr,
-                (myGUS.DMAControl & 0x80) /* invert_msb */,
-                (myGUS.DMAControl & 0x4) /* is_16bit */,
-                dma_delay,
-                &GUS_DMA_Active
-            );
-            uart_print_hex_u32(step);
-            // Bitu read=(Bitu)chan->Read((Bitu)docount,&GUSRam[dmaaddr]);
-            //Check for 16 or 8bit channel
-            // read*=(chan->DMA16+1u);
-            /* // this is handled in DMA_Write
-            if((myGUS.DMAControl & 0x80) != 0) {
-                //Invert the MSB to convert twos compliment form
-                Bitu i;
-                if((myGUS.DMAControl & 0x40) == 0) {
-                    // 8-bit data
-                    for(i=dmaaddr;i<(dmaaddr+read);i++) GUSRam[i] ^= 0x80;
-                } else {
-                    // 16-bit data
-                    for(i=dmaaddr+1;i<(dmaaddr+read);i+=2) GUSRam[i] ^= 0x80;
+    bool is_tc;
+    if ((myGUS.DMAControl & 0x2) == 0) { // transfer direction = write
+        bool invert_msb = false;
+        if (myGUS.DMAControl & 0x80) {
+            if (myGUS.DMAControl & 0x40) {
+                // 16-bit data
+                if (!(myGUS.dmaAddr & 0x1)) {
+                    invert_msb = true;
                 }
+            } else {
+                invert_msb = true;
             }
-            */
-            // step = read;
-        } else {
-            //Read data out of UltraSound
-            // curl up and die, we can't support read
-            printf("DMA read isn't supported on PicoGUS... sorry\n");
-            assert(false);
-            /*
-            Bitu wd = (Bitu)chan->Write((Bitu)docount,&GUSRam[dmaaddr]);
-            //Check for 16 or 8bit channel
-            wd*=(chan->DMA16+1u);
-
-            step = wd;
-            */
-        }
-    }
-
-    //LOG_MSG("GUS DMA transfer %lu bytes, GUS RAM address 0x%lx %u-bit DMA %u-bit PCM (ctrl=0x%02x) tcount=%u",
-    //    (unsigned long)step,(unsigned long)dmaaddr,(myGUS.DMAControl & 0x4) ? 16 : 8,(myGUS.DMAControl & 0x40) ? 16 : 8,myGUS.DMAControl,0/*chan->tcount*/);
-
-        /*
-    if (step > 0) {
-        dmaaddr += (unsigned int)step;
-
-        if (dma16xlate) {
-            holdAddr = dmaaddr & 0xc0000L;
-            dmaaddr = dmaaddr & 0x3ffffL;
-            dmaaddr = dmaaddr >> 1;
-            dmaaddr = (holdAddr | dmaaddr);
         }
 
-        myGUS.dmaAddr = dmaaddr >> 4;
-        myGUS.dmaAddrOffset = dmaaddr & 0xF;
+        is_tc = DMA_Write(
+            &dma_config,
+            // dmaaddr + GUS_DMA_step,
+            myGUS.dmaAddr,
+            invert_msb
+        );
+    } else {
+        //Read data out of UltraSound
+        // curl up and die, we can't support read
+        puts("DMA read isn't supported on PicoGUS... sorry");
+        assert(false);
     }
-        */
 
-    // If we're here, tcount has been reached
-    //if (chan->tcount) {
+    if (is_tc) {
+        puts("is_tc");
         // LOG_MSG("GUS DMA transfer hit Terminal Count, setting DMA TC IRQ pending");
         // printf("step %u\n", step);
+        // uart_print_hex_u32(GUS_DMA_step);
 
         /* Raise the TC irq, and stop DMA */
         myGUS.DMAControl |= 0x100u; /* NTS: DOSBox SVN approach: Use bit 8 for DMA TC IRQ */
@@ -1715,7 +1567,9 @@ void GUS_DMA_Event_Transfer(/*DmaChannel *chan,Bitu dmawords*/) {
         }
         GUS_CheckIRQ();
         GUS_StopDMA();
-    // }
+    } else {
+        ++myGUS.dmaAddr;
+    }
 
     // chan->tcount = saved_tcount;
 }
@@ -1740,6 +1594,7 @@ uint32_t GUS_DMA_Event(Bitu val) {
     */
 
     if (!(myGUS.DMAControl & 0x01/*DMA enable*/)) {
+        puts("stopping");
         DEBUG_LOG_MSG("GUS DMA event: DMA control 'enable DMA' bit was reset, stopping DMA transfer events");
         GUS_DMA_Active = false;
         return 0;
@@ -1755,15 +1610,34 @@ uint32_t GUS_DMA_Event(Bitu val) {
     GUS_DMA_Event_Transfer(/*chan,GUS_DMA_Event_transfer*/);
 
     if (GUS_DMA_Active) {
-        puts("HMM NOPE??");
         /* keep going */
         // PIC_AddEvent(GUS_DMA_Event,GUS_DMA_Event_interval, 2);
+        // From Interwave programmers guide:
+        // 00:0.5 μs–1.0 μs
+        // 01:6 μs–7 μs
+        // 10:6 μs–7 μs
+        // 11:13 μs–14 μs
+        // From ULTRAWRD: it's 650KHz with a divisor...
+        switch ((myGUS.DMAControl >> 3u) & 3u) {
+        case 0b00:
+            return 1;
+            break;
+        case 0b01:
+            return 3;
+            break;
+        case 0b10:
+            return 6;
+            break;
+        case 0b11:
+            return 12;
+            break;
+        }
     }
     return 0;
 }
 // #endif // 0 // TODO implement DMA
 
-void GUS_StopDMA() {
+__force_inline void GUS_StopDMA() {
     ///* TODO implement DMA
     if (GUS_DMA_Active)
         DEBUG_LOG_MSG("GUS: Stopping DMA transfer interval");
@@ -1779,6 +1653,8 @@ __force_inline void GUS_StartDMA() {
         GUS_DMA_Active = true;
         DEBUG_LOG_MSG("GUS: Starting DMA transfer interval");
         // PIC_AddEvent(GUS_DMA_Event, GUS_DMA_Event_interval_init, 2);
+        uart_print_hex_u32((myGUS.DMAControl >> 3u) & 3u);
+        uart_print_hex_u32(myGUS.dmaAddr);
         PIC_AddEvent(GUS_DMA_Event, 2, 2);
 
         /* can't do shit about this
