@@ -11,7 +11,7 @@ pio_spi_inst_t psram_spi;
 #endif
 #include "isa_io.pio.h"
 
-#ifndef SOUND_MPU
+#ifdef ASYNC_UART
 #include "stdio_async_uart.h"
 #endif 
 // UART_TX_PIN is defined in isa_io.pio.h
@@ -229,7 +229,7 @@ int main()
     // vreg_set_voltage(VREG_VOLTAGE_1_20);
 
     // stdio_init_all();
-#ifndef SOUND_MPU
+#ifdef ASYNC_UART
     stdio_async_uart_init_full(UART_ID, BAUD_RATE, UART_TX_PIN, UART_RX_PIN);
 #else
     stdio_init_all();
@@ -330,7 +330,7 @@ int main()
 #endif
 
 #ifdef SOUND_GUS
-    puts("Creating GUS");
+    printf("Creating GUS at port %x\n", GUS_PORT);
     GUS_OnReset(GUS_PORT);
     multicore_launch_core1(&play_gus);
 #endif
@@ -417,6 +417,9 @@ int main()
 #endif
 #ifdef SOUND_MPU
         send_midi_byte();				// see if we need to send a byte	
+#endif
+#ifdef POLLING_DMA
+        process_dma();
 #endif
     }
 }

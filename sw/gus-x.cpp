@@ -1151,7 +1151,7 @@ __force_inline static void ExecuteGlobRegister(void) {
     case 0x10:  // Undocumented register used in Fast Tracker 2
         break;
     case 0x41:  // Dma control register
-        myGUS.DMAControl &= ~0xFFu; // FIXME: Does writing DMA Control clear the DMA TC IRQ?
+        // myGUS.DMAControl &= ~0xFFu; // FIXME: Does writing DMA Control clear the DMA TC IRQ?
         myGUS.DMAControl |= (uint8_t)(myGUS.gRegData>>8);
         // GUS_Update_DMA_Event_transfer();
         if (myGUS.DMAControl & 1) GUS_StartDMA();
@@ -1185,9 +1185,12 @@ __force_inline static void ExecuteGlobRegister(void) {
         myGUS.timers[1].delay = ((0x100 - myGUS.timers[1].value) * 320) - 5;
         break;
     case 0x49:  // DMA sampling control register
+        /*
+        puts("I don't support sampling.");
         myGUS.SampControl = (uint8_t)(myGUS.gRegData>>8);
         if (myGUS.DMAControl & 1) GUS_StartDMA();
         else GUS_StopDMA();
+        */
         break;
     case 0x4c:  // GUS reset register
         GUSReset();
@@ -1538,6 +1541,7 @@ void GUS_DMA_Event_Transfer(/*DmaChannel *chan,Bitu dmawords*/) {
                 invert_msb = true;
             }
         }
+        // bool invert_msb = (myGUS.DMAControl & 0x80) && (!(myGUS.DMAControl & 0x40) || !(myGUS.dmaAddr & 0x1));
 
         is_tc = DMA_Write(
             &dma_config,
@@ -1553,7 +1557,7 @@ void GUS_DMA_Event_Transfer(/*DmaChannel *chan,Bitu dmawords*/) {
     }
 
     if (is_tc) {
-        puts("is_tc");
+        // puts("is_tc");
         // LOG_MSG("GUS DMA transfer hit Terminal Count, setting DMA TC IRQ pending");
         // printf("step %u\n", step);
         // uart_print_hex_u32(GUS_DMA_step);
@@ -1637,15 +1641,38 @@ uint32_t GUS_DMA_Event(Bitu val) {
 }
 // #endif // 0 // TODO implement DMA
 
+#if POLLING_DMA
+static uint32_t next_event = 0;
+#endif
+
 __force_inline void GUS_StopDMA() {
     ///* TODO implement DMA
-    if (GUS_DMA_Active)
-        DEBUG_LOG_MSG("GUS: Stopping DMA transfer interval");
+    // if (GUS_DMA_Active)
+    //     DEBUG_LOG_MSG("GUS: Stopping DMA transfer interval");
 
+#ifndef POLLING_DMA
     PIC_RemoveEvents(GUS_DMA_Event);
+#else
+    next_event = 0;
+#endif
     GUS_DMA_Active = false;
     //*/ // TODO implement DMA
 }
+#if POLLING_DMA
+void __force_inline process_dma(void) {
+    if (!GUS_DMA_Active) {
+        return;
+    }
+    /*
+    uint32_t cur_time = time_us_32();
+    if (next_event && cur_time >= next_event) {
+        next_event = cur_time + GUS_DMA_Event(2);
+    }
+    */
+    GUS_DMA_Event(2);
+}
+#endif
+
 
 __force_inline void GUS_StartDMA() {
     ///* TODO implement DMA
@@ -1653,9 +1680,13 @@ __force_inline void GUS_StartDMA() {
         GUS_DMA_Active = true;
         DEBUG_LOG_MSG("GUS: Starting DMA transfer interval");
         // PIC_AddEvent(GUS_DMA_Event, GUS_DMA_Event_interval_init, 2);
-        uart_print_hex_u32((myGUS.DMAControl >> 3u) & 3u);
-        uart_print_hex_u32(myGUS.dmaAddr);
+        // uart_print_hex_u32((myGUS.DMAControl >> 3u) & 3u);
+        // uart_print_hex_u32(myGUS.dmaAddr);
+#ifndef POLLING_DMA
         PIC_AddEvent(GUS_DMA_Event, 2, 2);
+#else
+        next_event = time_us_32() + 2;
+#endif
 
         /* can't do shit about this
         if (GetDMAChannel(myGUS.dma1)->masked)

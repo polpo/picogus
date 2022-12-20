@@ -8,7 +8,7 @@
 .define public DRQ_PIN 22
 .define public TC_PIN 20
 
-; budget: 11 instructions
+; budget: 12 instructions
 .program dma_write
 .side_set 2 opt                         ; sideset bit 1 is ADS, bit 0 is IOCHRDY
 .wrap_target
@@ -17,15 +17,16 @@
     wait 1 gpio DACK_PIN side 0b10      ; DACK faling edge
     set pins, 0          side 0b10      ; deassert DRQ 
     wait 0 gpio IOW_PIN  side 0b10      ; wait for IOW assert
-    in pins, 8           side 0b11      ; input data, deassert IOCHRDY if we stall on full FIFO
-    jmp pin tc_flag      side 0b00      ; if TC high, transfer is over. muxes back to addr
-    in null, 24          side 0b00      ; write 0 to TC flag, autopush
+    ; in pins, 8           side 0b11      ; input data, deassert IOCHRDY if we stall on full FIFO
+    jmp pin tc_flag      side 0b10      ; if TC high, transfer is over. muxes back to addr
+    in null, 24          side 0b10      ; write 0 to TC flag, autopush
 wait_dack:
-    wait 0 gpio DACK_PIN                ; DACK rising edge, no sideset to carry over from the IN instruction we came from
+    wait 1 gpio IOW_PIN  side 0b10      ; DACK rising edge, no sideset to carry over from the IN instruction we came from
+    in pins, 8           side 0b00      ; input data, deassert IOCHRDY if we stall on full FIFO
 .wrap
 tc_flag:
-    in x, 24             side 0b00      ; set TC flag, autopush, set ADS back to addr. X is full o' 1s
-    jmp wait_dack        side 0b00
+    in x, 24             side 0b10      ; set TC flag, autopush, set ADS back to addr. X is full o' 1s
+    jmp wait_dack        side 0b10
 
 % c-sdk {
 static inline void dma_write_program_init(PIO pio, uint sm, uint offset) {
@@ -35,7 +36,7 @@ static inline void dma_write_program_init(PIO pio, uint sm, uint offset) {
     sm_config_set_in_pins(&c, AD0_PIN);
     // Autopush at 8 bits
     // sm_config_set_in_shift(&c, false, true, 9);
-    sm_config_set_in_shift(&c, true, true, 32);
+    sm_config_set_in_shift(&c, false, true, 32);
 
     // Autopull 32 bits (condition variables)
     sm_config_set_out_shift(&c, true, true /* autopull */, 32);

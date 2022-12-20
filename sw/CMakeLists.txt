@@ -42,6 +42,7 @@ add_compile_definitions(
         # USE_IRQ=1
         USE_ALARM=1
         PICO_STDIO_USB_CONNECT_WAIT_TIMEOUT_MS=5000000
+        POLLING_DMA=1
 )
 
 if(PROJECT_TYPE STREQUAL "GUS")
@@ -58,7 +59,15 @@ if(PROJECT_TYPE STREQUAL "GUS")
         # USE_SPINLOCK=1
     )
     pico_generate_pio_header(picogus ${CMAKE_CURRENT_LIST_DIR}/psram_spi.pio)
-    pico_enable_stdio_uart(picogus 0)
+    set(ASYNC_UART 1)
+    if(ASYNC_UART)
+        add_compile_definitions(
+            ASYNC_UART=1
+        )
+        pico_enable_stdio_uart(picogus 0)
+    else()
+        pico_enable_stdio_uart(picogus 1)
+    endif()
     pico_enable_stdio_usb(picogus 0)
     pico_enable_stdio_semihosting(picogus 0)
 endif()
@@ -110,11 +119,13 @@ target_link_libraries(
     hardware_pll
 )
 
-add_subdirectory(stdio_async_uart)
-target_link_libraries(
-    picogus
-    stdio_async_uart
-)
+if(ASYNC_UART)
+    add_subdirectory(stdio_async_uart)
+    target_link_libraries(
+        picogus
+        stdio_async_uart
+    )
+endif()
 
 pico_add_extra_outputs(picogus)
 
