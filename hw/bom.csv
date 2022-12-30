@@ -1,5 +1,5 @@
 Mfr. #,Manufacturer,Mouser #,Digi-Key #,LCSC #,Customer #,Description,Order Qty.,Notes
-APS6404L-3SQR-SN,AP Memory Technology,878-APS6404L-3SQR-SN,706-IS66WVS1M8BLL-104NLI-ND,C261881,U8,"DRAM IoT RAM 64Mb QSPI (x1,x4) SDR 133/84MHz, RBX, 3V, Ind. Temp., SOP8",1,"Subst IPUS IPS6404, Lyontek LY68L640, Espressif ESP-PSRAM64H, Adafruit 4677"
+APS6404L-3SQR-SN,AP Memory Technology,878-APS6404L-3SQR-SN,1528-4677-ND,C261881,U8,"DRAM IoT RAM 64Mb QSPI (x1,x4) SDR 133/84MHz, RBX, 3V, Ind. Temp., SOP8",1,"Subst IPUS IPS6404L-SQ-SPN, Lyontek LY68L6400SLIT, Espressif ESP-PSRAM64H, Adafruit 4677"
 SN74CB3T3257PWR,Texas Instruments,595-SN74CB3T3257PWR,296-17850-1-ND,C544573 ,"U3,U4","Encoders, Decoders, Multiplexers & Demultiplexers 4-Bit 1-OF-2 FET Mltplx/Demultplxr",2,
 SN74CB3T3245PWR,Texas Instruments,595-SN74CB3T3245PW,296-18196-1-ND,C15298 ,U2,Digital Bus Switch ICs 8-Bit FET 2.5/3.3V Lo-Vltg Bus Switch,1,
 74LVC14AS14-13,Diodes Incorporated,621-74LVC14AS14-13,74LVC14AS14-13DICT-ND,C176927 ,U5,Inverters HEX INV Schmitt 1.65V to 5.5V 24mA,1,Subst any 74LVC14
