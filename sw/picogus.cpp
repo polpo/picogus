@@ -5,9 +5,12 @@
 #include "hardware/irq.h"
 #include "hardware/regs/vreg_and_chip_reset.h"
 
+#include "pico_reflash.h"
+
 #ifdef PSRAM
 #include "psram_spi.h"
-pio_spi_inst_t psram_spi;
+psram_spi_inst_t psram_spi;
+psram_spi_inst_t* async_spi_inst;
 #endif
 #include "isa_io.pio.h"
 
@@ -48,41 +51,73 @@ static uint iow_sm;
 static uint ior_sm;
 static uint ior_write_sm;
 
+static uint8_t sel_reg = 0;
+static uint32_t cur_read = 0;
+
+const char* firmware_string = PICO_PROGRAM_NAME " v" PICO_PROGRAM_VERSION_STRING;
+
+__force_inline void write_picogus(uint8_t value) {
+    switch (sel_reg) {
+    case 0xff:
+        // Write new firmware
+        pico_firmware_write(value);
+        break;
+    }
+}
+
+__force_inline uint8_t read_picogus(void) {
+    uint8_t ret;
+    switch (sel_reg) {
+    case 0x00:
+        return 0xdd;
+    case 0x01:
+        ret = firmware_string[cur_read++];
+        if (ret == 0) { // Null terminated
+            cur_read = 0;
+        }
+        return ret;
+    case 0xff:
+        // Get status of firmware write
+        return pico_firmware_getStatus();
+    default:
+        return 0xff;
+    }
+}
+
 __force_inline void handle_iow(void) {
-    bool iochrdy_on;
     uint32_t iow_read = pio_sm_get(pio0, iow_sm); //>> 16;
     // printf("%x", iow_read);
     // printf("IOW: %x\n", iow_read);
     uint16_t port = (iow_read >> 8) & 0x3FF;
 #ifdef SOUND_GUS
     if ((port >> 4 | 0x10) == GUS_PORT_TEST) {
+        bool fast_write = false;
         switch (port) {
         case GUS_PORT + 0x8:
         case GUS_PORT + 0x102:
         case GUS_PORT + 0x103:
         case GUS_PORT + 0x104:
             // Fast write, don't set iochrdy by writing 0
-            iochrdy_on = false;
             pio_sm_put(pio0, iow_sm, 0x0u);
+            fast_write = true;
             break;
         default:
             // Slow write, set iochrdy by writing non-0
-            iochrdy_on = true;
             pio_sm_put(pio0, iow_sm, 0xffffffffu);
             break;
         }
-        uint32_t value = iow_read & 0xFF;
+        // uint32_t value = iow_read & 0xFF;
         // uint32_t write_begin = time_us_32();
         __dsb();
         // printf("%x", iow_read);
-        write_gus(port, value);
+        write_gus(port, iow_read & 0xFF);
         // uint32_t write_elapsed = time_us_32() - write_begin;
         // if (write_elapsed > 1) {
         //     printf("long write to port %x, (sel reg %x), took %d us\n", port, gus->selected_register, write_elapsed);
         // }
-        // Tell PIO that we are done
-        if (iochrdy_on) {
-            pio_sm_put(pio0, iow_sm, 0x0u);
+        if (fast_write) {
+            // Fast write - return early as we've already written 0x0u to the PIO
+            return;
         }
         __dsb();
         // printf("GUS IOW: port: %x value: %x\n", port, value);
@@ -90,20 +125,16 @@ __force_inline void handle_iow(void) {
         // puts("IOW");
         // uart_print_hex_u32(port);
         // uart_print_hex_u32(value);
-    } else {
-        // Reset SM
-        pio_sm_put(pio0, iow_sm, 0x0u);
-        // gpio_xor_mask(1u << LED_PIN);
     }
 #endif // SOUND_GUS
 #ifdef SOUND_OPL
     switch (port) {
     case 0x388:
+        // Fast write
         pio_sm_put(pio0, iow_sm, 0x0u);
         OPL_Pico_PortWrite(OPL_REGISTER_PORT, iow_read & 0xFF);
-        // Tell PIO that we are done
-        // putchar(iow_read & 0xFF);
-        // printf("%x", iow_read);
+        // Fast write - return early as we've already written 0x0u to the PIO
+        return;
         break;
     case 0x389:
         pio_sm_put(pio0, iow_sm, 0xffffffffu);
@@ -112,10 +143,7 @@ __force_inline void handle_iow(void) {
         // Tell PIO that we are done
         // putchar(iow_read & 0xFF);
         // printf("%x", iow_read);
-        pio_sm_put(pio0, iow_sm, 0x0u);
         break;
-    default:
-        pio_sm_put(pio0, iow_sm, 0x0u);
     }
 #endif // SOUND_OPL
 #ifdef SOUND_MPU
@@ -124,45 +152,52 @@ __force_inline void handle_iow(void) {
         pio_sm_put(pio0, iow_sm, 0xffffffffu);
         // printf("MPU IOW: port: %x value: %x\n", port, iow_read & 0xFF);
         MPU401_WriteData(iow_read & 0xFF);
-        // Tell PIO that we are done
-        pio_sm_put(pio0, iow_sm, 0x0u);
         break;
     case 0x331:
         pio_sm_put(pio0, iow_sm, 0xffffffffu);
         MPU401_WriteCommand(iow_read & 0xFF);
         // printf("MPU IOW: port: %x value: %x\n", port, iow_read & 0xFF);
         __dsb();
-        // Tell PIO that we are done
-        pio_sm_put(pio0, iow_sm, 0x0u);
         break;
-    default:
-        pio_sm_put(pio0, iow_sm, 0x0u);
     }
 #endif // SOUND_MPU
+    // PicoGUS control
+    if (port == 0x1D0) {
+        pio_sm_put(pio0, iow_sm, 0x0u);
+        sel_reg = iow_read & 0xFF;
+        switch (sel_reg) {
+        case 0x01:
+            cur_read = 0;
+            break;
+        case 0xFF:
+            pico_firmware_stop(PICO_FIRMWARE_IDLE);
+            break;
+        }
+        // Fast write - return early
+        return;
+    } else if (port == 0x1D1) {
+        pio_sm_put(pio0, iow_sm, 0xffffffffu);
+        write_picogus(iow_read & 0xFF);
+    }
+    // Fallthrough if no match, or for slow write, reset PIO
+    pio_sm_put(pio0, iow_sm, 0x0u);
 }
 
 __force_inline void handle_ior(void) {
     uint32_t ior_read = pio_sm_get(pio0, ior_sm);
     uint16_t port = ior_read & 0x3FF;
     // printf("IOR: %x\n", port);
+    //
 #if defined(SOUND_GUS)
     if ((port >> 4 | 0x10) == GUS_PORT_TEST) {
         // Tell PIO to wait for data
         pio_sm_put(pio0, ior_sm, 0xffffffffu);
-        uint32_t value;
-        if (port == GUS_PORT + 0x2) {
-            value = 0xdd;
-        } else {
-            __dsb();
-            value = read_gus(port);
-        }
+        uint32_t value = read_gus(port) & 0xff;
         // OR with 0x00ffff00 is required to set pindirs in the PIO
-        pio_sm_put(pio0, ior_sm, 0x00ffff00u | value);
+        // pio_sm_put(pio0, ior_sm, 0x00ffff00u | value);
+        pio_sm_put(pio0, ior_sm, 0x0000ff00u | value);
         // printf("GUS IOR: port: %x value: %x\n", port, value);
         // gpio_xor_mask(1u << LED_PIN);
-    } else {
-        // Reset PIO
-        pio_sm_put(pio0, ior_sm, 0x0u);
     }
 #elif defined(SOUND_OPL)
     if (port == 0x388) {
@@ -171,15 +206,8 @@ __force_inline void handle_ior(void) {
         uint32_t value = OPL_Pico_PortRead(OPL_REGISTER_PORT);
         // OR with 0x00ffff00 is required to set pindirs in the PIO
         pio_sm_put(pio0, ior_sm, 0x00ffff00u | value);
-    } else {
-        // Reset PIO
-        pio_sm_put(pio0, ior_sm, 0x0u);
     }
-#else
-    // Reset PIO
-    pio_sm_put(pio0, ior_sm, 0x0u);
-#endif
-#ifdef SOUND_MPU
+#elif defined(SOUND_MPU)
     if (port == 0x331) {
         // Tell PIO to wait for data
         pio_sm_put(pio0, ior_sm, 0xffffffffu);
@@ -187,11 +215,24 @@ __force_inline void handle_ior(void) {
         // printf("MPU IOR: port: %x value: %x\n", port, value);
         // OR with 0x00ffff00 is required to set pindirs in the PIO
         pio_sm_put(pio0, ior_sm, 0x00ffff00u | value);
+    }
+#endif
+    else if (port == 0x1D0) {
+        // Tell PIO to wait for data
+        pio_sm_put(pio0, ior_sm, 0xffffffffu);
+        uint32_t value = sel_reg;
+        // OR with 0x00ffff00 is required to set pindirs in the PIO
+        pio_sm_put(pio0, ior_sm, 0x00ffff00u | value);
+    } else if (port == 0x1D1) {
+        // Tell PIO to wait for data
+        pio_sm_put(pio0, ior_sm, 0xffffffffu);
+        uint32_t value = read_picogus();
+        // OR with 0x00ffff00 is required to set pindirs in the PIO
+        pio_sm_put(pio0, ior_sm, 0x00ffff00u | value);
     } else {
         // Reset PIO
         pio_sm_put(pio0, ior_sm, 0x0u);
     }
-#endif
 }
 
 #ifdef USE_IRQ
@@ -235,7 +276,7 @@ int main()
     stdio_init_all();
 #endif
 
-    puts("PicoGUS booting!");
+    puts(firmware_string);
 
     io_rw_32 *reset_reason = (io_rw_32 *) (VREG_AND_CHIP_RESET_BASE + VREG_AND_CHIP_RESET_CHIP_RESET_OFFSET);
     if (*reset_reason & VREG_AND_CHIP_RESET_CHIP_RESET_HAD_POR_BITS) {
@@ -264,14 +305,16 @@ int main()
     MPU401_Init();
 #endif
 
+#ifdef PSRAM_CORE0
 #ifdef PSRAM
     puts("Initing PSRAM...");
-    psram_spi = psram_init();
+    psram_spi = psram_spi_init(pio1, -1);
 #if TEST_PSRAM
     puts("Writing PSRAM...");
     uint8_t deadbeef[8] = {0xd, 0xe, 0xa, 0xd, 0xb, 0xe, 0xe, 0xf};
     for (uint32_t addr = 0; addr < (1024 * 1024); ++addr) {
         psram_write8(&psram_spi, addr, (addr & 0xFF));
+        // psram_write8_async(&psram_spi, addr, (addr & 0xFF));
     }
     puts("Reading PSRAM...");
     uint32_t psram_begin = time_us_32();
@@ -320,6 +363,7 @@ int main()
     psram_elapsed = (time_us_32() - psram_begin);
     psram_speed = 1000000.0 * 1024 * 1024 / psram_elapsed;
     printf("32 bit: PSRAM read 1MB in %d us, %d B/s (target 1411200 B/s)\n", psram_elapsed, (uint32_t)psram_speed);
+#endif
 #endif
 #endif
 

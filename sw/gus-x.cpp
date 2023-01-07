@@ -27,7 +27,7 @@
 #include "hardware/gpio.h"
 #ifdef PSRAM
 #include "psram_spi.h"
-extern pio_spi_inst_t psram_spi;
+extern psram_spi_inst_t psram_spi;
 #endif
 
 #include "pico/critical_section.h"
@@ -1518,7 +1518,11 @@ void GUS_Update_DMA_Event_transfer() {
 static bool GUS_DMA_Active = false;
 // static unsigned int GUS_DMA_step = 0;
 
-void GUS_DMA_Event_Transfer(/*DmaChannel *chan,Bitu dmawords*/) {
+void __force_inline GUS_DMA_Event_Start(/*DmaChannel *chan,Bitu dmawords*/) {
+    DMA_Start_Write(&dma_config);
+}
+
+void __force_inline GUS_DMA_Event_Transfer(/*DmaChannel *chan,Bitu dmawords*/) {
     // Bitu dmaaddr = (Bitu)(myGUS.dmaAddr) << 4ul; //+ (Bitu)myGUS.dmaAddrOffset;
     // Bitu dmalimit = myGUS.memsize;
     // unsigned int docount = 0;
@@ -1534,7 +1538,7 @@ void GUS_DMA_Event_Transfer(/*DmaChannel *chan,Bitu dmawords*/) {
         if (myGUS.DMAControl & 0x80) {
             if (myGUS.DMAControl & 0x40) {
                 // 16-bit data
-                if (!(myGUS.dmaAddr & 0x1)) {
+                if ((myGUS.dmaAddr & 0x1)) {
                     invert_msb = true;
                 }
             } else {
@@ -1543,7 +1547,7 @@ void GUS_DMA_Event_Transfer(/*DmaChannel *chan,Bitu dmawords*/) {
         }
         // bool invert_msb = (myGUS.DMAControl & 0x80) && (!(myGUS.DMAControl & 0x40) || !(myGUS.dmaAddr & 0x1));
 
-        is_tc = DMA_Write(
+        is_tc = DMA_Complete_Write(
             &dma_config,
             // dmaaddr + GUS_DMA_step,
             myGUS.dmaAddr,
@@ -1566,9 +1570,11 @@ void GUS_DMA_Event_Transfer(/*DmaChannel *chan,Bitu dmawords*/) {
         myGUS.DMAControl |= 0x100u; /* NTS: DOSBox SVN approach: Use bit 8 for DMA TC IRQ */
         myGUS.IRQStatus |= 0x80;
         // saved_tcount = true;
+        /*
         if (!(myGUS.DMAControl & 0x20)) {
             puts("DMA end without TC IRQ enabled");
         }
+        */
         GUS_CheckIRQ();
         GUS_StopDMA();
     } else {
@@ -1580,8 +1586,16 @@ void GUS_DMA_Event_Transfer(/*DmaChannel *chan,Bitu dmawords*/) {
 // #endif // 0 // TODO implement DMA
 
 // #if 0 // TODO implement DMA
-uint32_t GUS_DMA_Event(Bitu val) {
+uint32_t 
+#ifdef POLLING_DMA
+static bool dma_waiting = false;
+__force_inline
+#endif
+GUS_DMA_Event(Bitu val) {
     (void)val;//UNUSED
+#ifndef POLLING_DMA
+    static bool dma_waiting = false;
+#endif
     /* stuff that has no bearing on a real card
     DmaChannel *chan = GetDMAChannel(myGUS.dma1);
     if (chan == NULL) {
@@ -1601,6 +1615,7 @@ uint32_t GUS_DMA_Event(Bitu val) {
         puts("stopping");
         DEBUG_LOG_MSG("GUS DMA event: DMA control 'enable DMA' bit was reset, stopping DMA transfer events");
         GUS_DMA_Active = false;
+        dma_waiting = false;
         return 0;
     }
 
@@ -1611,9 +1626,15 @@ uint32_t GUS_DMA_Event(Bitu val) {
         chan->masked?1:0,
         chan->currcnt+1);
     */
-    GUS_DMA_Event_Transfer(/*chan,GUS_DMA_Event_transfer*/);
-
-    if (GUS_DMA_Active) {
+    if (dma_waiting) {
+        if (pio_sm_is_rx_fifo_empty(dma_config.pio, dma_config.sm)) {
+            return 1;
+        }
+        GUS_DMA_Event_Transfer();
+        dma_waiting = false;
+        if (!GUS_DMA_Active) {
+            return 0;
+        }
         /* keep going */
         // PIC_AddEvent(GUS_DMA_Event,GUS_DMA_Event_interval, 2);
         // From Interwave programmers guide:
@@ -1622,6 +1643,7 @@ uint32_t GUS_DMA_Event(Bitu val) {
         // 10:6 μs–7 μs
         // 11:13 μs–14 μs
         // From ULTRAWRD: it's 650KHz with a divisor...
+        /*
         switch ((myGUS.DMAControl >> 3u) & 3u) {
         case 0b00:
             return 1;
@@ -1636,12 +1658,18 @@ uint32_t GUS_DMA_Event(Bitu val) {
             return 12;
             break;
         }
+        */
+        return 12;
+    } else {
+        GUS_DMA_Event_Start();
+        dma_waiting = true;
+        return 1;
     }
     return 0;
 }
 // #endif // 0 // TODO implement DMA
 
-#if POLLING_DMA
+#ifdef POLLING_DMA
 static uint32_t next_event = 0;
 #endif
 
@@ -1658,7 +1686,7 @@ __force_inline void GUS_StopDMA() {
     GUS_DMA_Active = false;
     //*/ // TODO implement DMA
 }
-#if POLLING_DMA
+#ifdef POLLING_DMA
 void __force_inline process_dma(void) {
     if (!GUS_DMA_Active) {
         return;

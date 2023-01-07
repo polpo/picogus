@@ -72,7 +72,7 @@ restart:
     out pins, 8         side 0b01 ; output data to be written, stalling with IOCHRDY low until data is ready
     out pindirs, 8      side 0b11 ; next 8 in pindirs is FF - set pindirs as output
     wait 1 gpio IOR_PIN side 0b10 ; - wait for IOR rising edge with IOCHRDY high and muxes to data
-    out pins, 8         side 0b10 ; next 8 in pindirs is FF - reset data pins back to high
+    ; out pins, 8         side 0b10 ; next 8 in pindirs is FF - reset data pins back to high
     out pindirs, 8      side 0b00 ; next 8 in pindirs is 00 - set pindirs back as input
 .wrap
 
@@ -89,7 +89,7 @@ static inline void ior_program_init(PIO pio, uint sm, uint offset) {
     pio_sm_set_consecutive_pindirs(pio, sm, AD0_PIN, 10, false);
 
     sm_config_set_out_pins(&c, AD0_PIN, 8);
-    sm_config_set_out_shift(&c, true, true /* autopull */, 32);
+    sm_config_set_out_shift(&c, true, true /* autopull */, 24);
     // Set this pin's GPIO function (connect PIO to the pad)
     for (int i = AD0_PIN; i <= AD0_PIN + 8; i++) {
         pio_gpio_init(pio, i);

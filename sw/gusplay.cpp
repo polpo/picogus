@@ -20,6 +20,11 @@
 #include "pico_pic.h"
 #endif
 
+#ifdef PSRAM
+#include "psram_spi.h"
+extern psram_spi_inst_t psram_spi;
+#endif
+
 #if PICO_ON_DEVICE
 #include "pico/binary_info.h"
 bi_decl(bi_3pins_with_names(PICO_AUDIO_I2S_DATA_PIN, "I2S DIN", PICO_AUDIO_I2S_CLOCK_PIN_BASE, "I2S BCK", PICO_AUDIO_I2S_CLOCK_PIN_BASE+1, "I2S LRCK"));
@@ -71,6 +76,32 @@ void play_gus() {
 #ifdef USE_ALARM
     // Init PIC on this core so it handles timers
     PIC_Init();
+#endif
+
+#ifdef PSRAM_CORE1
+#ifdef PSRAM
+    puts("Initing PSRAM...");
+    psram_spi = psram_spi_init(pio1, -1);
+#if TEST_PSRAM
+    puts("Writing PSRAM...");
+    uint8_t deadbeef[8] = {0xd, 0xe, 0xa, 0xd, 0xb, 0xe, 0xe, 0xf};
+    for (uint32_t addr = 0; addr < (1024 * 1024); ++addr) {
+        psram_write8_async(&psram_spi, addr, (addr & 0xFF));
+    }
+    puts("Reading PSRAM...");
+    uint32_t psram_begin = time_us_32();
+    for (uint32_t addr = 0; addr < (1024 * 1024); ++addr) {
+        uint8_t result = psram_read8(&psram_spi, addr);
+        if (static_cast<uint8_t>((addr & 0xFF)) != result) {
+            printf("\nPSRAM failure at address %x (%x != %x)\n", addr, addr & 0xFF, result);
+            return;
+        }
+    }
+    uint32_t psram_elapsed = time_us_32() - psram_begin;
+    float psram_speed = 1000000.0 * 1024.0 * 1024 / psram_elapsed;
+    printf("8 bit: PSRAM read 1MB in %d us, %d B/s (target 705600 B/s)\n", psram_elapsed, (uint32_t)psram_speed);
+#endif
+#endif
 #endif
 
     struct audio_buffer_pool *ap = init_audio();

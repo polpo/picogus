@@ -13,7 +13,10 @@ set(PICO_SDK_PATH "${CMAKE_SOURCE_DIR}/../../pico/pico-sdk")
 include(pico_sdk_import.cmake)
 include(pico_extras_import.cmake)
 
-project(picogus C CXX ASM)
+project(picogus
+    VERSION "0.3.99"
+    LANGUAGES C CXX ASM
+)
 
 # set(PICO_DEOPTIMIZED_DEBUG "1")
 set(CMAKE_BUILD_TYPE "Release")
@@ -29,7 +32,7 @@ pico_sdk_init()
 
 # Add executable. Default name is the project name, version 0.1
 add_executable(picogus picogus.cpp)
-pico_set_program_version(picogus "0.2.0")
+pico_set_program_version(picogus ${CMAKE_PROJECT_VERSION})
 
 add_compile_definitions(
         USE_AUDIO_I2S=1
@@ -42,8 +45,9 @@ add_compile_definitions(
         # USE_IRQ=1
         USE_ALARM=1
         PICO_STDIO_USB_CONNECT_WAIT_TIMEOUT_MS=5000000
-        POLLING_DMA=1
 )
+
+target_sources(picogus PRIVATE pico_reflash.c)
 
 if(PROJECT_TYPE STREQUAL "GUS")
     if(NOT GUS_PORT)
@@ -53,13 +57,24 @@ if(PROJECT_TYPE STREQUAL "GUS")
     target_sources(picogus PRIVATE gusplay.cpp pico_pic.c)
     target_compile_definitions(picogus PRIVATE
         SOUND_GUS=1
-        PSRAM=1
         GUS_PORT=${GUS_PORT}
-        # TEST_PSRAM=1
-        # USE_SPINLOCK=1
+        PSRAM=1
+        TEST_PSRAM=1
+        PSRAM_ASYNC=1
+        PSRAM_ASYNC_DMA_IRQ=1
+        PSRAM_SPINLOCK=1
+        # PSRAM_MUTEX=1
+        PSRAM_CORE0=1
+        PSRAM_PIN_CS=1
+        PSRAM_PIN_SCK=2
+        PSRAM_PIN_MOSI=3
+        PSRAM_PIN_MISO=0
+        # POLLING_DMA=1
     )
-    pico_generate_pio_header(picogus ${CMAKE_CURRENT_LIST_DIR}/psram_spi.pio)
-    set(ASYNC_UART 1)
+    add_subdirectory(rp2040-psram)
+    target_link_libraries(picogus rp2040-psram)
+    # pico_generate_pio_header(picogus ${CMAKE_CURRENT_LIST_DIR}/psram_spi.pio)
+    set(ASYNC_UART 0)
     if(ASYNC_UART)
         add_compile_definitions(
             ASYNC_UART=1
@@ -117,6 +132,7 @@ target_link_libraries(
     pico_audio_i2s
     hardware_pio
     hardware_pll
+    hardware_flash
 )
 
 if(ASYNC_UART)
