@@ -24,6 +24,8 @@
 extern "C" {
 #endif
 
+#include "hardware/uart.h"
+
 // #define NULL 0 /* SOFTMPU */
 #define RTCFREQ 4000 /* SOFTMPU: RTC interrupt frequency */
 
@@ -35,14 +37,12 @@ typedef enum EventID {MPU_EVENT,RESET_DONE,EOI_HANDLER,NUM_EVENTS} EventID;
 
 /* Interface functions */
 void MPU401_Init();
-void MPU401_WriteCommand(Bit8u val);
+void MPU401_WriteCommand(Bit8u val, bool crit);
 Bit8u MPU401_ReadData(void);
-void MPU401_WriteData(Bit8u val);
+Bit8u MPU401_ReadStatus(void);
+void MPU401_WriteData(Bit8u val, bool crit);
 Bit8u QueueUsed();
 void send_midi_byte();
-void output_to_uart(Bit8u val);
-void wait_for_uart();
-Bit8u uart_tx_status();
 
 #ifdef __cplusplus
 }

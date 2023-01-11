@@ -116,9 +116,10 @@ if(PROJECT_TYPE STREQUAL "MPU")
         mpu401/mpu401.c
         mpu401/midi.c
     )
+    target_sources(picogus PRIVATE mpuplay.cpp)
     # Use USB stdio because UART is used by MIDI
     pico_enable_stdio_uart(picogus 0)
-    pico_enable_stdio_usb(picogus 1)
+    pico_enable_stdio_usb(picogus 0)
     pico_enable_stdio_semihosting(picogus 0)
 endif()
 

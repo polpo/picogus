@@ -43,6 +43,7 @@ void play_gus(void);
 
 #ifdef SOUND_MPU
 #include "mpu401/export.h"
+void play_mpu(void);
 #endif
 
 constexpr uint LED_PIN = PICO_DEFAULT_LED_PIN;
@@ -151,18 +152,18 @@ __force_inline void handle_iow(void) {
     case 0x330:
         pio_sm_put(pio0, iow_sm, 0xffffffffu);
         // printf("MPU IOW: port: %x value: %x\n", port, iow_read & 0xFF);
-        MPU401_WriteData(iow_read & 0xFF);
+        MPU401_WriteData(iow_read & 0xFF, true);
         break;
     case 0x331:
         pio_sm_put(pio0, iow_sm, 0xffffffffu);
-        MPU401_WriteCommand(iow_read & 0xFF);
+        MPU401_WriteCommand(iow_read & 0xFF, true);
         // printf("MPU IOW: port: %x value: %x\n", port, iow_read & 0xFF);
         __dsb();
         break;
     }
 #endif // SOUND_MPU
     // PicoGUS control
-    if (port == 0x1D0) {
+    if (port == 0x2D0) {
         pio_sm_put(pio0, iow_sm, 0x0u);
         sel_reg = iow_read & 0xFF;
         switch (sel_reg) {
@@ -175,7 +176,7 @@ __force_inline void handle_iow(void) {
         }
         // Fast write - return early
         return;
-    } else if (port == 0x1D1) {
+    } else if (port == 0x2D1) {
         pio_sm_put(pio0, iow_sm, 0xffffffffu);
         write_picogus(iow_read & 0xFF);
     }
@@ -205,25 +206,32 @@ __force_inline void handle_ior(void) {
         pio_sm_put(pio0, ior_sm, 0xffffffffu);
         uint32_t value = OPL_Pico_PortRead(OPL_REGISTER_PORT);
         // OR with 0x00ffff00 is required to set pindirs in the PIO
-        pio_sm_put(pio0, ior_sm, 0x00ffff00u | value);
+        pio_sm_put(pio0, ior_sm, 0x0000ff00u | value);
     }
 #elif defined(SOUND_MPU)
-    if (port == 0x331) {
+    if (port == 0x330) {
         // Tell PIO to wait for data
         pio_sm_put(pio0, ior_sm, 0xffffffffu);
         uint32_t value = MPU401_ReadData();
         // printf("MPU IOR: port: %x value: %x\n", port, value);
         // OR with 0x00ffff00 is required to set pindirs in the PIO
-        pio_sm_put(pio0, ior_sm, 0x00ffff00u | value);
+        pio_sm_put(pio0, ior_sm, 0x0000ff00u | value);
+    } else if (port == 0x331) {
+        // Tell PIO to wait for data
+        pio_sm_put(pio0, ior_sm, 0xffffffffu);
+        uint32_t value = MPU401_ReadStatus();
+        // printf("MPU IOR: port: %x value: %x\n", port, value);
+        // OR with 0x00ffff00 is required to set pindirs in the PIO
+        pio_sm_put(pio0, ior_sm, 0x0000ff00u | value);
     }
 #endif
-    else if (port == 0x1D0) {
+    else if (port == 0x2D0) {
         // Tell PIO to wait for data
         pio_sm_put(pio0, ior_sm, 0xffffffffu);
         uint32_t value = sel_reg;
         // OR with 0x00ffff00 is required to set pindirs in the PIO
         pio_sm_put(pio0, ior_sm, 0x00ffff00u | value);
-    } else if (port == 0x1D1) {
+    } else if (port == 0x2D1) {
         // Tell PIO to wait for data
         pio_sm_put(pio0, ior_sm, 0xffffffffu);
         uint32_t value = read_picogus();
@@ -379,6 +387,9 @@ int main()
     multicore_launch_core1(&play_gus);
 #endif
 
+#ifdef SOUND_MPU
+    multicore_launch_core1(&play_mpu);
+#endif
 
     for(int i=AD0_PIN; i<(AD0_PIN + 10); ++i) {
         gpio_disable_pulls(i);
@@ -460,7 +471,7 @@ int main()
         PIC_HandleEvents();
 #endif
 #ifdef SOUND_MPU
-        send_midi_byte();				// see if we need to send a byte	
+        // send_midi_byte();				// see if we need to send a byte	
 #endif
 #ifdef POLLING_DMA
         process_dma();
