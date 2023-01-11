@@ -4,7 +4,7 @@
 
 #define MIXER_BUFSIZE 256u
 
-typedef uintptr_t	Bitu;
+typedef uint32_t	Bitu;
 
 //#define INLINE inline __attribute__((always_inline))
 #define INLINE __force_inline

@@ -29,8 +29,8 @@ extern "C" {
 // #define NULL 0 /* SOFTMPU */
 #define RTCFREQ 4000 /* SOFTMPU: RTC interrupt frequency */
 
-typedef unsigned char Bit8u;
-typedef unsigned int Bitu;
+typedef uint8_t Bit8u;
+typedef uint32_t Bitu;
 
 // typedef enum bool {false = 0,true = 1} bool;
 typedef enum EventID {MPU_EVENT,RESET_DONE,EOI_HANDLER,NUM_EVENTS} EventID;

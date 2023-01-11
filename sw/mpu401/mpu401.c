@@ -111,7 +111,7 @@ static struct {
         bool conductor,cond_req,cond_set, block_ack;
         bool playing,reset;
         bool wsd,wsm,wsd_start;
-        bool run_irq,irq_pending;
+        bool irq_pending;
         bool send_now;
         bool eoi_scheduled;
         Bit8s data_onoff;
@@ -122,12 +122,10 @@ static struct {
         Bit8u channel,old_chan;
     } state;
     struct {
-        Bit8u timebase,old_timebase;
-        Bit8u tempo,old_tempo;
-        Bit8u tempo_rel,old_tempo_rel;
-        Bit8u tempo_grad;
-        Bit8u cth_rate,cth_counter;
-        bool clock_to_host,cth_active;
+        Bit8u timebase;
+        Bit8u tempo,tempo_rel, tempo_grad;
+        Bit8u cth_rate,cth_counter,cth_savecount;
+        bool clock_to_host;
     } clock;
 } mpu;
 
@@ -171,7 +169,7 @@ void MPU401_WriteCommand(Bit8u val, bool crit) { /* SOFTMPU */
     }
     Bit8u i; /* SOFTMPU */
     if (mpu.state.reset) {
-        if (mpu.state.cmd_pending || (val!=0x3f && val!=0xff)) {
+        if (mpu.state.cmd_pending || val!=0xff) {
             mpu.state.cmd_pending=val+1;
             goto write_command_return;
         }
@@ -180,14 +178,15 @@ void MPU401_WriteCommand(Bit8u val, bool crit) { /* SOFTMPU */
     }
     if (val<=0x2f) {
         switch (val&3) { /* MIDI stop, start, continue */
-            case 1: {MIDI_RawOutByte(0xfc);break;}
-            case 2: {MIDI_RawOutByte(0xfa);break;}
-            case 3: {MIDI_RawOutByte(0xfb);break;}
+            case 1: {MIDI_RawOutByte(0xfc);mpu.clock.cth_savecount=mpu.clock.cth_counter;break;}
+            case 2: {MIDI_RawOutByte(0xfa);mpu.clock.cth_counter=mpu.clock.cth_savecount=0;break;}
+            case 3: {MIDI_RawOutByte(0xfb);mpu.clock.cth_counter=mpu.clock.cth_savecount;break;}
         }
         /*if (val&0x20) LOG(LOG_MISC,LOG_ERROR)("MPU-401:Unhandled Recording Command %x",val);*/ /* SOFTMPU */
         switch (val&0xc) {
             case  0x4:      /* Stop */
-                PIC_RemoveEvents(MPU401_Event);
+                if (mpu.state.playing && !mpu.clock.clock_to_host)
+                    PIC_RemoveEvents(MPU401_Event);
                 mpu.state.playing=false;
                 for (i=0xb0;i<0xbf;i++) {  /* All notes off */
                     MIDI_RawOutByte(i);
@@ -197,10 +196,9 @@ void MPU401_WriteCommand(Bit8u val, bool crit) { /* SOFTMPU */
                 break;
             case 0x8:       /* Play */
                 /*LOG(LOG_MISC,LOG_NORMAL)("MPU-401:Intelligent mode playback started");*/ /* SOFTMPU */
+                if (!mpu.state.playing && !mpu.clock.clock_to_host)
+                    PIC_AddEvent(MPU401_Event,MPU401_TIMECONSTANT/((mpu.clock.tempo*mpu.clock.timebase*mpu.clock.tempo_rel)/0x40), 2);
                 mpu.state.playing=true;
-                PIC_RemoveEvents(MPU401_Event);
-                /* puts("start intell"); */
-                PIC_AddEvent(MPU401_Event,MPU401_TIMECONSTANT/((mpu.clock.tempo*mpu.clock.timebase*mpu.clock.tempo_rel)/0x40), 2);
                 ClrQueue();
                 break;
         }
@@ -229,9 +227,13 @@ void MPU401_WriteCommand(Bit8u val, bool crit) { /* SOFTMPU */
             mpu.state.cond_set=true;
             break;
         case 0x94: /* Clock to host */
+            if (mpu.clock.clock_to_host && !mpu.state.playing)
+                PIC_RemoveEvents(MPU401_Event);
             mpu.clock.clock_to_host=false;
             break;
         case 0x95:
+            if (!mpu.clock.clock_to_host && !mpu.state.playing)
+                PIC_AddEvent(MPU401_Event,MPU401_TIMECONSTANT/((mpu.clock.tempo*mpu.clock.timebase*mpu.clock.tempo_rel)/0x40), 2);
             mpu.clock.clock_to_host=true;
             break;
         case 0xc2: /* Internal timebase */
@@ -260,23 +262,14 @@ void MPU401_WriteCommand(Bit8u val, bool crit) { /* SOFTMPU */
         case 0xe7: case 0xec: case 0xed: case 0xee: case 0xef:
             mpu.state.command_byte=val;
             break;
-        /* Commands 0xa# goto write_command_returning data */
+        /* Commands 0xa# returning data */
         case 0xab:      /* Request and clear recording counter */
             QueueByte(MSG_MPU_ACK);
             QueueByte(0);
             goto write_command_return;
         case 0xac:      /* Request version */
-            if (false)
-            {
-                /* SOFTMPU: Fix missing music in Gateway by reversing version and ACK */
-                QueueByte(MPU401_VERSION);
-                QueueByte(MSG_MPU_ACK);
-            }
-            else
-            {
-                QueueByte(MSG_MPU_ACK);
-                QueueByte(MPU401_VERSION);
-            }
+            QueueByte(MSG_MPU_ACK);
+            QueueByte(MPU401_VERSION);
             goto write_command_return;
         case 0xad:      /* Request revision */
             QueueByte(MSG_MPU_ACK);
@@ -318,8 +311,11 @@ void MPU401_WriteCommand(Bit8u val, bool crit) { /* SOFTMPU */
             /*LOG(LOG_MISC,LOG_NORMAL)("MPU-401:Reset %X",val);*/ /* SOFTMPU */
             PIC_AddEvent(MPU401_ResetDone, MPU401_RESETBUSY, 0);
             mpu.state.reset=true;
+            if (mpu.mode==M_UART) {
+                MPU401_Reset();
+                goto write_command_return;      //do not send ack in UART mode
+            }
             MPU401_Reset();
-            if (mpu.mode==M_UART) goto write_command_return;//do not send ack in UART mode
             break;
         case 0x3f:      /* UART mode */
             /*LOG(LOG_MISC,LOG_NORMAL)("MPU-401:Set UART mode %X",val);*/ /* SOFTMPU */
@@ -394,9 +390,9 @@ void MPU401_WriteData(Bit8u val, bool crit) { /* SOFTMPU */
             goto write_return;
         case 0xe1:      /* Set relative tempo */
             mpu.state.command_byte=0;
+            mpu.clock.tempo_rel=val;
             /*if (val!=0x40) //default value
                 LOG(LOG_MISC,LOG_ERROR)("MPU-401:Relative tempo change not implemented");*/ /* SOFTMPU */
-            mpu.clock.tempo_rel=val;
             goto write_return;
         case 0xe7:      /* Set internal clock to host interval */
             mpu.state.command_byte=0;
@@ -604,13 +600,16 @@ static void UpdateTrack(Bit8u chan) {
 }
 
 static void UpdateConductor(void) {
-    if (mpu.condbuf.value[0]==0xfc) {
-        mpu.condbuf.value[0]=0;
-        mpu.state.conductor=false;
-        mpu.state.req_mask&=~(1<<9);
-        if (mpu.state.amask==0) mpu.state.req_mask|=(1<<12);
-        return;
+    for (unsigned int i=0;i < mpu.condbuf.vlength;i++) {
+        if (mpu.condbuf.value[i] == 0xfc) {
+            mpu.condbuf.value[i] = 0;
+            mpu.state.conductor=false;
+            mpu.state.req_mask&=~(1<<9);
+            if (mpu.state.amask==0) mpu.state.req_mask|=(1<<12);
+            return;
+        }
     }
+
     mpu.condbuf.vlength=0;
     mpu.condbuf.counter=0xf0;
     mpu.state.req_mask|=(1<<9);
@@ -620,19 +619,20 @@ uint32_t MPU401_Event(Bitu val) {
     /* SOFTMPU */
     /* putchar('.'); */
     Bit8u i;
-    Bitu new_time;
     if (mpu.mode==M_UART) return 0;
     critical_section_enter_blocking(&mpu_crit);
     if (mpu.state.irq_pending) goto next_event;
-    for (i=0;i<8;i++) { /* Decrease counters */
-        if (mpu.state.amask&(1<<i)) {
-            mpu.playbuf[i].counter--;
-            if (mpu.playbuf[i].counter<=0) UpdateTrack(i);
+        if (mpu.state.playing) {
+        for (i=0;i<8;i++) { /* Decrease counters */
+            if (mpu.state.amask&(1<<i)) {
+                mpu.playbuf[i].counter--;
+                if (mpu.playbuf[i].counter<=0) UpdateTrack(i);
+            }
+        }               
+        if (mpu.state.conductor) {
+            mpu.condbuf.counter--;
+            if (mpu.condbuf.counter<=0) UpdateConductor();
         }
-    }               
-    if (mpu.state.conductor) {
-        mpu.condbuf.counter--;
-        if (mpu.condbuf.counter<=0) UpdateConductor();
     }
     if (mpu.clock.clock_to_host) {
         mpu.clock.cth_counter++;
@@ -644,11 +644,6 @@ uint32_t MPU401_Event(Bitu val) {
     if (!mpu.state.irq_pending && mpu.state.req_mask) MPU401_EOIHandler(0);
 next_event:
     critical_section_exit(&mpu_crit);
-    /* PIC_RemoveEvents(MPU_EVENT); */
-        /*
-    if ((new_time=((mpu.clock.tempo*mpu.clock.timebase*mpu.clock.tempo_rel)/0x40))==0) return 0;
-        return (Bitu)MPU401_TIMECONSTANT/new_time;
-        */
     return MPU401_TIMECONSTANT/((mpu.clock.tempo*mpu.clock.timebase*mpu.clock.tempo_rel)/0x40);
 }
 
@@ -665,7 +660,6 @@ uint32_t MPU401_EOIHandler(Bitu val) {
     if (val) {
         critical_section_enter_blocking(&mpu_crit);
     }
-    Bit8u i=0; /* SOFTMPU */
     mpu.state.eoi_scheduled=false;
     if (mpu.state.send_now) {
         mpu.state.send_now=false;
@@ -673,12 +667,13 @@ uint32_t MPU401_EOIHandler(Bitu val) {
         else UpdateTrack(mpu.state.channel);
     }
     mpu.state.irq_pending=false;
-    if (!mpu.state.playing || !mpu.state.req_mask) {
+    if (!mpu.state.req_mask) {
         if (val) {
             critical_section_exit(&mpu_crit);
         }
         return 0;
     }
+    Bit8u i=0; /* SOFTMPU */
     do {
         if (mpu.state.req_mask&(1<<i)) {
             QueueByte(0xf0+i);
@@ -708,6 +703,7 @@ static void MPU401_Reset(void) {
 
     PIC_DeActivateIRQ();
     mpu.mode=(mpu.intelligent ? M_INTELLIGENT : M_UART);
+    PIC_RemoveEvents(MPU401_Event);
     PIC_RemoveEvents(MPU401_EOIHandler);
     mpu.state.eoi_scheduled=false;
     mpu.state.wsd=false;
@@ -716,17 +712,16 @@ static void MPU401_Reset(void) {
     mpu.state.cond_req=false;
     mpu.state.cond_set=false;
     mpu.state.playing=false;
-    mpu.state.run_irq=false;
     mpu.state.irq_pending=false;
     mpu.state.cmask=0xff;
     mpu.state.amask=mpu.state.tmask=0;
     mpu.state.midi_mask=0xffff;
-    mpu.state.data_onoff=0;
+    mpu.state.data_onoff=-1;
     mpu.state.command_byte=0;
     mpu.state.block_ack=false;
-    mpu.clock.tempo=mpu.clock.old_tempo=100;
-    mpu.clock.timebase=mpu.clock.old_timebase=120;
-    mpu.clock.tempo_rel=mpu.clock.old_tempo_rel=0x40;
+    mpu.clock.tempo=100;
+    mpu.clock.timebase=120;
+    mpu.clock.tempo_rel=0x40;
     mpu.clock.tempo_grad=0;
     mpu.clock.clock_to_host=false;
     mpu.clock.cth_rate=60;
@@ -734,6 +729,7 @@ static void MPU401_Reset(void) {
     ClrQueue();
     mpu.state.req_mask=0;
     mpu.condbuf.counter=0;
+    mpu.clock.cth_savecount=0;
     mpu.condbuf.type=T_OVERFLOW;
     for (i=0;i<8;i++) {mpu.playbuf[i].type=T_OVERFLOW;mpu.playbuf[i].counter=0;}
 }

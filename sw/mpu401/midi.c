@@ -41,21 +41,22 @@
 static critical_section_t midi_crit;
 
 /* SOFTMPU: Additional defines, typedefs etc. for C */
-typedef unsigned long Bit32u;
-typedef int Bits;
+typedef uint32_t Bit32u;
+typedef int32_t Bits;
 
-#define SYSEX_SIZE 1024     // sysex buffer for delay calculation
+#define SYSEX_SIZE 8192     // sysex buffer for delay calculation
 
 /* RAWBUF: This is the buffer for outgoing MIDI data. The larger the buffer,
     the less likely it is to overrun when SysEx delay is enabled and large SysEx
     transfers are occurring. */
 //#define RAWBUF  14336
 #define RAWBUF  65536
+#define RAWBUF_BITS  65535
 
 typedef struct ring_buffer {
-    unsigned char buffer[RAWBUF];
-    unsigned int head;
-    unsigned int tail;
+    uint8_t buffer[RAWBUF];
+    uint32_t head;
+    uint32_t tail;
 } ring_buffer;
 
 static ring_buffer midi_out_buff = { {0}, 0, 0 };
@@ -109,7 +110,7 @@ static struct {
     struct {
         Bit8u buf[SYSEX_SIZE];
         Bitu used;
-        Bit8u usedbufs;
+        /* Bit8u usedbufs; */
         Bitu delay;
         Bit32u start;
         // bool delay;
@@ -147,7 +148,7 @@ static void PlayMsg(Bit8u* msg, Bitu len)
     for (Bitu i = 0; i < len; i++) {
         /* putchar('m'); */
         critical_section_enter_blocking(&midi_crit);
-        unsigned int next = (unsigned int)(midi_out_buff.head + 1) % RAWBUF;
+        uint32_t next = (midi_out_buff.head + 1) & RAWBUF_BITS;
         if (next != midi_out_buff.tail) {
             midi_out_buff.buffer[midi_out_buff.head] = msg[i];
             midi_out_buff.head = next;
@@ -253,42 +254,52 @@ void send_midi_byte() {
         return;   // nothing to send
     }
     Bit8u data = midi_out_buff.buffer[midi_out_buff.tail];
-    midi_out_buff.tail = (unsigned int)(midi_out_buff.tail + 1) % RAWBUF;   // increment tail, wrap to 0 if we're at the end
+    midi_out_buff.tail = (midi_out_buff.tail + 1) & RAWBUF_BITS;   // increment tail, wrap to 0 if we're at the end
     critical_section_exit(&midi_crit);
     if (midi.sysex.start) {
         Bit32u passed_ticks = time_us_32() - midi.sysex.start;
         if (passed_ticks < midi.sysex.delay) { // still waiting for sysex delay
-            busy_wait_us(midi.sysex.delay - passed_ticks);
+            busy_wait_us_32(midi.sysex.delay - passed_ticks);
         }
     }
 
     if (midi.sysex.status==0xf0) { // Start 
         /* putchar('s'); */
         if (!(data&0x80)) {
+            /*
             if (midi.sysex.used==SYSEX_SIZE) {
                 midi.sysex.used = 0;
                 midi.sysex.usedbufs++;
             }
+            */
             
             output_to_uart(data);
-            midi.sysex.buf[midi.sysex.used++] = data;
+            if (midi.sysex.used<(SYSEX_SIZE-1)) midi.sysex.buf[midi.sysex.used++] = data;
+            /* midi.sysex.buf[midi.sysex.used++] = data; */
             return;
         } else {
             output_to_uart(0xf7);
             midi.sysex.buf[midi.sysex.used++] = 0xf7;
             midi.sysex.status = 0xf7;
                 /*LOG(LOG_ALL,LOG_NORMAL)("Play sysex; address:%02X %02X %02X, length:%4d, delay:%3d", midi.sysex.buf[5], midi.sysex.buf[6], midi.sysex.buf[7], midi.sysex.used, midi.sysex.delay);*/
-            if (midi.sysex.delay) {
-                if (midi.sysex.usedbufs == 0 && midi.sysex.buf[5] == 0x7F) {
+            if (midi.sysex.start) {
+                /* if (midi.sysex.usedbufs == 0 && midi.sysex.buf[5] == 0x7F) { */
+                if (midi.sysex.buf[5] == 0x7F) {
                     midi.sysex.delay = 290; // PicoGUS // All Parameters reset
-                } else if (midi.sysex.usedbufs == 0 && midi.sysex.buf[5] == 0x10 && midi.sysex.buf[6] == 0x00 && midi.sysex.buf[7] == 0x04) {
+                /* } else if (midi.sysex.usedbufs == 0 && midi.sysex.buf[5] == 0x10 && midi.sysex.buf[6] == 0x00 && midi.sysex.buf[7] == 0x04) { */
+                } else if (midi.sysex.buf[5] == 0x10 && midi.sysex.buf[6] == 0x00 && midi.sysex.buf[7] == 0x04) {
                     midi.sysex.delay = 145;  // PicoGUS // Viking Child
-                } else if (midi.sysex.usedbufs == 0 && midi.sysex.buf[5] == 0x10 && midi.sysex.buf[6] == 0x00 && midi.sysex.buf[7] == 0x01) {
+                /* } else if (midi.sysex.usedbufs == 0 && midi.sysex.buf[5] == 0x10 && midi.sysex.buf[6] == 0x00 && midi.sysex.buf[7] == 0x01) { */
+                } else if (midi.sysex.buf[5] == 0x10 && midi.sysex.buf[6] == 0x00 && midi.sysex.buf[7] == 0x01) {
                     midi.sysex.delay = 30;  // PicoGUS  // Dark Sun 1
                 } else {
+                    // HardMPU:
                     /* midi.sysex.delay = ((((midi.sysex.usedbufs*SYSEX_SIZE)+midi.sysex.used)/2)+2); */
-                    // 1.25 * 1000.0 / 3125.0 = 0.4
-					midi.sysex.delay = midi.sysex.used * 0.4f + 2;
+                    // DOSBox:
+                    /* midi.sysex.delay = (Bitu)(((float)(midi.sysex.used) * 1.25f) * 1000.0f / 3125.0f) + 2 */
+                    // PicoGUS: 1.25 * 1000.0 / 3125.0 = 0.4
+                    /* midi.sysex.delay = ((midi.sysex.usedbufs*SYSEX_SIZE)+midi.sysex.used) * 0.4f + 2; */
+                    midi.sysex.delay = midi.sysex.used * 0.4f + 2;
                 }
                 midi.sysex.start = time_us_32();  // PicoGUS
             }
@@ -305,7 +316,7 @@ void send_midi_byte() {
             output_to_uart(0xf0);
             midi.sysex.used=1;
             midi.sysex.buf[0]=0xf0;
-            midi.sysex.usedbufs=0;
+            /* midi.sysex.usedbufs=0; */
             return;
         }
     }
@@ -328,8 +339,8 @@ void MIDI_Init(bool delaysysex,bool fakeallnotesoff){
     midi.status=0x00;
     midi.sysex.status=0x00;
     midi.sysex.delay = 0;
-    /* midi.sysex.start = delaysysex ? time_us_32() : 0; // PicoGUS */
-    midi.sysex.start = time_us_32(); // PicoGUS
+    midi.sysex.start = delaysysex ? time_us_32() : 0; // PicoGUS
+    /* midi.sysex.start = time_us_32(); // PicoGUS */
     midi.cmd_pos=0;
     midi.cmd_len=0;
     midi.fakeallnotesoff=fakeallnotesoff>0;
