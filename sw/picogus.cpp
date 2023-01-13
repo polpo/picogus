@@ -291,7 +291,7 @@ int main()
         puts("I was reset due to power on reset or brownout detection.");
     } else if (*reset_reason & VREG_AND_CHIP_RESET_CHIP_RESET_HAD_RUN_BITS) {
         puts("I was reset due to the RUN pin (either manually or due to ISA RESET signal)");
-    } else if(*reset_reason & VREG_AND_CHIP_RESET_CHIP_RESET_HAD_POR_BITS) {
+    } else if(*reset_reason & VREG_AND_CHIP_RESET_CHIP_RESET_HAD_PSM_RESTART_BITS) {
         puts("I was reset due the debug port");
     }
 
@@ -311,85 +311,33 @@ int main()
     gpio_set_function(UART_TX_PIN, GPIO_FUNC_UART);
     busy_wait_ms(1000);
     MPU401_Init();
-#endif
+#endif // SOUND_MPU
 
 #ifdef PSRAM_CORE0
 #ifdef PSRAM
     puts("Initing PSRAM...");
     psram_spi = psram_spi_init(pio1, -1);
 #if TEST_PSRAM
-    puts("Writing PSRAM...");
-    uint8_t deadbeef[8] = {0xd, 0xe, 0xa, 0xd, 0xb, 0xe, 0xe, 0xf};
-    for (uint32_t addr = 0; addr < (1024 * 1024); ++addr) {
-        psram_write8(&psram_spi, addr, (addr & 0xFF));
-        // psram_write8_async(&psram_spi, addr, (addr & 0xFF));
-    }
-    puts("Reading PSRAM...");
-    uint32_t psram_begin = time_us_32();
-    for (uint32_t addr = 0; addr < (1024 * 1024); ++addr) {
-        uint8_t result = psram_read8(&psram_spi, addr);
-        if (static_cast<uint8_t>((addr & 0xFF)) != result) {
-            printf("\nPSRAM failure at address %x (%x != %x)\n", addr, addr & 0xFF, result);
-            err_blink();
-            return 1;
-        }
-    }
-    uint32_t psram_elapsed = time_us_32() - psram_begin;
-    float psram_speed = 1000000.0 * 1024.0 * 1024 / psram_elapsed;
-    printf("8 bit: PSRAM read 1MB in %d us, %d B/s (target 705600 B/s)\n", psram_elapsed, (uint32_t)psram_speed);
-
-    psram_begin = time_us_32();
-    for (uint32_t addr = 0; addr < (1024 * 1024); addr += 2) {
-        uint16_t result = psram_read16(&psram_spi, addr);
-        if (static_cast<uint16_t>(
-                (((addr + 1) & 0xFF) << 8) |
-                (addr & 0XFF)) != result
-        ) {
-            printf("PSRAM failure at address %x (%x != %x) ", addr, addr & 0xFF, result & 0xFF);
-            err_blink();
-            return 1;
-        }
-    }
-    psram_elapsed = (time_us_32() - psram_begin);
-    psram_speed = 1000000.0 * 1024 * 1024 / psram_elapsed;
-    printf("16 bit: PSRAM read 1MB in %d us, %d B/s (target 1411200 B/s)\n", psram_elapsed, (uint32_t)psram_speed);
-
-    psram_begin = time_us_32();
-    for (uint32_t addr = 0; addr < (1024 * 1024); addr += 4) {
-        uint32_t result = psram_read32(&psram_spi, addr);
-        if (static_cast<uint32_t>(
-                (((addr + 3) & 0xFF) << 24) |
-                (((addr + 2) & 0xFF) << 16) |
-                (((addr + 1) & 0xFF) << 8)  |
-                (addr & 0XFF)) != result
-        ) {
-            printf("PSRAM failure at address %x (%x != %x) ", addr, addr & 0xFF, result & 0xFF);
-            err_blink();
-            return 1;
-        }
-    }
-    psram_elapsed = (time_us_32() - psram_begin);
-    psram_speed = 1000000.0 * 1024 * 1024 / psram_elapsed;
-    printf("32 bit: PSRAM read 1MB in %d us, %d B/s (target 1411200 B/s)\n", psram_elapsed, (uint32_t)psram_speed);
-#endif
-#endif
-#endif
+    test_psram(&psram_spi);
+#endif // TEST_PSRAM
+#endif // PSRAM
+#endif // PSRAM_CORE0
 
 #ifdef SOUND_OPL
     puts("Creating OPL");
     OPL_Pico_Init(0x388);
     multicore_launch_core1(&play_adlib);
-#endif
+#endif // SOUND_OPL
 
 #ifdef SOUND_GUS
     printf("Creating GUS at port %x\n", GUS_PORT);
     GUS_OnReset(GUS_PORT);
     multicore_launch_core1(&play_gus);
-#endif
+#endif // SOUND_GUS
 
 #ifdef SOUND_MPU
     multicore_launch_core1(&play_mpu);
-#endif
+#endif // SOUND_MPU
 
     for(int i=AD0_PIN; i<(AD0_PIN + 10); ++i) {
         gpio_disable_pulls(i);
@@ -429,7 +377,7 @@ int main()
     iow_program_init(pio, iow_sm, iow_offset);
 
 #ifdef USE_IRQ
-    puts("Enabling IRQ");
+    puts("Enabling IRQ on ISA IOR/IOW events");
     // iow irq
     irq_set_enabled(PIO0_IRQ_0, false);
     pio_set_irq0_source_enabled(pio0, pis_sm0_rx_fifo_not_empty, true);

@@ -1485,7 +1485,8 @@ __force_inline void write_gus(Bitu port, Bitu val) {
     case 0x307:
         if ((myGUS.gDramAddr & myGUS.gDramAddrMask) < myGUS.memsize) {
 #ifdef PSRAM
-            psram_write8(&psram_spi, myGUS.gDramAddr & myGUS.gDramAddrMask, (uint8_t)val);
+            // psram_write8(&psram_spi, myGUS.gDramAddr & myGUS.gDramAddrMask, (uint8_t)val);
+            psram_write8_async(&psram_spi, myGUS.gDramAddr & myGUS.gDramAddrMask, (uint8_t)val);
 #else
             GUSRam[myGUS.gDramAddr & myGUS.gDramAddrMask] = (uint8_t)val;
 #endif
