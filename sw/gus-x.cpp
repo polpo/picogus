@@ -233,19 +233,13 @@ class GUSChannels {
         int32_t VolLeft;
         int32_t VolRight;
 
-        struct sample_cache_8 {
+        struct sample_cache_t {
+            uint8_t data[32];
             // Signed so it can hold -1 for invalid address
             int32_t addr;
-            uint16_t data;
+            int32_t addr_next;
         };
-        mutable sample_cache_8 cache_8;
-
-        struct sample_cache_16 {
-            // Signed so it can hold -1 for invalid address
-            int32_t addr;
-            uint32_t data;
-        };
-        mutable sample_cache_16 cache_16;
+        mutable sample_cache_t sample_cache;
 
         GUSChannels(uint8_t num) { 
             channum = num;
@@ -267,13 +261,11 @@ class GUSChannels {
             PanLeft = 0;
             PanRight = 0;
             PanPot = 0x7;
-            cache_8 = {-1, 0};
-            cache_16 = {-1, 0};
+            sample_cache = {{0}, -1, -1};
         }
 
         void ClearCache(void) {
-            cache_8.addr = -1;
-            cache_16.addr = -1;
+            sample_cache.addr = sample_cache.addr_next = -1;
         }
 
         INLINE int32_t LoadSample8(const uint32_t addr/*memory address without fractional bits*/) const {
@@ -309,40 +301,41 @@ class GUSChannels {
             int32_t high;
         };
 
-        INLINE sample32_pair LoadSamples8(const uint32_t addr/*memory address without fractional bits*/) const {
-            uint8_t_pair p;
-            if (cache_8.addr == addr) {
-                // putchar('.');
-                p.data16 = cache_8.data;
-            } else {
-                // putchar('!');
-                p.data16 = psram_read16(&psram_spi, addr & 0xFFFFFu/*1MB*/);
-                cache_8.addr = addr;
-                cache_8.data = p.data16;
+        INLINE uint8_t prime_cache(const uint32_t addr, const uint8_t threshold) const {
+            uint32_t addr_hi = addr & 0xffff0u;
+            uint8_t addr_part = addr & 0xfu;
+            if (sample_cache.addr != addr_hi) {
+                if (sample_cache.addr_next == addr_hi) {
+                    // We could avoid this memcpy by wrapping around the cache address... but I am tired
+                    memcpy(sample_cache.data, sample_cache.data + 16, 16);
+                } else {
+                    psram_read(&psram_spi, addr_hi, sample_cache.data, 16);
+                }
+                sample_cache.addr = addr_hi;
             }
-            // uint8_t_pair p = { .data16 = psram_read16(&psram_spi, addr & 0xFFFFFu/*1MB*/) };
+            // If we're about to read past the end of our cache, populate the other bank
+            uint32_t addr_next = ((addr_hi + 16) & 0xffff0u);
+            if (addr_part == threshold && sample_cache.addr_next != addr_next) {
+                psram_read(&psram_spi, addr_next, (sample_cache.data + 16), 16);
+                sample_cache.addr_next = addr_next;
+            }
+            return addr_part;
+        }
+
+        INLINE sample32_pair LoadSamples8(const uint32_t addr/*memory address without fractional bits*/) const {
+            const uint8_t addr_part = prime_cache(addr, 0xfu);
             return (struct sample32_pair){
-                .low = (int8_t)p.data8[0] << int32_t(8),
-                .high = (int8_t)p.data8[1] << int32_t(8)
+                .low = (int8_t)sample_cache.data[addr_part] << (int32_t)8,
+                .high = (int8_t)sample_cache.data[addr_part + 1] << (int32_t)8
             };
         }
 
         INLINE sample32_pair LoadSamples16(const uint32_t addr/*memory address without fractional bits*/) const {
             const uint32_t adjaddr = (addr & 0xC0000u/*256KB bank*/) | ((addr & 0x1FFFFu) << 1u/*16-bit sample value within bank*/);
-            uint16_t_pair p;
-            if (cache_16.addr == addr) {
-                // putchar('.');
-                p.data32 = cache_16.data;
-            } else {
-                // putchar('!');
-                p.data32 = psram_read32(&psram_spi, adjaddr);
-                cache_16.addr = addr;
-                cache_16.data = p.data32;
-            }
-            // uint16_t_pair p = { .data32 = psram_read32(&psram_spi, adjaddr) };
+            const uint8_t addr_part = prime_cache(adjaddr, 0xeu);
             return (struct sample32_pair){
-                .low = (int16_t)p.data16[0],
-                .high = (int16_t)p.data16[1]
+                .low = (int16_t)*(uint16_t*)(sample_cache.data + addr_part),
+                .high = (int16_t)*(uint16_t*)(sample_cache.data + addr_part + 2)
             };
         }
 #endif
@@ -1485,8 +1478,8 @@ __force_inline void write_gus(Bitu port, Bitu val) {
     case 0x307:
         if ((myGUS.gDramAddr & myGUS.gDramAddrMask) < myGUS.memsize) {
 #ifdef PSRAM
-            // psram_write8(&psram_spi, myGUS.gDramAddr & myGUS.gDramAddrMask, (uint8_t)val);
-            psram_write8_async(&psram_spi, myGUS.gDramAddr & myGUS.gDramAddrMask, (uint8_t)val);
+            psram_write8(&psram_spi, myGUS.gDramAddr & myGUS.gDramAddrMask, (uint8_t)val);
+            // psram_write8_async(&psram_spi, myGUS.gDramAddr & myGUS.gDramAddrMask, (uint8_t)val);
 #else
             GUSRam[myGUS.gDramAddr & myGUS.gDramAddrMask] = (uint8_t)val;
 #endif
