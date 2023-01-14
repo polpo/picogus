@@ -1,0 +1,3 @@
+[submodule "sw/rp2040-psram"]
+	path = sw/rp2040-psram
+	url = https://github.com/polpo/rp2040-psram.git
