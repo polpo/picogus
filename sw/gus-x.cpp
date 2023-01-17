@@ -1493,22 +1493,6 @@ __force_inline void write_gus(Bitu port, Bitu val) {
     }
 }
 
-//#if 0 // TODO implement DMA
-#if 0 // we aren't going to do it this way
-static constexpr Bitu GUS_Master_Clock = 617400; /* NOTE: This is 1000000Hz / 1.619695497. Seems to be a common base rate within the hardware. */
-static constexpr Bitu GUS_DMA_Event_transfer = 16; /* DMA words (8 or 16-bit) per interval */
-static constexpr Bitu GUS_DMA_Events_per_sec = 44100 / 4; /* cheat a little, to improve emulation performance */
-static constexpr uint32_t GUS_DMA_Event_interval = 1000000 / GUS_DMA_Events_per_sec;
-static constexpr uint32_t GUS_DMA_Event_interval_init = 1000000 / 44100;
-
-void GUS_Update_DMA_Event_transfer() {
-    /* NTS: From the GUS SDK, bits 3-4 of DMA Control divide the ISA DMA transfer rate down from "approx 650KHz".
-     *      Bits 3-4 are documented as "DMA Rate divisor" */
-    GUS_DMA_Event_transfer = GUS_Master_Clock / GUS_DMA_Events_per_sec / (Bitu)(((Bitu)(myGUS.DMAControl >> 3u) & 3u) + 1u);
-    GUS_DMA_Event_transfer &= ~1u; /* make sure it's word aligned in case of 16-bit PCM */
-    if (GUS_DMA_Event_transfer == 0) GUS_DMA_Event_transfer = 2;
-}
-#endif
 static bool GUS_DMA_Active = false;
 // static unsigned int GUS_DMA_step = 0;
 
@@ -1570,6 +1554,7 @@ void __force_inline GUS_DMA_Event_Transfer(/*DmaChannel *chan,Bitu dmawords*/) {
         }
         */
         GUS_CheckIRQ();
+        // Does DMA go forever until actually stopped? fascinating
         GUS_StopDMA();
     } else {
         ++myGUS.dmaAddr;
@@ -1580,30 +1565,19 @@ void __force_inline GUS_DMA_Event_Transfer(/*DmaChannel *chan,Bitu dmawords*/) {
 // #endif // 0 // TODO implement DMA
 
 // #if 0 // TODO implement DMA
-uint32_t 
 #ifdef POLLING_DMA
 static bool dma_waiting = false;
 __force_inline
 #endif
+uint32_t 
 GUS_DMA_Event(Bitu val) {
     (void)val;//UNUSED
 #ifndef POLLING_DMA
     static bool dma_waiting = false;
 #endif
-    /* stuff that has no bearing on a real card
-    DmaChannel *chan = GetDMAChannel(myGUS.dma1);
-    if (chan == NULL) {
-        DEBUG_LOG_MSG("GUS DMA event: DMA channel no longer exists, stopping DMA transfer events");
-        GUS_DMA_Active = false;
-        return;
+    if (!GUS_DMA_Active) {
+        return 0;
     }
-
-    if (chan->masked) {
-        DEBUG_LOG_MSG("GUS: Stopping DMA transfer interval, DMA masked=%u",chan->masked?1:0);
-        GUS_DMA_Active = false;
-        return;
-    }
-    */
 
     if (!(myGUS.DMAControl & 0x01/*DMA enable*/)) {
         puts("stopping");
@@ -1637,10 +1611,10 @@ GUS_DMA_Event(Bitu val) {
         // 10:6 μs–7 μs
         // 11:13 μs–14 μs
         // From ULTRAWRD: it's 650KHz with a divisor...
-        /*
+        return 18;
         switch ((myGUS.DMAControl >> 3u) & 3u) {
         case 0b00:
-            return 1;
+            return 3;
             break;
         case 0b01:
             return 3;
@@ -1652,8 +1626,6 @@ GUS_DMA_Event(Bitu val) {
             return 12;
             break;
         }
-        */
-        return 12;
     } else {
         GUS_DMA_Event_Start();
         dma_waiting = true;
@@ -1685,13 +1657,11 @@ void __force_inline process_dma(void) {
     if (!GUS_DMA_Active) {
         return;
     }
-    /*
     uint32_t cur_time = time_us_32();
     if (next_event && cur_time >= next_event) {
         next_event = cur_time + GUS_DMA_Event(2);
     }
-    */
-    GUS_DMA_Event(2);
+    // GUS_DMA_Event(2);
 }
 #endif
 
@@ -1705,7 +1675,7 @@ __force_inline void GUS_StartDMA() {
         // uart_print_hex_u32((myGUS.DMAControl >> 3u) & 3u);
         // uart_print_hex_u32(myGUS.dmaAddr);
 #ifndef POLLING_DMA
-        PIC_AddEvent(GUS_DMA_Event, 2, 2);
+        PIC_AddEvent(GUS_DMA_Event, 2, 13);
 #else
         next_event = time_us_32() + 2;
 #endif
