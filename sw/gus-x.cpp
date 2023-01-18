@@ -1565,16 +1565,13 @@ void __force_inline GUS_DMA_Event_Transfer(/*DmaChannel *chan,Bitu dmawords*/) {
 // #endif // 0 // TODO implement DMA
 
 // #if 0 // TODO implement DMA
-#ifdef POLLING_DMA
 static bool dma_waiting = false;
+#ifdef POLLING_DMA
 __force_inline
 #endif
 uint32_t 
 GUS_DMA_Event(Bitu val) {
     (void)val;//UNUSED
-#ifndef POLLING_DMA
-    static bool dma_waiting = false;
-#endif
     if (!GUS_DMA_Active) {
         return 0;
     }
@@ -1650,8 +1647,12 @@ __force_inline void GUS_StopDMA() {
     next_event = 0;
 #endif
     GUS_DMA_Active = false;
-    //*/ // TODO implement DMA
+    if (dma_waiting) {
+        DMA_Cancel_Write(&dma_config);
+        dma_waiting = false;
+    }
 }
+
 #ifdef POLLING_DMA
 void __force_inline process_dma(void) {
     if (!GUS_DMA_Active) {

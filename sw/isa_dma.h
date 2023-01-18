@@ -30,6 +30,10 @@ __force_inline void DMA_Start_Write(dma_inst_t* dma) {
     pio_sm_put_blocking(dma->pio, dma->sm, 0xffffffffu);  // Write 1s to kick off DMA process. note that these 1s are used to set TC flag in PIO!
 }
 
+__force_inline void DMA_Cancel_Write(dma_inst_t* dma) {
+    pio_sm_exec(dma->pio, dma->sm, pio_encode_jmp(dma->offset));
+}
+
 __force_inline bool DMA_Complete_Write(dma_inst_t* dma, uint32_t dmaaddr, bool invert_msb) {
     // pio_sm_put_blocking(dma->pio, dma->sm, 0xffffffffu);  // Write 1s to kick off DMA process. note that these 1s are used to set TC flag in PIO!
     // putchar('.');

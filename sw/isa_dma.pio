@@ -11,6 +11,8 @@
 ; budget: 12 instructions
 .program dma_write
 .side_set 2 opt                         ; sideset bit 1 is ADS, bit 0 is IOCHRDY
+restart:
+    set pins, 0                         ; deassert DRQ
 .wrap_target
     out x, 32                           ; wait to trigger DMA operation
     set pins, 1                         ; assert DRQ
