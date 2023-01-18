@@ -147,6 +147,8 @@ struct GFGus {
     uint16_t DMAControl; /* NTS: bit 8 for DMA TC IRQ status. Only bits [7:0] exist on real hardware.
                 We're taking the DOSBox SVN approach here (https://sourceforge.net/p/dosbox/code-0/4387/#diff-2) */
     uint32_t dmaAddr;
+    uint32_t dmaInterval;
+    bool dmaWaiting;
     uint8_t TimerControl;
     uint8_t SampControl;
     uint8_t mixControl;
@@ -781,6 +783,9 @@ static void GUSReset(void) {
         curchan = guschan[myGUS.gCurChannel];
 
         myGUS.dmaAddr = 0;
+        myGUS.dmaInterval = 0;
+        myGUS.dmaWaiting = false;
+
         myGUS.irqenabled = 0;
         myGUS.gRegControl = 0;
         myGUS.gDramAddr = 0;
@@ -1491,78 +1496,25 @@ __force_inline void write_gus(Bitu port, Bitu val) {
 }
 
 static bool GUS_DMA_Active = false;
-// static unsigned int GUS_DMA_step = 0;
 
-void __force_inline GUS_DMA_Event_Start(/*DmaChannel *chan,Bitu dmawords*/) {
+void __force_inline GUS_DMA_Event_Start() {
+    bool invert_msb = false;
+    if (myGUS.DMAControl & 0x80) {
+        if (myGUS.DMAControl & 0x40) {
+            // 16-bit data
+            if ((myGUS.dmaAddr & 0x1)) {
+                invert_msb = true;
+            }
+        } else {
+            invert_msb = true;
+        }
+    }
+    dma_config.invertMsb = invert_msb;
+
     DMA_Start_Write(&dma_config);
 }
 
-void __force_inline GUS_DMA_Event_Transfer(/*DmaChannel *chan,Bitu dmawords*/) {
-    // Bitu dmaaddr = (Bitu)(myGUS.dmaAddr) << 4ul; //+ (Bitu)myGUS.dmaAddrOffset;
-    // Bitu dmalimit = myGUS.memsize;
-    // unsigned int docount = 0;
 
-    // hack: some programs especially Gravis Ultrasound MIDI playback like to upload by DMA but never clear the DMA TC flag on the DMA controller.
-    // TODO let's see how this acts on "real" hardware
-    // bool saved_tcount = chan->tcount;
-    // chan->tcount = false;
-
-    bool is_tc;
-    if ((myGUS.DMAControl & 0x2) == 0) { // transfer direction = write
-        bool invert_msb = false;
-        if (myGUS.DMAControl & 0x80) {
-            if (myGUS.DMAControl & 0x40) {
-                // 16-bit data
-                if ((myGUS.dmaAddr & 0x1)) {
-                    invert_msb = true;
-                }
-            } else {
-                invert_msb = true;
-            }
-        }
-        // bool invert_msb = (myGUS.DMAControl & 0x80) && (!(myGUS.DMAControl & 0x40) || !(myGUS.dmaAddr & 0x1));
-
-        is_tc = DMA_Complete_Write(
-            &dma_config,
-            // dmaaddr + GUS_DMA_step,
-            myGUS.dmaAddr,
-            invert_msb
-        );
-    } else {
-        //Read data out of UltraSound
-        // curl up and die, we can't support read
-        puts("DMA read isn't supported on PicoGUS... sorry");
-        assert(false);
-    }
-
-    if (is_tc) {
-        // puts("is_tc");
-        // LOG_MSG("GUS DMA transfer hit Terminal Count, setting DMA TC IRQ pending");
-        // printf("step %u\n", step);
-        // uart_print_hex_u32(GUS_DMA_step);
-
-        /* Raise the TC irq, and stop DMA */
-        myGUS.DMAControl |= 0x100u; /* NTS: DOSBox SVN approach: Use bit 8 for DMA TC IRQ */
-        myGUS.IRQStatus |= 0x80;
-        // saved_tcount = true;
-        /*
-        if (!(myGUS.DMAControl & 0x20)) {
-            puts("DMA end without TC IRQ enabled");
-        }
-        */
-        GUS_CheckIRQ();
-        // Does DMA go forever until actually stopped? fascinating
-        GUS_StopDMA();
-    } else {
-        ++myGUS.dmaAddr;
-    }
-
-    // chan->tcount = saved_tcount;
-}
-// #endif // 0 // TODO implement DMA
-
-// #if 0 // TODO implement DMA
-static bool dma_waiting = false;
 #ifdef POLLING_DMA
 __force_inline
 #endif
@@ -1577,79 +1529,66 @@ GUS_DMA_Event(Bitu val) {
         puts("stopping");
         DEBUG_LOG_MSG("GUS DMA event: DMA control 'enable DMA' bit was reset, stopping DMA transfer events");
         GUS_DMA_Active = false;
-        dma_waiting = false;
         return 0;
     }
 
-    /*
-    DEBUG_LOG_MSG("GUS DMA event: max %u DMA words. DMA: tc=%u mask=%u cnt=%u",
-        (unsigned int)GUS_DMA_Event_transfer,
-        chan->tcount?1:0,
-        chan->masked?1:0,
-        chan->currcnt+1);
-    */
-    if (dma_waiting) {
-        if (pio_sm_is_rx_fifo_empty(dma_config.pio, dma_config.sm)) {
-            return 1;
-        }
-        GUS_DMA_Event_Transfer();
-        dma_waiting = false;
-        if (!GUS_DMA_Active) {
-            return 0;
-        }
-        /* keep going */
-        // From Interwave programmers guide:
-        // 00:0.5 μs–1.0 μs
-        // 01:6 μs–7 μs
-        // 10:6 μs–7 μs
-        // 11:13 μs–14 μs
-        // From ULTRAWRD: it's 650KHz with a divisor...
-        if (dma_interval) {
-            return dma_interval;
-        }
-        switch ((myGUS.DMAControl >> 3u) & 3u) {
-        case 0b00:
-            return 2;
-            break;
-        case 0b01:
-            return 3;
-            break;
-        case 0b10:
-            return 6;
-            break;
-        case 0b11:
-            return 12;
-            break;
-        }
-    } else {
-        GUS_DMA_Event_Start();
-        dma_waiting = true;
-        return 1;
-    }
+    myGUS.dmaWaiting = true;
+    GUS_DMA_Event_Start();
     return 0;
 }
-// #endif // 0 // TODO implement DMA
+
+void 
+GUS_DMA_isr() {
+    // Pull data from PIO even if we have to throw it away, because otherwise it will be stalled
+    const uint32_t dma_data = DMA_Complete_Write(&dma_config);
+    myGUS.dmaWaiting = false;
+
+    if (!GUS_DMA_Active) {
+        return;
+    }
+
+    if (!(myGUS.DMAControl & 0x01/*DMA enable*/)) {
+        puts("stopping");
+        DEBUG_LOG_MSG("GUS DMA event: DMA control 'enable DMA' bit was reset, stopping DMA transfer events");
+        GUS_DMA_Active = false;
+        return;
+    }
+
+    const uint8_t dma_data8 = dma_data & 0xffu;
+    psram_write8_async(&psram_spi, myGUS.dmaAddr, dma_config.invertMsb ? dma_data8 ^ 0x80 : dma_data8);
+
+    // uart_print_hex_u32(dma_data);
+    if (dma_data & 0x100u) { // if TC
+        /* Raise the TC irq, and stop DMA */
+        myGUS.DMAControl |= 0x100u; /* NTS: DOSBox SVN approach: Use bit 8 for DMA TC IRQ */
+        myGUS.IRQStatus |= 0x80;
+        GUS_StopDMA();
+        GUS_CheckIRQ();
+    } else {
+        ++myGUS.dmaAddr;
+        /* keep going */
+        PIC_AddEvent(GUS_DMA_Event, myGUS.dmaInterval, 2);
+    }
+}
 
 #ifdef POLLING_DMA
 static uint32_t next_event = 0;
 #endif
 
 __force_inline void GUS_StopDMA() {
-    ///* TODO implement DMA
-    // if (GUS_DMA_Active)
-    //     DEBUG_LOG_MSG("GUS: Stopping DMA transfer interval");
-
 #ifndef POLLING_DMA
     PIC_RemoveEvents(GUS_DMA_Event);
 #else
     next_event = 0;
 #endif
     GUS_DMA_Active = false;
-    if (dma_waiting) {
+    if (myGUS.dmaWaiting) {
+        // Reset the PIO
         DMA_Cancel_Write(&dma_config);
-        dma_waiting = false;
+        myGUS.dmaWaiting = false;
     }
 }
+
 
 #ifdef POLLING_DMA
 void __force_inline process_dma(void) {
@@ -1660,52 +1599,49 @@ void __force_inline process_dma(void) {
     if (next_event && cur_time >= next_event) {
         next_event = cur_time + GUS_DMA_Event(2);
     }
-    // GUS_DMA_Event(2);
 }
 #endif
 
 
 __force_inline void GUS_StartDMA() {
     ///* TODO implement DMA
-    if (!GUS_DMA_Active) {
-        GUS_DMA_Active = true;
-        DEBUG_LOG_MSG("GUS: Starting DMA transfer interval");
-        // PIC_AddEvent(GUS_DMA_Event, GUS_DMA_Event_interval_init, 2);
-        // uart_print_hex_u32((myGUS.DMAControl >> 3u) & 3u);
-        // uart_print_hex_u32(myGUS.dmaAddr);
+    if (GUS_DMA_Active) {
+        // DMA already started
+        return;
+    }
+    GUS_DMA_Active = true;
+    DEBUG_LOG_MSG("GUS: Starting DMA transfer interval");
+
+    // uart_print_hex_u32((myGUS.DMAControl >> 3u) & 3u);
+    // From Interwave programmers guide:
+    // 00:0.5 μs–1.0 μs
+    // 01:6 μs–7 μs
+    // 10:6 μs–7 μs
+    // 11:13 μs–14 μs
+    // From ULTRAWRD: it's 650KHz with a divisor...
+    switch ((myGUS.DMAControl >> 3u) & 3u) {
+    case 0b00:
+        myGUS.dmaInterval = 1;
+        break;
+    case 0b01:
+        myGUS.dmaInterval = 3;
+        break;
+    case 0b10:
+        myGUS.dmaInterval = 6;
+        break;
+    case 0b11:
+        myGUS.dmaInterval = 12;
+        break;
+    }
+    // myGUS.dmaInterval = 8;
+    
 #ifndef POLLING_DMA
-        PIC_AddEvent(GUS_DMA_Event, 2, 13);
+    PIC_AddEvent(GUS_DMA_Event, 13, 2);
 #else
-        next_event = time_us_32() + 2;
+    next_event = time_us_32() + 2;
 #endif
-
-        /* can't do shit about this
-        if (GetDMAChannel(myGUS.dma1)->masked)
-            LOG(LOG_MISC,LOG_WARN)("GUS: DMA transfer interval started when channel is masked");
-
-        if (gus_warn_dma_conflict)
-            LOG(LOG_MISC,LOG_WARN)(
-                "GUS warning: Both DMA channels set to the same channel WITHOUT combining! "
-                "This is documented to cause bus conflicts on real hardware");
-        */
-    }
-    //*/ // TODO implement DMA
 }
 
-//#if 0 // TODO implement DMA
-#if 0 // we aren't going to do it this way
-static void GUS_DMA_Callback(/*DmaChannel * chan,*/DMAEvent event) {
-    // (void)chan;//UNUSED
-    if (event == DMA_UNMASKED) {
-        DEBUG_LOG_MSG("GUS: DMA unmasked");
-        if (myGUS.DMAControl & 0x01/*DMA enable*/) GUS_StartDMA();
-    }
-    else if (event == DMA_MASKED) {
-        DEBUG_LOG_MSG("GUS: DMA masked. Perhaps it will stop the DMA transfer event.");
-    }
-}
-#endif
-//#endif // 0 // TODO implement DMA
 
 int32_t buffer[MIXER_BUFSIZE][2];
 extern uint32_t GUS_CallBack(Bitu max_len, int16_t* play_buffer) {

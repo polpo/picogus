@@ -16,20 +16,18 @@ restart:
 .wrap_target
     out x, 32                           ; wait to trigger DMA operation
     set pins, 1                         ; assert DRQ
-    wait 1 gpio DACK_PIN                ; DACK faling edge
+    wait 1 gpio DACK_PIN                ; DACK faling edge - no sideset up to this point as it could interfere with isa_io.pio
     set pins, 0          side 0b10      ; deassert DRQ, muxes to data
     wait 0 gpio IOW_PIN  side 0b10      ; wait for IOW assert
-    jmp pin tc_flag      side 0b10      ; if TC high, transfer is over. muxes back to addr
+    jmp pin tc_flag      side 0b10      ; if TC high, transfer is over
     in null, 24          side 0b10      ; write 0 to TC flag, autopush
-wait_dack:
-    wait 1 gpio IOW_PIN  side 0b10      ; DACK rising edge, no sideset to carry over from the IN instruction we came from
-    in pins, 8           side 0b00      ; input data, deassert IOCHRDY if we stall on full FIFO
-    ;out null, 32         side 0b01      ; wait for write to complete
-    ;nop                  side 0b00
+wait_iow:
+    wait 1 gpio IOW_PIN  side 0b10      ; wait for IOW deassert
+    in pins, 8           side 0b00      ; input data, muxes back to addr
 .wrap
 tc_flag:
     in x, 24             side 0b10      ; set TC flag, autopush, set ADS back to addr. X is full o' 1s
-    jmp wait_dack        side 0b10
+    jmp wait_iow         side 0b10
 
 % c-sdk {
 static inline void dma_write_program_init(PIO pio, uint sm, uint offset) {

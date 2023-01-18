@@ -507,7 +507,7 @@ int main()
 
 #ifdef SOUND_GUS
     puts("Initing ISA DMA PIO...");
-    dma_config = DMA_init(pio);
+    dma_config = DMA_init(pio, GUS_DMA_isr);
 #endif
 
     gpio_xor_mask(1u << LED_PIN);

@@ -54,7 +54,7 @@ if(PROJECT_TYPE STREQUAL "GUS")
         set(GUS_DEFAULT_PORT "0x240")
     endif()
     pico_set_program_name(picogus "picogus-gus")
-    target_sources(picogus PRIVATE gusplay.cpp pico_pic.c)
+    target_sources(picogus PRIVATE gusplay.cpp pico_pic.c isa_dma.c)
     target_compile_definitions(picogus PRIVATE
         SOUND_GUS=1
         GUS_DEFAULT_PORT=${GUS_DEFAULT_PORT}
