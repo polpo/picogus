@@ -23,7 +23,7 @@ build () {
     local EXTRA_CMAKE="$3"
 
     cd "$BUILD_DIR"
-    cmake .. -DPROJECT_TYPE=$PROJECT_TYPE $EXTRA_CMAKE
+    cmake .. --fresh -DPROJECT_TYPE=$PROJECT_TYPE $EXTRA_CMAKE
     make clean && make -j
     cp picogus.uf2 "$STAGING_DIR"/pg-$FW_SUFFIX.uf2
 }
