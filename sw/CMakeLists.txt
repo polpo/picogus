@@ -14,7 +14,7 @@ include(pico_sdk_import.cmake)
 include(pico_extras_import.cmake)
 
 project(picogus
-    VERSION "0.2.99"
+    VERSION "0.3.0"
     LANGUAGES C CXX ASM
 )
 
