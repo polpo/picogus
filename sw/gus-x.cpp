@@ -128,6 +128,7 @@ static bool gus_warn_irq_conflict = false;
 static bool gus_warn_dma_conflict = false;
 
 static uint32_t buffer_size = 16;
+static uint32_t dma_interval = 0;
 
 class GUSChannels;
 static void CheckVoiceIrq(void);
@@ -1303,10 +1304,6 @@ __force_inline void write_gus(Bitu port, Bitu val) {
         myGUS.ChangeIRQDMA = true;
         // return;
         break;
-    case 0x202:
-        // PICOGUS special port to set audio buffer size
-        buffer_size = val + 1;
-        break;
     case 0x208:
         adlib_commandreg = (uint8_t)val;
         break;
@@ -1601,17 +1598,18 @@ GUS_DMA_Event(Bitu val) {
             return 0;
         }
         /* keep going */
-        // PIC_AddEvent(GUS_DMA_Event,GUS_DMA_Event_interval, 2);
         // From Interwave programmers guide:
         // 00:0.5 μs–1.0 μs
         // 01:6 μs–7 μs
         // 10:6 μs–7 μs
         // 11:13 μs–14 μs
         // From ULTRAWRD: it's 650KHz with a divisor...
-        return 18;
+        if (dma_interval) {
+            return dma_interval;
+        }
         switch ((myGUS.DMAControl >> 3u) & 3u) {
         case 0b00:
-            return 3;
+            return 2;
             break;
         case 0b01:
             return 3;
@@ -1860,6 +1858,21 @@ static void MakeTables(void) {
         ((double)pantable[15]) / (1 << RAMP_FRACT));
 }
 
+
+void GUS_SetPort(uint16_t base_port) {
+    printf("GUS: setting port to %x\n", base_port);
+    myGUS.portbase = base_port - 0x200u;
+}
+void GUS_SetAudioBuffer(uint16_t new_buffer_size) {
+    // PICOGUS special port to set audio buffer size
+    buffer_size = new_buffer_size;
+}
+void GUS_SetDMAInterval(uint16_t new_dma_interval) {
+    // PICOGUS special port to set audio buffer size
+    dma_interval = new_dma_interval;
+}
+
+
 class GUS/*:public Module_base*/{
 private:
     bool gus_enable;
@@ -1896,7 +1909,7 @@ public:
         myGUS.masterVolume = 0.00;
         myGUS.updateMasterVolume();
 
-        myGUS.portbase = base_port - 0x200u;
+        GUS_SetPort(base_port);
 
        // DmaChannels[myGUS.dma1]->Register_TC_Callback(GUS_DMA_TC_Callback);
     

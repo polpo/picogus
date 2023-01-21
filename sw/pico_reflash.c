@@ -2,6 +2,7 @@
 
 #include <stdio.h>
 #include <hardware/flash.h>
+#include "pico/multicore.h"
 
 static union {
     uint8_t buf[512];
@@ -37,13 +38,16 @@ void pico_firmware_process_block(void)
     }
     if (pico_firmware_curBlock == 0) {
         puts("Starting firmware write...");
+        multicore_reset_core1();
         pico_firmware_numBlocks = uf2_buf.uf2.numBlocks;
+        printf("numBlocks: %u\n", pico_firmware_numBlocks);
         pico_firmware_payloadSize = uf2_buf.uf2.payloadSize;
         uint32_t totalSize = pico_firmware_numBlocks * pico_firmware_payloadSize;
         // Point of no return... erasing the flash!
         flash_range_erase(0, (totalSize / 4096) * 4096 + 4096);
     }
-    flash_range_program(0, uf2_buf.uf2.data, pico_firmware_payloadSize);
+    flash_range_program(pico_firmware_curBlock * pico_firmware_payloadSize, uf2_buf.uf2.data, pico_firmware_payloadSize);
+    printf("curBlock: %u\n", pico_firmware_curBlock);
     ++pico_firmware_curBlock;
     if (pico_firmware_curBlock == pico_firmware_numBlocks) {
         // Final block has been written

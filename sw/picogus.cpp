@@ -24,6 +24,7 @@ psram_spi_inst_t* async_spi_inst;
 
 #ifdef SOUND_OPL
 #include "opl.h"
+static uint16_t basePort = 0x388u;
 
 void play_adlib(void);
 extern "C" int OPL_Pico_Init(unsigned int);
@@ -36,15 +37,27 @@ extern "C" unsigned int OPL_Pico_PortRead(opl_port_t);
 
 #include "isa_dma.h"
 dma_inst_t dma_config;
-
-constexpr uint16_t GUS_PORT_TEST = GUS_PORT >> 4 | 0x10;
+static uint16_t basePort = GUS_DEFAULT_PORT;
+static uint16_t gus_port_test = basePort >> 4 | 0x10;
 void play_gus(void);
 #endif
 
 #ifdef SOUND_MPU
 #include "mpu401/export.h"
+static uint16_t basePort = 0x330u;
 void play_mpu(void);
 #endif
+
+// PicoGUS control and data ports
+// 1D0 chosen as the base port as nothing is listed in Ralf Brown's Port List (http://www.cs.cmu.edu/~ralf/files.html)
+#define CONTROL_PORT 0x1D0
+#define DATA_PORT_LOW  0x1D1
+#define DATA_PORT_HIGH 0x1D2
+#define PICOGUS_PROTOCOL_VER 1
+static bool control_active = false;
+static uint8_t sel_reg = 0;
+static uint16_t cur_data = 0;
+static uint32_t cur_read = 0;
 
 constexpr uint LED_PIN = PICO_DEFAULT_LED_PIN;
 
@@ -52,38 +65,132 @@ static uint iow_sm;
 static uint ior_sm;
 static uint ior_write_sm;
 
-static uint8_t sel_reg = 0;
-static uint32_t cur_read = 0;
-
 const char* firmware_string = PICO_PROGRAM_NAME " v" PICO_PROGRAM_VERSION_STRING;
 
-__force_inline void write_picogus(uint8_t value) {
+uint16_t basePort_tmp;
+
+__force_inline void select_picogus(uint8_t value) {
+    // printf("select picogus %x\n", value);
+    sel_reg = value;
     switch (sel_reg) {
-    case 0xff:
-        // Write new firmware
+    case 0x00: // Magic string
+    case 0x01: // Protocol version
+        break;
+    case 0x02: // Firmware string
+        cur_read = 0;
+        break;
+    case 0x03: // Mode (GUS, OPL, MPU, etc...)
+        break;
+    case 0x04: // Base port
+        basePort_tmp = 0;
+        break;
+#ifdef SOUND_GUS
+    case 0x10: // Audio buffer size
+    case 0x11: // DMA interval
+        break;
+#endif
+    case 0xFF: // Firmware write mode
+        pico_firmware_stop(PICO_FIRMWARE_IDLE);
+        break;
+    default:
+        control_active = false;
+        break;
+    }
+}
+
+__force_inline void write_picogus_low(uint8_t value) {
+    switch (sel_reg) {
+    case 0x04: // Base port
+        basePort_tmp = value;
+        break;
+    }
+}
+
+__force_inline void write_picogus_high(uint8_t value) {
+    switch (sel_reg) {
+    case 0x04: // Base port
+        basePort = (value << 8) | basePort_tmp;
+#ifdef SOUND_GUS
+        gus_port_test = basePort >> 4 | 0x10;
+        GUS_SetPort(basePort);
+#endif
+        break;
+#ifdef SOUND_GUS
+    case 0x10: // Audio buffer size
+        GUS_SetAudioBuffer(value);
+        break;
+    case 0x11: // DMA interval
+        GUS_SetDMAInterval(value);
+        break;
+#endif
+    case 0xff: // Firmware write
         pico_firmware_write(value);
         break;
     }
 }
 
-__force_inline uint8_t read_picogus(void) {
+__force_inline uint8_t read_picogus_low(void) {
+    switch (sel_reg) {
+    case 0x04: // Base port
+#if defined(SOUND_GUS) || defined(SOUND_OPL) || defined(SOUND_MPU)
+        return basePort & 0xff;
+#else
+        return 0xff;
+#endif
+        break;
+    default:
+        return 0x0;
+    }
+}
+
+__force_inline uint8_t read_picogus_high(void) {
     uint8_t ret;
     switch (sel_reg) {
-    case 0x00:
+    case 0x00:  // PicoGUS magic string
         return 0xdd;
-    case 0x01:
+        break;
+    case 0x01:  // PicoGUS magic string
+        return PICOGUS_PROTOCOL_VER;
+        break;
+    case 0x02: // Firmware string
         ret = firmware_string[cur_read++];
         if (ret == 0) { // Null terminated
             cur_read = 0;
         }
         return ret;
+        break;
+    case 0x03: // Mode (GUS, OPL, MPU, etc...)
+#if defined(SOUND_GUS)
+        return 0;
+#elif defined(SOUND_OPL)
+        return 1;
+#elif defined(SOUND_MPU)
+        return 2;
+#else
+        return 0xff;
+#endif
+        break;
+    case 0x04: // Base port
+#if defined(SOUND_GUS) || defined(SOUND_OPL) || defined(SOUND_MPU)
+        return basePort >> 8;
+#else
+        return 0xff;
+#endif
+        break;
     case 0xff:
         // Get status of firmware write
         return pico_firmware_getStatus();
+        break;
     default:
         return 0xff;
+        break;
     }
 }
+
+static constexpr uint32_t IO_WAIT = 0xffffffffu;
+static constexpr uint32_t IO_END = 0x0u;
+// OR with 0x0000ff00 is required to set pindirs in the PIO
+static constexpr uint32_t IOR_SET_VALUE = 0x0000ff00u;
 
 __force_inline void handle_iow(void) {
     uint32_t iow_read = pio_sm_get(pio0, iow_sm); //>> 16;
@@ -91,20 +198,20 @@ __force_inline void handle_iow(void) {
     // printf("IOW: %x\n", iow_read);
     uint16_t port = (iow_read >> 8) & 0x3FF;
 #ifdef SOUND_GUS
-    if ((port >> 4 | 0x10) == GUS_PORT_TEST) {
+    if ((port >> 4 | 0x10) == gus_port_test) {
         bool fast_write = false;
-        switch (port) {
-        case GUS_PORT + 0x8:
-        case GUS_PORT + 0x102:
-        case GUS_PORT + 0x103:
-        case GUS_PORT + 0x104:
+        switch (port - basePort) {
+        case 0x8:
+        case 0x102:
+        case 0x103:
+        case 0x104:
             // Fast write, don't set iochrdy by writing 0
-            pio_sm_put(pio0, iow_sm, 0x0u);
+            pio_sm_put(pio0, iow_sm, IO_END);
             fast_write = true;
             break;
         default:
             // Slow write, set iochrdy by writing non-0
-            pio_sm_put(pio0, iow_sm, 0xffffffffu);
+            pio_sm_put(pio0, iow_sm, IO_WAIT);
             break;
         }
         // uint32_t value = iow_read & 0xFF;
@@ -129,33 +236,30 @@ __force_inline void handle_iow(void) {
     }
 #endif // SOUND_GUS
 #ifdef SOUND_OPL
-    switch (port) {
-    case 0x388:
+    switch (port - basePort) {
+    case 0:
         // Fast write
-        pio_sm_put(pio0, iow_sm, 0x0u);
+        pio_sm_put(pio0, iow_sm, IO_END);
         OPL_Pico_PortWrite(OPL_REGISTER_PORT, iow_read & 0xFF);
         // Fast write - return early as we've already written 0x0u to the PIO
         return;
         break;
-    case 0x389:
-        pio_sm_put(pio0, iow_sm, 0xffffffffu);
+    case 1:
+        pio_sm_put(pio0, iow_sm, IO_WAIT);
         OPL_Pico_PortWrite(OPL_DATA_PORT, iow_read & 0xFF);
         __dsb();
-        // Tell PIO that we are done
-        // putchar(iow_read & 0xFF);
-        // printf("%x", iow_read);
         break;
     }
 #endif // SOUND_OPL
 #ifdef SOUND_MPU
-    switch (port) {
-    case 0x330:
-        pio_sm_put(pio0, iow_sm, 0xffffffffu);
+    switch (port - basePort) {
+    case 0:
+        pio_sm_put(pio0, iow_sm, IO_WAIT);
         // printf("MPU IOW: port: %x value: %x\n", port, iow_read & 0xFF);
         MPU401_WriteData(iow_read & 0xFF, true);
         break;
-    case 0x331:
-        pio_sm_put(pio0, iow_sm, 0xffffffffu);
+    case 1:
+        pio_sm_put(pio0, iow_sm, IO_WAIT);
         MPU401_WriteCommand(iow_read & 0xFF, true);
         // printf("MPU IOW: port: %x value: %x\n", port, iow_read & 0xFF);
         __dsb();
@@ -163,83 +267,92 @@ __force_inline void handle_iow(void) {
     }
 #endif // SOUND_MPU
     // PicoGUS control
-    if (port == 0x2D0) {
-        pio_sm_put(pio0, iow_sm, 0x0u);
-        sel_reg = iow_read & 0xFF;
-        switch (sel_reg) {
-        case 0x01:
-            cur_read = 0;
-            break;
-        case 0xFF:
-            pico_firmware_stop(PICO_FIRMWARE_IDLE);
-            break;
+    if (port == CONTROL_PORT) {
+        pio_sm_put(pio0, iow_sm, IO_WAIT);
+        // printf("iow control port: %x %d\n", iow_read & 0xff, control_active);
+        if ((iow_read & 0xFF) == 0xCC) {
+            // printf("activate ");
+            control_active = true;
+        } else if (control_active) {
+            select_picogus(iow_read & 0xFF);
         }
-        // Fast write - return early
+    } else if (port == DATA_PORT_LOW) {
+        pio_sm_put(pio0, iow_sm, IO_END);
+        if (control_active) {
+            write_picogus_low(iow_read & 0xFF);
+        }
+        // Fast write - return early as we've already written 0x0u to the PIO
         return;
-    } else if (port == 0x2D1) {
-        pio_sm_put(pio0, iow_sm, 0xffffffffu);
-        write_picogus(iow_read & 0xFF);
+    } else if (port == DATA_PORT_HIGH) {
+        // printf("iow data port: %x\n", iow_read & 0xff);
+        pio_sm_put(pio0, iow_sm, IO_WAIT);
+        if (control_active) {
+            write_picogus_high(iow_read & 0xFF);
+        }
     }
     // Fallthrough if no match, or for slow write, reset PIO
-    pio_sm_put(pio0, iow_sm, 0x0u);
+    pio_sm_put(pio0, iow_sm, IO_END);
 }
 
 __force_inline void handle_ior(void) {
-    uint32_t ior_read = pio_sm_get(pio0, ior_sm);
-    uint16_t port = ior_read & 0x3FF;
+    uint16_t port = pio_sm_get(pio0, ior_sm) & 0x3FF;
     // printf("IOR: %x\n", port);
     //
 #if defined(SOUND_GUS)
-    if ((port >> 4 | 0x10) == GUS_PORT_TEST) {
+    if ((port >> 4 | 0x10) == gus_port_test) {
         // Tell PIO to wait for data
-        pio_sm_put(pio0, ior_sm, 0xffffffffu);
+        pio_sm_put(pio0, ior_sm, IO_WAIT);
         uint32_t value = read_gus(port) & 0xff;
         // OR with 0x00ffff00 is required to set pindirs in the PIO
         // pio_sm_put(pio0, ior_sm, 0x00ffff00u | value);
-        pio_sm_put(pio0, ior_sm, 0x0000ff00u | value);
+        pio_sm_put(pio0, ior_sm, IOR_SET_VALUE | value);
         // printf("GUS IOR: port: %x value: %x\n", port, value);
         // gpio_xor_mask(1u << LED_PIN);
     }
 #elif defined(SOUND_OPL)
-    if (port == 0x388) {
+    if (port == basePort) {
         // Tell PIO to wait for data
-        pio_sm_put(pio0, ior_sm, 0xffffffffu);
+        pio_sm_put(pio0, ior_sm, IO_WAIT);
         uint32_t value = OPL_Pico_PortRead(OPL_REGISTER_PORT);
         // OR with 0x00ffff00 is required to set pindirs in the PIO
-        pio_sm_put(pio0, ior_sm, 0x0000ff00u | value);
+        pio_sm_put(pio0, ior_sm, IOR_SET_VALUE | value);
     }
 #elif defined(SOUND_MPU)
-    if (port == 0x330) {
+    if (port == basePort) {
         // Tell PIO to wait for data
-        pio_sm_put(pio0, ior_sm, 0xffffffffu);
+        pio_sm_put(pio0, ior_sm, IO_WAIT);
         uint32_t value = MPU401_ReadData();
         // printf("MPU IOR: port: %x value: %x\n", port, value);
         // OR with 0x00ffff00 is required to set pindirs in the PIO
-        pio_sm_put(pio0, ior_sm, 0x0000ff00u | value);
-    } else if (port == 0x331) {
+        pio_sm_put(pio0, ior_sm, IOR_SET_VALUE | value);
+    } else if (port == basePort + 1) {
         // Tell PIO to wait for data
-        pio_sm_put(pio0, ior_sm, 0xffffffffu);
+        pio_sm_put(pio0, ior_sm, IO_WAIT);
         uint32_t value = MPU401_ReadStatus();
         // printf("MPU IOR: port: %x value: %x\n", port, value);
         // OR with 0x00ffff00 is required to set pindirs in the PIO
-        pio_sm_put(pio0, ior_sm, 0x0000ff00u | value);
+        pio_sm_put(pio0, ior_sm, IOR_SET_VALUE | value);
     }
 #endif
-    else if (port == 0x2D0) {
+    else if (port == CONTROL_PORT) {
         // Tell PIO to wait for data
-        pio_sm_put(pio0, ior_sm, 0xffffffffu);
+        pio_sm_put(pio0, ior_sm, IO_WAIT);
         uint32_t value = sel_reg;
         // OR with 0x00ffff00 is required to set pindirs in the PIO
-        pio_sm_put(pio0, ior_sm, 0x00ffff00u | value);
-    } else if (port == 0x2D1) {
+        pio_sm_put(pio0, ior_sm, IOR_SET_VALUE | value);
+    } else if (port == DATA_PORT_LOW) {
         // Tell PIO to wait for data
-        pio_sm_put(pio0, ior_sm, 0xffffffffu);
-        uint32_t value = read_picogus();
+        pio_sm_put(pio0, ior_sm, IO_WAIT);
+        uint32_t value = read_picogus_low();
         // OR with 0x00ffff00 is required to set pindirs in the PIO
-        pio_sm_put(pio0, ior_sm, 0x00ffff00u | value);
+        pio_sm_put(pio0, ior_sm, IOR_SET_VALUE | value);
+    } else if (port == DATA_PORT_HIGH) {
+        pio_sm_put(pio0, ior_sm, IO_WAIT);
+        uint32_t value = read_picogus_high();
+        pio_sm_put(pio0, ior_sm, IOR_SET_VALUE | value);
     } else {
         // Reset PIO
-        pio_sm_put(pio0, ior_sm, 0x0u);
+        pio_sm_put(pio0, ior_sm, IO_END);
     }
 }
 
@@ -325,13 +438,13 @@ int main()
 
 #ifdef SOUND_OPL
     puts("Creating OPL");
-    OPL_Pico_Init(0x388);
+    OPL_Pico_Init(basePort);
     multicore_launch_core1(&play_adlib);
 #endif // SOUND_OPL
 
 #ifdef SOUND_GUS
-    printf("Creating GUS at port %x\n", GUS_PORT);
-    GUS_OnReset(GUS_PORT);
+    printf("Creating GUS at port %x\n", basePort);
+    GUS_OnReset(basePort);
     multicore_launch_core1(&play_gus);
 #endif // SOUND_GUS
 

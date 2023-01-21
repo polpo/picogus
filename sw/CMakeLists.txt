@@ -14,7 +14,7 @@ include(pico_sdk_import.cmake)
 include(pico_extras_import.cmake)
 
 project(picogus
-    VERSION "0.3.99"
+    VERSION "0.2.99"
     LANGUAGES C CXX ASM
 )
 
@@ -50,14 +50,14 @@ add_compile_definitions(
 target_sources(picogus PRIVATE pico_reflash.c)
 
 if(PROJECT_TYPE STREQUAL "GUS")
-    if(NOT GUS_PORT)
-        set(GUS_PORT "0x240")
+    if(NOT GUS_DEFAULT_PORT)
+        set(GUS_DEFAULT_PORT "0x240")
     endif()
     pico_set_program_name(picogus "picogus-gus")
     target_sources(picogus PRIVATE gusplay.cpp pico_pic.c)
     target_compile_definitions(picogus PRIVATE
         SOUND_GUS=1
-        GUS_PORT=${GUS_PORT}
+        GUS_DEFAULT_PORT=${GUS_DEFAULT_PORT}
         PSRAM=1
         TEST_PSRAM=1
         PSRAM_ASYNC=1
@@ -154,4 +154,4 @@ add_custom_target(
 )
 
 unset(PROJECT_TYPE CACHE)
-unset(GUS_PORT CACHE)
+unset(GUS_DEFAULT_PORT CACHE)
