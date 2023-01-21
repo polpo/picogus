@@ -1,6 +1,9 @@
 .DS_Store
-*.EXE
-*.OBJ
+*.exe
+*.obj
+*.o
+*.zip
+staging_dir
 build
 fp-info-cache
 PicoGUS-backups
