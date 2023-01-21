@@ -25,7 +25,7 @@ build () {
     cd "$BUILD_DIR"
     cmake .. -DPROJECT_TYPE=$PROJECT_TYPE $EXTRA_CMAKE
     make clean && make -j
-    cp picogus.uf2 "$STAGING_DIR"/picogus-$FW_SUFFIX.uf2
+    cp picogus.uf2 "$STAGING_DIR"/pg-$FW_SUFFIX.uf2
 }
 
 # Build pgusinit
@@ -46,11 +46,9 @@ cp pgusinit.exe "$STAGING_DIR"
 cd -
 
 # Build picogus releases
-build GUS "gus_220" "-DGUS_PORT=0x220"
-build GUS "gus_240" "-DGUS_PORT=0x240"
-build GUS "gus_260" "-DGUS_PORT=0x260"
+build GUS "gus" "-DGUS_DEFAULT_PORT=0x240"
 build OPL "adlib"
-build MPU "mpu401"
+build MPU "mpu"
 
 # Create zip file
 cd "$STAGING_DIR"
