@@ -197,7 +197,7 @@ int write_firmware(const char* fw_filename) {
 
     // Wait for card to reboot
     printf("\nProgramming complete. Waiting for the card to reboot...\n");
-    sleep(3);
+    sleep(2);
     if (inp(DATA_PORT_HIGH) != 0xDD) {
         fprintf(stderr, "ERROR: card is not alive after programming firmware\n");
         return 99;
