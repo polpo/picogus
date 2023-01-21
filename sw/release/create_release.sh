@@ -43,6 +43,7 @@ export INCLUDE="$WATCOM"/h
 make -f Makefile-cross clean
 make -f Makefile-cross
 cp pgusinit.exe "$STAGING_DIR"
+cp README.md "$STAGING_DIR"
 cd -
 
 # Build picogus releases
