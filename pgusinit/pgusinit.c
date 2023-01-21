@@ -6,9 +6,10 @@
 #include <stdint.h>
 #include <i86.h>
 
-#define CONTROL_PORT 0x2D0
-#define DATA_PORT_LOW  0x2D1
-#define DATA_PORT_HIGH 0x2D2
+#define CONTROL_PORT 0x1D0
+#define DATA_PORT_LOW  0x1D1
+#define DATA_PORT_HIGH 0x1D2
+#define PICOGUS_PROTOCOL_VER 1
 
 typedef enum {
     PICO_FIRMWARE_IDLE = 0,
@@ -31,10 +32,10 @@ void usage(void) {
     fprintf(stderr, "Options:\n");
     fprintf(stderr, "    /?   - show this message\n");
     fprintf(stderr, "    /f fw.uf2 - Program the PicoGUS with the firmware file fw.uf2.\n");
-    fprintf(stderr, "AdLib and MPU-401 mode only:");
+    fprintf(stderr, "AdLib and MPU-401 mode only:\n");
     fprintf(stderr, "    /b x - set the base address of the emulated card. Defaults:\n");
     fprintf(stderr, "           AdLib: 388; MPU-401: 330\n");
-    fprintf(stderr, "GUS mode only:");
+    fprintf(stderr, "GUS mode only:\n");
     fprintf(stderr, "    /a n - set audio buffer to n samples. Default: 16, Min: 8, Max: 256\n");
     fprintf(stderr, "           (tweaking this can help programs that hang or have audio glitches)\n");
     fprintf(stderr, "    /d n - force DMA interval to n ms. Default: 0, Min: 1, Max: 256\n");
@@ -43,7 +44,7 @@ void usage(void) {
     fprintf(stderr, "The ULTRASND environment variable must be set in the following format:\n");
     fprintf(stderr, "\tset ULTRASND=xxx,y,n,z,n\n");
     fprintf(stderr, "Where xxx = port, y = DMA, z = IRQ. n is ignored.\n");
-    fprintf(stderr, "Port is set on the card according to ULTRASND; DMA and IRQ configued via jumper.\n");
+    fprintf(stderr, "Port is set on the card according to ULTRASND; DMA and IRQ configued via jumper.");
     //              "................................................................................\n"
 }
 
@@ -56,6 +57,12 @@ void err_ultrasnd(void) {
 
 void err_pigus(void) {
     fprintf(stderr, "ERROR: no PicoGUS detected!\n"); 
+}
+
+
+void err_protocol(uint8_t expected, uint8_t got) {
+    fprintf(stderr, "ERROR: PicoGUS card using protocol %u, needs %u\n", expected, got); 
+    fprintf(stderr, "Please run the latest PicoGUS firmware and pgusinit.exe versions together!\n");
 }
 
 
@@ -77,6 +84,8 @@ int init_gus(void) {
         return 2;
     }
 
+    outp(CONTROL_PORT, 0x04); // Select port register
+    outpw(DATA_PORT_LOW, port); // Write port
 
     // Detect if there's something GUS-like...
     // Set memory address to 0
@@ -88,10 +97,10 @@ int init_gus(void) {
     outp(port + 0x107, 0xDD);
     // Read it and see if it's the same
     if (inp(port + 0x107) != 0xDD) {
-        err_pigus();
+        fprintf(stderr, "ERROR: Card not responding to GUS commands on port %x\n", port); 
         return 98;
     }
-    printf("GUS-like card detected...\n");
+    printf("GUS-like card detected on port %x...\n", port);
 
     // Enable IRQ latches
     outp(port, 0x8);
@@ -104,7 +113,7 @@ int init_gus(void) {
 
 void print_firmware_string(void) {
     outp(CONTROL_PORT, 0xCC); // Knock on the door...
-    outp(CONTROL_PORT, 0x01); // Select firmware string register
+    outp(CONTROL_PORT, 0x02); // Select firmware string register
 
     char firmware_string[256] = {0};
     for (int i = 0; i < 255; ++i) {
@@ -193,7 +202,7 @@ int write_firmware(const char* fw_filename) {
         fprintf(stderr, "ERROR: card is not alive after programming firmware\n");
         return 99;
     }
-    printf("PicoGUS detected...\n");
+    printf("PicoGUS detected: ");
     print_firmware_string();
     return 0;
 }
@@ -266,22 +275,29 @@ int main(int argc, char* argv[]) {
     print_firmware_string();
     printf("\n");
 
+    outp(CONTROL_PORT, 0x01); // Select protocol version register
+    uint8_t protocol_got = inp(DATA_PORT_HIGH);
+    if (PICOGUS_PROTOCOL_VER != protocol_got) {
+        err_protocol(PICOGUS_PROTOCOL_VER, protocol_got);
+        return 97;
+    }
+
     if (fw_filename[0]) {
         return write_firmware(fw_filename);
     }
 
-    outp(CONTROL_PORT, 0x02); // Select mode register
+    outp(CONTROL_PORT, 0x03); // Select mode register
     uint8_t mode = inp(DATA_PORT_HIGH);
 
     uint16_t port;
     if (mode != 0) {
         if (port_override) {
-            outp(CONTROL_PORT, 0x03); // Select port register
-            outpw(DATA_PORT_LOW, port_override); // Select port register
+            outp(CONTROL_PORT, 0x04); // Select port register
+            outpw(DATA_PORT_LOW, port_override); // Write port
         }
 
-        outp(CONTROL_PORT, 0x03); // Select port register
-        port = inpw(DATA_PORT_LOW);
+        outp(CONTROL_PORT, 0x04); // Select port register
+        port = inpw(DATA_PORT_LOW); // Get port
     }
 
     switch(mode) {
@@ -301,8 +317,8 @@ int main(int argc, char* argv[]) {
         } else {
             printf("DMA interval forced to %u ms\n", dma_interval);
         }
-        outp(CONTROL_PORT, 0x03); // Select port register
-        port = inpw(DATA_PORT_LOW);
+        outp(CONTROL_PORT, 0x04); // Select port register
+        port = inpw(DATA_PORT_LOW); // Get port
         printf("Running in GUS mode on port %x\n", port);
         break;
     case 1:
