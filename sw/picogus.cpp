@@ -203,6 +203,7 @@ __force_inline void handle_iow(void) {
         port -= basePort;
         switch (port) {
         case 0x8:
+        case 0xb:
         case 0x102:
         case 0x103:
         case 0x104:
@@ -217,7 +218,6 @@ __force_inline void handle_iow(void) {
         }
         // uint32_t write_begin = time_us_32();
         __dsb();
-        // printf("%x", iow_read);
         write_gus(port, iow_read & 0xFF);
         // uint32_t write_elapsed = time_us_32() - write_begin;
         // if (write_elapsed > 1) {
@@ -231,8 +231,6 @@ __force_inline void handle_iow(void) {
         // printf("GUS IOW: port: %x value: %x\n", port, value);
         // gpio_xor_mask(1u << LED_PIN);
         // puts("IOW");
-        // uart_print_hex_u32(port);
-        // uart_print_hex_u32(value);
     } else // if follows down below
 #endif // SOUND_GUS
 #ifdef SOUND_OPL

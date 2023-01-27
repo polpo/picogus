@@ -26,7 +26,7 @@ wait_iow:
     in pins, 8           side 0b00      ; input data, muxes back to addr
 .wrap
 tc_flag:
-    in x, 24             side 0b10      ; set TC flag, autopush, set ADS back to addr. X is full o' 1s
+    in x, 24             side 0b10      ; set TC flag. X is full o' 1s
     jmp wait_iow         side 0b10
 
 % c-sdk {

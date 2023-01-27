@@ -111,8 +111,6 @@ static uint16_t const sample_rates[32] = {
 
 uint8_t adlib_commandreg;
 // static MixerChannel * gus_chan;
-static uint8_t const irqtable[8] = { 0/*invalid*/, 2, 5, 3, 7, 11, 12, 15 };
-static uint8_t const dmatable[8] = { 0/*NO DMA*/, 1, 3, 5, 6, 7, 0/*invalid*/, 0/*invalid*/ };
 #ifndef PSRAM
 static uint8_t GUSRam[GUS_RAM_SIZE + 16/*safety margin*/]; // 1024K of GUS Ram
 #endif
@@ -124,8 +122,6 @@ static bool ignore_active_channel_write_while_active = false;
 static bool dma_enable_on_dma_control_polling = false;
 static uint16_t vol16bit[4096];
 static uint32_t pantable[16];
-static bool gus_warn_irq_conflict = false;
-static bool gus_warn_dma_conflict = false;
 
 static uint32_t buffer_size = 16;
 static uint32_t dma_interval = 0;
@@ -170,14 +166,7 @@ struct GFGus {
     uint32_t rate;
     // Bitu portbase;
     uint32_t memsize;
-    uint8_t dma1;
-    uint8_t dma2;
-
-    uint8_t irq1;       // GF1 IRQ
-    uint8_t irq2;       // MIDI IRQ
-
     bool irqenabled;
-    bool ChangeIRQDMA;
     bool initUnmaskDMA;
     bool force_master_irq_enable;
     bool clearTCIfPollingIRQStatus;
@@ -765,7 +754,6 @@ static void GUSReset(void) {
 
         PIC_RemoveEvents(GUS_TimerEvent);
 
-        myGUS.ChangeIRQDMA = false;
         myGUS.DMAControl = 0x00;
         myGUS.mixControl = 0x0b;    // latches enabled by default LINEs disabled
         myGUS.TimerControl = 0x00;
@@ -900,16 +888,6 @@ __force_inline static uint16_t ExecuteReadRegister(void) {
         // NTS: The GUS SDK documents the active channel count as bits 5-0, which is wrong. it's bits 4-0. bits 7-5 are always 1 on real hardware.
         return ((uint16_t)(0xE0 | (myGUS.ActiveChannelsUser - 1))) << 8;
     case 0x41: // Dma control register - read acknowledges DMA IRQ
-        /* here in the real world we can't ask the DMA controller if it's masked
-        if (dma_enable_on_dma_control_polling) {
-            if (!GetDMAChannel(myGUS.dma1)->masked && !(myGUS.DMAControl & 0x01) && !(myGUS.IRQStatus & 0x80)) {
-                DEBUG_LOG_MSG("GUS: As instructed, switching on DMA ENABLE upon polling DMA control register (HACK) as workaround");
-                myGUS.DMAControl |= 0x01;
-                GUS_StartDMA();
-            }
-        }
-        */
-
         tmpreg = myGUS.DMAControl & 0xbf;
         tmpreg |= (myGUS.DMAControl & 0x100) >> 2; /* Bit 6 on read is the DMA terminal count IRQ status */
         myGUS.DMAControl&=0xff; /* clear TC IRQ status */
@@ -1300,7 +1278,6 @@ __force_inline void write_gus(Bitu port, Bitu val) {
     case 0x0:
         myGUS.gRegControl = 0;
         myGUS.mixControl = (uint8_t)val;
-        myGUS.ChangeIRQDMA = true;
         // return;
         break;
     case 0x8:
@@ -1329,116 +1306,6 @@ __force_inline void write_gus(Bitu port, Bitu val) {
                 myGUS.timers[1].running=true;
             }
         } else myGUS.timers[1].running=false;
-        break;
-//TODO Check if 0x20a register is also available on the gus like on the interwave
-    case 0xb:
-        if (!myGUS.ChangeIRQDMA) break;
-        myGUS.ChangeIRQDMA=false;
-
-        if (myGUS.gRegControl == 6) {
-            /* Jumper register:
-             *
-             * 7: reserved
-             * 6: reserved
-             * 5: reserved
-             * 4: reserved
-             * 3: reserved
-             * 2: enable joystick port decode
-             * 1: enable midi port address decode
-             * 0: reserved */
-            /* TODO: */
-            LOG_MSG("GUS: DOS application wrote to 2XB register control number 0x06 (Jumper) val=%02xh",(int)val);
-        }
-        else if (myGUS.gRegControl == 5) {
-            /* write a 0 to clear IRQs on power up (?) */
-            LOG_MSG("GUS: DOS application wrote to 2XB register control number 0x05 (Clear IRQs) val=%02xh",(int)val);
-        }
-        else if (myGUS.gRegControl == 0) {
-            if (myGUS.mixControl & 0x40) {
-                // GUS SDK: IRQ Control Register
-                //     Channel 1 GF1 IRQ selector (bits 2-0)
-                //       0=reserved, do not use
-                //       1=IRQ2
-                //       2=IRQ5
-                //       3=IRQ3
-                //       4=IRQ7
-                //       5=IRQ11
-                //       6=IRQ12
-                //       7=IRQ15
-                //     Channel 2 MIDI IRQ selector (bits 5-3)
-                //       0=no interrupt
-                //       1=IRQ2
-                //       2=IRQ5
-                //       3=IRQ3
-                //       4=IRQ7
-                //       5=IRQ11
-                //       6=IRQ12
-                //       7=IRQ15
-                //     Combine both IRQs using channel 1 (bit 6)
-                //     Reserved (bit 7)
-                //
-                //     "If both channels are sharing an IRQ, channel 2's IRQ must be set to 0 and turn on bit 6. A
-                //      bus conflict will occur if both latches are programmed with the same IRQ #."
-                if (irqtable[val & 0x7] != 0)
-                    myGUS.irq1 = irqtable[val & 0x7];
-
-                if (val & 0x40) // "Combine both IRQs"
-                    myGUS.irq2 = myGUS.irq1;
-                else if (((val >> 3) & 7) != 0)
-                    myGUS.irq2 = irqtable[(val >> 3) & 0x7];
-
-                LOG_MSG("GUS IRQ reprogrammed: GF1 IRQ %d, MIDI IRQ %d",(int)myGUS.irq1,(int)myGUS.irq2);
-
-                gus_warn_irq_conflict = (!(val & 0x40) && (val & 7) == ((val >> 3) & 7));
-            } else {
-                // GUS SDK: DMA Control Register
-                //     Channel 1 (bits 2-0)
-                //       0=NO DMA
-                //       1=DMA1
-                //       2=DMA3
-                //       3=DMA5
-                //       4=DMA6
-                //       5=DMA7
-                //       6=?
-                //       7=?
-                //     Channel 2 (bits 5-3)
-                //       0=NO DMA
-                //       1=DMA1
-                //       2=DMA3
-                //       3=DMA5
-                //       4=DMA6
-                //       5=DMA7
-                //       6=?
-                //       7=?
-                //     Combine both DMA channels using channel 1 (bit 6)
-                //     Reserved (bit 7)
-                //
-                //     "If both channels are sharing an DMA, channel 2's DMA must be set to 0 and turn on bit 6. A
-                //      bus conflict will occur if both latches are programmed with the same DMA #."
-
-                // NTS: This emulation does not use the second DMA channel... yet... which is why we do not bother
-                //      unregistering and reregistering the second DMA channel.
-
-                // NTS: Contrary to an earlier commit, DMA channel 0 is not a valid choice
-                if (dmatable[val & 0x7] != 0)
-                    myGUS.dma1 = dmatable[val & 0x7];
-
-                if (val & 0x40) // "Combine both DMA channels"
-                    myGUS.dma2 = myGUS.dma1;
-                else if (dmatable[(val >> 3) & 0x7] != 0)
-                    myGUS.dma2 = dmatable[(val >> 3) & 0x7];
-
-                DEBUG_LOG_MSG("GUS DMA reprogrammed: DMA1 %d, DMA2 %d",(int)myGUS.dma1,(int)myGUS.dma2);
-
-                // NTS: The Windows 3.1 Gravis Ultrasound drivers will program the same DMA channel into both without setting the "combining" bit,
-                //      even though their own SDK says not to, when Windows starts up. But it then immediately reprograms it normally, so no bus
-                //      conflicts actually occur. Strange.
-                gus_warn_dma_conflict = (!(val & 0x40) && (val & 7) == ((val >> 3) & 7));
-            }
-        }
-        else {
-            LOG_MSG("GUS warning: Port 2XB register control %02xh written (unknown control reg) val=%02xh",(int)myGUS.gRegControl,(int)val);
-        }
         break;
     case 0x102:
         myGUS.gCurChannel = val & 31;
@@ -1538,7 +1405,11 @@ GUS_DMA_isr() {
     }
 
     const uint8_t dma_data8 = dma_data & 0xffu;
+#ifdef PSRAM
     psram_write8_async(&psram_spi, myGUS.dmaAddr, dma_config.invertMsb ? dma_data8 ^ 0x80 : dma_data8);
+#else
+    GUSRam[myGUS.dmaAddr] = dma_data8;
+#endif
 
     // uart_print_hex_u32(dma_data);
     if (dma_data & 0x100u) { // if TC
