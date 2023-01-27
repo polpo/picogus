@@ -35,7 +35,7 @@ extern irq_handler_t GUS_DMA_isr_pt;
 extern dma_inst_t dma_config;
 
 #include "gus-x.h"
-#define SAMPLES_PER_BUFFER 256
+#define SAMPLES_PER_BUFFER 1024
 
 struct audio_buffer_pool *init_audio() {
 

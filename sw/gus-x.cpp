@@ -148,6 +148,7 @@ struct GFGus {
                 We're taking the DOSBox SVN approach here (https://sourceforge.net/p/dosbox/code-0/4387/#diff-2) */
     uint32_t dmaAddr;
     uint32_t dmaInterval;
+    uint32_t dmaIntervalOverride;
     bool dmaWaiting;
     uint8_t TimerControl;
     uint8_t SampControl;
@@ -700,10 +701,6 @@ static INLINE void GUS_CheckIRQ(void);
 
 static uint32_t GUS_TimerEvent(Bitu val);
 
-///* TODO implement DMA
-// static void GUS_DMA_Callback(/*DmaChannel * chan,*/DMAEvent event);
-//*/ // TODO implement DMA
-
 void GUS_StopDMA();
 void GUS_StartDMA();
 void GUS_Update_DMA_Event_transfer();
@@ -784,16 +781,13 @@ static void GUSReset(void) {
 
         myGUS.dmaAddr = 0;
         myGUS.dmaInterval = 0;
+        myGUS.dmaIntervalOverride = 0;
         myGUS.dmaWaiting = false;
 
         myGUS.irqenabled = 0;
         myGUS.gRegControl = 0;
         myGUS.gDramAddr = 0;
         myGUS.gRegData = 0;
-
-        // /* TODO implmeent DMA
-        // GUS_Update_DMA_Event_transfer();
-        // */
     }
 
     /* if the card was just put into reset, or the card WAS in reset, bits 1-2 are cleared */
@@ -1425,9 +1419,6 @@ __force_inline void write_gus(Bitu port, Bitu val) {
                 // NTS: This emulation does not use the second DMA channel... yet... which is why we do not bother
                 //      unregistering and reregistering the second DMA channel.
 
-                ///* TODO implement DMA
-                // GetDMAChannel(myGUS.dma1)->Register_Callback(0); // FIXME: On DMA conflict this could mean kicking other devices off!
-
                 // NTS: Contrary to an earlier commit, DMA channel 0 is not a valid choice
                 if (dmatable[val & 0x7] != 0)
                     myGUS.dma1 = dmatable[val & 0x7];
@@ -1437,16 +1428,12 @@ __force_inline void write_gus(Bitu port, Bitu val) {
                 else if (dmatable[(val >> 3) & 0x7] != 0)
                     myGUS.dma2 = dmatable[(val >> 3) & 0x7];
 
-                // TODO implement DMA callback
-                // GetDMAChannel(myGUS.dma1)->Register_Callback(GUS_DMA_Callback);
-
                 DEBUG_LOG_MSG("GUS DMA reprogrammed: DMA1 %d, DMA2 %d",(int)myGUS.dma1,(int)myGUS.dma2);
 
                 // NTS: The Windows 3.1 Gravis Ultrasound drivers will program the same DMA channel into both without setting the "combining" bit,
                 //      even though their own SDK says not to, when Windows starts up. But it then immediately reprograms it normally, so no bus
                 //      conflicts actually occur. Strange.
                 gus_warn_dma_conflict = (!(val & 0x40) && (val & 7) == ((val >> 3) & 7));
-                //*/ // TODO implement DMA
             }
         }
         else {
@@ -1495,25 +1482,8 @@ __force_inline void write_gus(Bitu port, Bitu val) {
     }
 }
 
+
 static bool GUS_DMA_Active = false;
-
-void __force_inline GUS_DMA_Event_Start() {
-    bool invert_msb = false;
-    if (myGUS.DMAControl & 0x80) {
-        if (myGUS.DMAControl & 0x40) {
-            // 16-bit data
-            if ((myGUS.dmaAddr & 0x1)) {
-                invert_msb = true;
-            }
-        } else {
-            invert_msb = true;
-        }
-    }
-    dma_config.invertMsb = invert_msb;
-
-    DMA_Start_Write(&dma_config);
-}
-
 
 #ifdef POLLING_DMA
 __force_inline
@@ -1533,7 +1503,20 @@ GUS_DMA_Event(Bitu val) {
     }
 
     myGUS.dmaWaiting = true;
-    GUS_DMA_Event_Start();
+    bool invert_msb = false;
+    if (myGUS.DMAControl & 0x80) {
+        if (myGUS.DMAControl & 0x40) {
+            // 16-bit data
+            if ((myGUS.dmaAddr & 0x1)) {
+                invert_msb = true;
+            }
+        } else {
+            invert_msb = true;
+        }
+    }
+    dma_config.invertMsb = invert_msb;
+
+    DMA_Start_Write(&dma_config);
     return 0;
 }
 
@@ -1605,7 +1588,6 @@ void __force_inline process_dma(void) {
 
 
 __force_inline void GUS_StartDMA() {
-    ///* TODO implement DMA
     if (GUS_DMA_Active) {
         // DMA already started
         return;
@@ -1620,21 +1602,24 @@ __force_inline void GUS_StartDMA() {
     // 10:6 μs–7 μs
     // 11:13 μs–14 μs
     // From ULTRAWRD: it's 650KHz with a divisor...
-    switch ((myGUS.DMAControl >> 3u) & 3u) {
-    case 0b00:
-        myGUS.dmaInterval = 1;
-        break;
-    case 0b01:
-        myGUS.dmaInterval = 3;
-        break;
-    case 0b10:
-        myGUS.dmaInterval = 6;
-        break;
-    case 0b11:
-        myGUS.dmaInterval = 12;
-        break;
+    if (myGUS.dmaIntervalOverride) {
+        myGUS.dmaInterval = myGUS.dmaIntervalOverride;
+    } else {
+        switch ((myGUS.DMAControl >> 3u) & 3u) {
+        case 0b00:
+            myGUS.dmaInterval = 1;
+            break;
+        case 0b01:
+            myGUS.dmaInterval = 3;
+            break;
+        case 0b10:
+            myGUS.dmaInterval = 6;
+            break;
+        case 0b11:
+            myGUS.dmaInterval = 12;
+            break;
+        }
     }
-    // myGUS.dmaInterval = 8;
     
 #ifndef POLLING_DMA
     PIC_AddEvent(GUS_DMA_Event, 13, 2);
@@ -1724,10 +1709,7 @@ extern uint32_t GUS_CallBack(Bitu max_len, int16_t* play_buffer) {
         play_buffer[play_i++] = buffer[i][1];
     }
 
-    // TODO copy samples to play buffer
-    // gus_chan->AddSamples_s32(len, buffer[0]);
     CheckVoiceIrq();
-    // putchar('o');
     return render_samples;
 }
 
@@ -1796,17 +1778,17 @@ static void MakeTables(void) {
 }
 
 
-void GUS_SetPort(uint16_t base_port) {
+void GUS_SetPort(const uint16_t base_port) {
     printf("GUS: setting port to %x\n", base_port);
     myGUS.portbase = base_port - 0x200u;
 }
-void GUS_SetAudioBuffer(uint16_t new_buffer_size) {
+void GUS_SetAudioBuffer(const uint16_t new_buffer_size) {
     // PICOGUS special port to set audio buffer size
     buffer_size = new_buffer_size;
 }
-void GUS_SetDMAInterval(uint16_t new_dma_interval) {
-    // PICOGUS special port to set audio buffer size
-    dma_interval = new_dma_interval;
+void GUS_SetDMAInterval(const uint16_t newInterval) {
+    // PICOGUS special port to set DMA interval
+    myGUS.dmaIntervalOverride = newInterval;
 }
 
 
@@ -1848,8 +1830,6 @@ public:
 
         GUS_SetPort(base_port);
 
-       // DmaChannels[myGUS.dma1]->Register_TC_Callback(GUS_DMA_TC_Callback);
-    
         MakeTables();
     
         for (uint8_t chan_ct=0; chan_ct<32; chan_ct++) {
@@ -1859,14 +1839,6 @@ public:
         // FIXME: Could we leave the card in reset state until a fake ULTRINIT runs?
         myGUS.gRegData=0x000/*reset*/;
         GUSReset();
-
-        /* TODO support DMA
-        if (myGUS.initUnmaskDMA)
-            GetDMAChannel(myGUS.dma1)->SetMask(false);
-        */
-        /* TODO support DMA
-        GetDMAChannel(myGUS.dma1)->Register_Callback(GUS_DMA_Callback);
-        */
 
         // Default to GUS MAX 1MB maximum
         myGUS.gDramAddrMask = 0xFFFFFu;

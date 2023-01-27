@@ -214,7 +214,6 @@ __force_inline void handle_iow(void) {
             pio_sm_put(pio0, iow_sm, IO_WAIT);
             break;
         }
-        // uint32_t value = iow_read & 0xFF;
         // uint32_t write_begin = time_us_32();
         __dsb();
         // printf("%x", iow_read);
@@ -233,7 +232,7 @@ __force_inline void handle_iow(void) {
         // puts("IOW");
         // uart_print_hex_u32(port);
         // uart_print_hex_u32(value);
-    }
+    } else // if follows down below
 #endif // SOUND_GUS
 #ifdef SOUND_OPL
     switch (port - basePort) {
@@ -303,8 +302,7 @@ __force_inline void handle_ior(void) {
         // Tell PIO to wait for data
         pio_sm_put(pio0, ior_sm, IO_WAIT);
         uint32_t value = read_gus(port) & 0xff;
-        // OR with 0x00ffff00 is required to set pindirs in the PIO
-        // pio_sm_put(pio0, ior_sm, 0x00ffff00u | value);
+        // OR with 0x0000ff00 is required to set pindirs in the PIO
         pio_sm_put(pio0, ior_sm, IOR_SET_VALUE | value);
         // printf("GUS IOR: port: %x value: %x\n", port, value);
         // gpio_xor_mask(1u << LED_PIN);
@@ -314,7 +312,7 @@ __force_inline void handle_ior(void) {
         // Tell PIO to wait for data
         pio_sm_put(pio0, ior_sm, IO_WAIT);
         uint32_t value = OPL_Pico_PortRead(OPL_REGISTER_PORT);
-        // OR with 0x00ffff00 is required to set pindirs in the PIO
+        // OR with 0x0000ff00 is required to set pindirs in the PIO
         pio_sm_put(pio0, ior_sm, IOR_SET_VALUE | value);
     }
 #elif defined(SOUND_MPU)
@@ -323,14 +321,14 @@ __force_inline void handle_ior(void) {
         pio_sm_put(pio0, ior_sm, IO_WAIT);
         uint32_t value = MPU401_ReadData();
         // printf("MPU IOR: port: %x value: %x\n", port, value);
-        // OR with 0x00ffff00 is required to set pindirs in the PIO
+        // OR with 0x0000ff00 is required to set pindirs in the PIO
         pio_sm_put(pio0, ior_sm, IOR_SET_VALUE | value);
     } else if (port == basePort + 1) {
         // Tell PIO to wait for data
         pio_sm_put(pio0, ior_sm, IO_WAIT);
         uint32_t value = MPU401_ReadStatus();
         // printf("MPU IOR: port: %x value: %x\n", port, value);
-        // OR with 0x00ffff00 is required to set pindirs in the PIO
+        // OR with 0x0000ff00 is required to set pindirs in the PIO
         pio_sm_put(pio0, ior_sm, IOR_SET_VALUE | value);
     }
 #endif
@@ -338,13 +336,13 @@ __force_inline void handle_ior(void) {
         // Tell PIO to wait for data
         pio_sm_put(pio0, ior_sm, IO_WAIT);
         uint32_t value = sel_reg;
-        // OR with 0x00ffff00 is required to set pindirs in the PIO
+        // OR with 0x0000ff00 is required to set pindirs in the PIO
         pio_sm_put(pio0, ior_sm, IOR_SET_VALUE | value);
     } else if (port == DATA_PORT_LOW) {
         // Tell PIO to wait for data
         pio_sm_put(pio0, ior_sm, IO_WAIT);
         uint32_t value = read_picogus_low();
-        // OR with 0x00ffff00 is required to set pindirs in the PIO
+        // OR with 0x0000ff00 is required to set pindirs in the PIO
         pio_sm_put(pio0, ior_sm, IOR_SET_VALUE | value);
     } else if (port == DATA_PORT_HIGH) {
         pio_sm_put(pio0, ior_sm, IO_WAIT);
@@ -384,8 +382,6 @@ void err_blink(void) {
 int main()
 {
     // Overclock!
-    // set_sys_clock_khz(200000, true);
-    // Use hacked set_sys_clock_khz to keep SPI clock high - see clock_pll.h for details
     // set_sys_clock_khz(266000, true);
     set_sys_clock_khz(280000, true);
     // vreg_set_voltage(VREG_VOLTAGE_1_20);
@@ -411,7 +407,6 @@ int main()
     gpio_init(LED_PIN);
     gpio_set_dir(LED_PIN, GPIO_OUT);
 
-    // alarm_pool_init_default();
     gpio_init(IRQ_PIN);
     gpio_set_dir(IRQ_PIN, GPIO_OUT);
 
@@ -457,12 +452,8 @@ int main()
     }
     gpio_disable_pulls(IOW_PIN);
     gpio_disable_pulls(IOR_PIN);
-    //gpio_disable_pulls(IOCHRDY_PIN);
-    // gpio_put(IOCHRDY_PIN, 1);
-    // gpio_init(IOCHRDY_PIN);
     gpio_pull_down(IOCHRDY_PIN);
     gpio_set_dir(IOCHRDY_PIN, GPIO_OUT);
-    // gpio_put(IOCHRDY_PIN, 1);
 
     puts("Enabling bus transceivers...");
     // waggle ADS to set BUSOE latch
@@ -476,18 +467,16 @@ int main()
     // gpio_set_drive_strength(ADS_PIN, GPIO_DRIVE_STRENGTH_12MA);
     gpio_set_slew_rate(ADS_PIN, GPIO_SLEW_RATE_FAST);
 
-    PIO pio = pio0;
-
-    uint iow_offset = pio_add_program(pio, &iow_program);
-    iow_sm = pio_claim_unused_sm(pio, true);
+    uint iow_offset = pio_add_program(pio0, &iow_program);
+    iow_sm = pio_claim_unused_sm(pio0, true);
     printf("iow sm: %u\n", iow_sm);
 
-    uint ior_offset = pio_add_program(pio, &ior_program);
-    ior_sm = pio_claim_unused_sm(pio, true);
+    uint ior_offset = pio_add_program(pio0, &ior_program);
+    ior_sm = pio_claim_unused_sm(pio0, true);
     printf("ior sm: %u\n", ior_sm);
 
-    ior_program_init(pio, ior_sm, ior_offset);
-    iow_program_init(pio, iow_sm, iow_offset);
+    ior_program_init(pio0, ior_sm, ior_offset);
+    iow_program_init(pio0, iow_sm, iow_offset);
 
 #ifdef USE_IRQ
     puts("Enabling IRQ on ISA IOR/IOW events");
@@ -505,11 +494,6 @@ int main()
     irq_set_enabled(PIO0_IRQ_1, true);
 #endif
 
-#ifdef SOUND_GUS
-    puts("Initing ISA DMA PIO...");
-    dma_config = DMA_init(pio, GUS_DMA_isr);
-#endif
-
     gpio_xor_mask(1u << LED_PIN);
 
 #ifndef USE_ALARM
@@ -518,12 +502,12 @@ int main()
 
     for (;;) {
 #ifndef USE_IRQ
-        if (!pio_sm_is_rx_fifo_empty(pio, iow_sm)) {
+        if (!pio_sm_is_rx_fifo_empty(pio0, iow_sm)) {
             handle_iow();
             // gpio_xor_mask(1u << LED_PIN);
         }
 
-        if (!pio_sm_is_rx_fifo_empty(pio, ior_sm)) {
+        if (!pio_sm_is_rx_fifo_empty(pio0, ior_sm)) {
             handle_ior();
             // gpio_xor_mask(1u << LED_PIN);
         }
