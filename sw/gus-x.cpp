@@ -49,7 +49,7 @@ using namespace std;
 #define RAMP_FRACT (10)
 #define RAMP_FRACT_MASK ((1 << RAMP_FRACT)-1)
 
-#define GUS_BASE myGUS.portbase
+// #define GUS_BASE myGUS.portbase
 #define GUS_RATE myGUS.rate
 #define LOG_GUS 0
 
@@ -168,7 +168,7 @@ struct GFGus {
     } timers[2];
 
     uint32_t rate;
-    Bitu portbase;
+    // Bitu portbase;
     uint32_t memsize;
     uint8_t dma1;
     uint8_t dma2;
@@ -1202,8 +1202,8 @@ __force_inline Bitu read_gus(Bitu port) {
 
 //  LOG_MSG("read from gus port %x",port);
 
-    switch(port - GUS_BASE) {
-    case 0x206:
+    switch(port) {
+    case 0x6:
 #if 0 // no fancy stuff
         if (myGUS.clearTCIfPollingIRQStatus) {
             double t = PIC_FullIndex();
@@ -1240,7 +1240,7 @@ __force_inline Bitu read_gus(Bitu port) {
         /* NTS: Contrary to some false impressions, GUS hardware does not report "one at a time", it really is a bitmask.
          *      I had the funny idea you read this register "one at a time" just like reading the IRQ reason bits of the RS-232 port --J.C. */
         return GUS_EffectiveIRQStatus();
-    case 0x208:
+    case 0x8:
         uint8_t tmptime;
         tmptime = 0;
         if (myGUS.timers[0].reached) tmptime |= (1 << 6);
@@ -1249,29 +1249,29 @@ __force_inline Bitu read_gus(Bitu port) {
         if (myGUS.IRQStatus & 0x04) tmptime|=(1 << 2);
         if (myGUS.IRQStatus & 0x08) tmptime|=(1 << 1);
         return tmptime;
-    case 0x20a:
+    case 0xa:
         return adlib_commandreg;
-    case 0x20f:
+    case 0xf:
         return ~0ul; // should not happen
-    case 0x302:
+    case 0x102:
         return myGUS.gRegSelectData;
-    case 0x303:
+    case 0x103:
         return myGUS.gRegSelectData;
-    case 0x304:
+    case 0x104:
         reg16 = ExecuteReadRegister() & 0xff;
 
         // Versions prior to the Interwave will reflect last I/O to 3X2-3X5 when read back from 3X3
         myGUS.gRegSelectData = reg16/* & 0xFF*/;
 
         return reg16;
-    case 0x305:
+    case 0x105:
         reg16 = ExecuteReadRegister() >> 8;
 
         //  Versions prior to the Interwave will reflect last I/O to 3X2-3X5 when read back from 3X3
         myGUS.gRegSelectData = reg16 & 0xFF;
 
         return reg16;
-    case 0x307:
+    case 0x107:
         if((myGUS.gDramAddr & myGUS.gDramAddrMask) < myGUS.memsize) {
 #ifdef PSRAM
             return psram_read8(&psram_spi, myGUS.gDramAddr & myGUS.gDramAddrMask);
@@ -1281,7 +1281,7 @@ __force_inline Bitu read_gus(Bitu port) {
         } else {
             return 0;
         }
-    case 0x306:
+    case 0x106:
     default:
 #if LOG_GUS
         LOG_MSG("Read GUS at port 0x%x", port);
@@ -1296,17 +1296,17 @@ __force_inline Bitu read_gus(Bitu port) {
 __force_inline void write_gus(Bitu port, Bitu val) {
 //  LOG_MSG("Write gus port %x val %x",port,val);
 
-    switch(port - GUS_BASE) {
-    case 0x200:
+    switch(port) {
+    case 0x0:
         myGUS.gRegControl = 0;
         myGUS.mixControl = (uint8_t)val;
         myGUS.ChangeIRQDMA = true;
         // return;
         break;
-    case 0x208:
+    case 0x8:
         adlib_commandreg = (uint8_t)val;
         break;
-    case 0x209:
+    case 0x9:
 //TODO adlib_commandreg should be 4 for this to work else it should just latch the value
         if (val & 0x80) {
             myGUS.timers[0].reached=false;
@@ -1331,7 +1331,7 @@ __force_inline void write_gus(Bitu port, Bitu val) {
         } else myGUS.timers[1].running=false;
         break;
 //TODO Check if 0x20a register is also available on the gus like on the interwave
-    case 0x20b:
+    case 0xb:
         if (!myGUS.ChangeIRQDMA) break;
         myGUS.ChangeIRQDMA=false;
 
@@ -1440,31 +1440,31 @@ __force_inline void write_gus(Bitu port, Bitu val) {
             LOG_MSG("GUS warning: Port 2XB register control %02xh written (unknown control reg) val=%02xh",(int)myGUS.gRegControl,(int)val);
         }
         break;
-    case 0x302:
+    case 0x102:
         myGUS.gCurChannel = val & 31;
         // Versions prior to the Interwave will reflect last I/O to 3X2-3X5 when read back from 3X3
         myGUS.gRegSelectData = (uint8_t)val;
 
         curchan = guschan[myGUS.gCurChannel];
         break;
-    case 0x303:
+    case 0x103:
         myGUS.gRegSelect = myGUS.gRegSelectData = (uint8_t)val;
         myGUS.gRegData = 0;
         break;
-    case 0x304:
+    case 0x104:
         // Versions prior to the Interwave will reflect last I/O to 3X2-3X5 when read back from 3X3
         myGUS.gRegSelectData = val;
 
         myGUS.gRegData = (uint16_t)val;
         break;
-    case 0x305:
+    case 0x105:
         // Versions prior to the Interwave will reflect last I/O to 3X2-3X5 when read back from 3X3
         myGUS.gRegSelectData = val;
 
         myGUS.gRegData = (uint16_t)((0x00ff & myGUS.gRegData) | val << 8);
         ExecuteGlobRegister();
         break;
-    case 0x307:
+    case 0x107:
         if ((myGUS.gDramAddr & myGUS.gDramAddrMask) < myGUS.memsize) {
 #ifdef PSRAM
             psram_write8(&psram_spi, myGUS.gDramAddr & myGUS.gDramAddrMask, (uint8_t)val);
@@ -1777,11 +1777,12 @@ static void MakeTables(void) {
         ((double)pantable[15]) / (1 << RAMP_FRACT));
 }
 
-
+/*
 void GUS_SetPort(const uint16_t base_port) {
     printf("GUS: setting port to %x\n", base_port);
     myGUS.portbase = base_port - 0x200u;
 }
+*/
 void GUS_SetAudioBuffer(const uint16_t new_buffer_size) {
     // PICOGUS special port to set audio buffer size
     buffer_size = new_buffer_size;
@@ -1796,7 +1797,7 @@ class GUS/*:public Module_base*/{
 private:
     bool gus_enable;
 public:
-    GUS(Bitu base_port) {
+    GUS(void/*Bitu base_port*/) {
         int x;
 
         gus_enable = true;
@@ -1828,7 +1829,7 @@ public:
         myGUS.masterVolume = 0.00;
         myGUS.updateMasterVolume();
 
-        GUS_SetPort(base_port);
+        // GUS_SetPort(base_port);
 
         MakeTables();
     
@@ -1870,9 +1871,9 @@ public:
 };
 
 static GUS* test = NULL;
-void GUS_OnReset(Bitu base_port) {
+void GUS_OnReset(void/*Bitu base_port*/) {
     LOG_MSG("Allocating GUS emulation");
-    test = new GUS(base_port);
+    test = new GUS(/*base_port*/);
 
     critical_section_init(&gus_crit);
 }

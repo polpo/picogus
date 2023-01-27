@@ -112,7 +112,7 @@ __force_inline void write_picogus_high(uint8_t value) {
         basePort = (value << 8) | basePort_tmp;
 #ifdef SOUND_GUS
         gus_port_test = basePort >> 4 | 0x10;
-        GUS_SetPort(basePort);
+        // GUS_SetPort(basePort);
 #endif
         break;
 #ifdef SOUND_GUS
@@ -200,7 +200,8 @@ __force_inline void handle_iow(void) {
 #ifdef SOUND_GUS
     if ((port >> 4 | 0x10) == gus_port_test) {
         bool fast_write = false;
-        switch (port - basePort) {
+        port -= basePort;
+        switch (port) {
         case 0x8:
         case 0x102:
         case 0x103:
@@ -301,7 +302,7 @@ __force_inline void handle_ior(void) {
     if ((port >> 4 | 0x10) == gus_port_test) {
         // Tell PIO to wait for data
         pio_sm_put(pio0, ior_sm, IO_WAIT);
-        uint32_t value = read_gus(port) & 0xff;
+        uint32_t value = read_gus(port - basePort) & 0xff;
         // OR with 0x0000ff00 is required to set pindirs in the PIO
         pio_sm_put(pio0, ior_sm, IOR_SET_VALUE | value);
         // printf("GUS IOR: port: %x value: %x\n", port, value);
@@ -439,7 +440,7 @@ int main()
 
 #ifdef SOUND_GUS
     printf("Creating GUS at port %x\n", basePort);
-    GUS_OnReset(basePort);
+    GUS_OnReset(/*basePort*/);
     multicore_launch_core1(&play_gus);
 #endif // SOUND_GUS
 
