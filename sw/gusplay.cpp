@@ -30,6 +30,10 @@ extern psram_spi_inst_t psram_spi;
 bi_decl(bi_3pins_with_names(PICO_AUDIO_I2S_DATA_PIN, "I2S DIN", PICO_AUDIO_I2S_CLOCK_PIN_BASE, "I2S BCK", PICO_AUDIO_I2S_CLOCK_PIN_BASE+1, "I2S LRCK"));
 #endif
 
+#include "isa_dma.h"
+extern irq_handler_t GUS_DMA_isr_pt;
+extern dma_inst_t dma_config;
+
 #include "gus-x.h"
 #define SAMPLES_PER_BUFFER 256
 
@@ -77,6 +81,10 @@ void play_gus() {
     // Init PIC on this core so it handles timers
     PIC_Init();
 #endif
+
+    // Init ISA DMA on this core so it handles the ISR
+    puts("Initing ISA DMA PIO...");
+    dma_config = DMA_init(pio0, GUS_DMA_isr_pt);
 
 #ifdef PSRAM_CORE1
 #ifdef PSRAM

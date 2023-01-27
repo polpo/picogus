@@ -1570,6 +1570,7 @@ GUS_DMA_isr() {
         PIC_AddEvent(GUS_DMA_Event, myGUS.dmaInterval, 2);
     }
 }
+irq_handler_t GUS_DMA_isr_pt = GUS_DMA_isr;
 
 #ifdef POLLING_DMA
 static uint32_t next_event = 0;
