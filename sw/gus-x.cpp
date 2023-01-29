@@ -1404,15 +1404,28 @@ GUS_DMA_isr() {
         return;
     }
 
+    bool is_tc = dma_data & 0x100u;
     const uint8_t dma_data8 = dma_data & 0xffu;
 #ifdef PSRAM
-    psram_write8_async(&psram_spi, myGUS.dmaAddr, dma_config.invertMsb ? dma_data8 ^ 0x80 : dma_data8);
+    // psram_write8_async(&psram_spi, myGUS.dmaAddr, dma_config.invertMsb ? dma_data8 ^ 0x80 : dma_data8);
+    static uint8_t dma_buffer[32];
+    uint8_t buffer_addr = myGUS.dmaAddr & 0x1f;
+    dma_buffer[buffer_addr] = dma_config.invertMsb ? dma_data8 ^ 0x80 : dma_data8;
+    if ((buffer_addr & 0xf) == 0xf) {
+        psram_write_async(&psram_spi, myGUS.dmaAddr - 0xf, dma_buffer + (buffer_addr & 0x10), 16);
+    }
 #else
     GUSRam[myGUS.dmaAddr] = dma_data8;
 #endif
 
+
     // uart_print_hex_u32(dma_data);
     if (dma_data & 0x100u) { // if TC
+#ifdef PSRAM
+        if ((buffer_addr & 0xf) != 0xf) {
+            psram_write_async(&psram_spi, myGUS.dmaAddr - (buffer_addr & 0xf), dma_buffer + (buffer_addr & 0x10), (buffer_addr & 0xf) + 1);
+        }
+#endif
         /* Raise the TC irq, and stop DMA */
         myGUS.DMAControl |= 0x100u; /* NTS: DOSBox SVN approach: Use bit 8 for DMA TC IRQ */
         myGUS.IRQStatus |= 0x80;
