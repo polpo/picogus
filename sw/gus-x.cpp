@@ -888,11 +888,13 @@ __force_inline static uint16_t ExecuteReadRegister(void) {
         // NTS: The GUS SDK documents the active channel count as bits 5-0, which is wrong. it's bits 4-0. bits 7-5 are always 1 on real hardware.
         return ((uint16_t)(0xE0 | (myGUS.ActiveChannelsUser - 1))) << 8;
     case 0x41: // Dma control register - read acknowledges DMA IRQ
+        critical_section_enter_blocking(&gus_crit);
         tmpreg = myGUS.DMAControl & 0xbf;
         tmpreg |= (myGUS.DMAControl & 0x100) >> 2; /* Bit 6 on read is the DMA terminal count IRQ status */
         myGUS.DMAControl&=0xff; /* clear TC IRQ status */
         myGUS.IRQStatus&=0x7f;
         GUS_CheckIRQ();
+        critical_section_exit(&gus_crit);
         return (uint16_t)(tmpreg << 8);
     case 0x42:  // Dma address register
         return myGUS.dmaAddr >> 0x4u;
@@ -1122,11 +1124,13 @@ __force_inline static void ExecuteGlobRegister(void) {
     case 0x10:  // Undocumented register used in Fast Tracker 2
         break;
     case 0x41:  // Dma control register
+        critical_section_enter_blocking(&gus_crit);
         // myGUS.DMAControl &= ~0xFFu; // FIXME: Does writing DMA Control clear the DMA TC IRQ?
         myGUS.DMAControl |= (uint8_t)(myGUS.gRegData>>8);
         // GUS_Update_DMA_Event_transfer();
         if (myGUS.DMAControl & 1) GUS_StartDMA();
         else GUS_StopDMA();
+        critical_section_exit(&gus_crit);
         break;
     case 0x42:  // Gravis DRAM DMA address register
         myGUS.dmaAddr = myGUS.gRegData << 0x4u;
@@ -1413,11 +1417,13 @@ GUS_DMA_isr() {
 
     // uart_print_hex_u32(dma_data);
     if (dma_data & 0x100u) { // if TC
+        critical_section_enter_blocking(&gus_crit);
         /* Raise the TC irq, and stop DMA */
         myGUS.DMAControl |= 0x100u; /* NTS: DOSBox SVN approach: Use bit 8 for DMA TC IRQ */
         myGUS.IRQStatus |= 0x80;
         GUS_StopDMA();
         GUS_CheckIRQ();
+        critical_section_exit(&gus_crit);
     } else {
         ++myGUS.dmaAddr;
         /* keep going */
