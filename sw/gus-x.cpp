@@ -1140,6 +1140,7 @@ __force_inline static void ExecuteGlobRegister(void) {
         myGUS.gDramAddr = (0xffff & myGUS.gDramAddr) | ((uint32_t)myGUS.gRegData>>8) << 16;
         break;
     case 0x45:  // Timer control register.  Identical in operation to Adlib's timer
+        critical_section_enter_blocking(&gus_crit);
         myGUS.TimerControl = (uint8_t)(myGUS.gRegData>>8);
         myGUS.timers[0].raiseirq=(myGUS.TimerControl & 0x04)>0;
         if (!myGUS.timers[0].raiseirq) myGUS.IRQStatus&=~0x04;
@@ -1148,6 +1149,7 @@ __force_inline static void ExecuteGlobRegister(void) {
         if (!myGUS.timers[0].raiseirq && !myGUS.timers[1].raiseirq) {
             GUS_CheckIRQ();
         }
+        critical_section_exit(&gus_crit);
         break;
     case 0x46:  // Timer 1 control
         myGUS.timers[0].value = (uint8_t)(myGUS.gRegData>>8);
@@ -1287,10 +1289,12 @@ __force_inline void write_gus(Bitu port, Bitu val) {
         break;
     case 0x9:
 //TODO adlib_commandreg should be 4 for this to work else it should just latch the value
+        critical_section_enter_blocking(&gus_crit);
         if (val & 0x80) {
             myGUS.timers[0].reached=false;
             myGUS.timers[1].reached=false;
             GUS_CheckIRQ();
+            critical_section_exit(&gus_crit);
             // return;
             break;
         }
@@ -1308,6 +1312,7 @@ __force_inline void write_gus(Bitu port, Bitu val) {
                 myGUS.timers[1].running=true;
             }
         } else myGUS.timers[1].running=false;
+        critical_section_exit(&gus_crit);
         break;
     case 0x102:
         myGUS.gCurChannel = val & 31;
@@ -1435,12 +1440,12 @@ static uint32_t next_event = 0;
 #endif
 
 __force_inline void GUS_StopDMA() {
+    GUS_DMA_Active = false;
 #ifndef POLLING_DMA
     PIC_RemoveEvents(GUS_DMA_Event);
 #else
     next_event = 0;
 #endif
-    GUS_DMA_Active = false;
     if (myGUS.dmaWaiting) {
         // Reset the PIO
         DMA_Cancel_Write(&dma_config);
