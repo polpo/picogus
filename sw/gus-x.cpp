@@ -692,7 +692,6 @@ static uint32_t GUS_TimerEvent(Bitu val);
 
 void GUS_StopDMA();
 void GUS_StartDMA();
-void GUS_Update_DMA_Event_transfer();
 
 static void GUSReset(void) {
     gpio_xor_mask(1u << PICO_DEFAULT_LED_PIN);
@@ -1125,9 +1124,8 @@ __force_inline static void ExecuteGlobRegister(void) {
         break;
     case 0x41:  // Dma control register
         critical_section_enter_blocking(&gus_crit);
-        // myGUS.DMAControl &= ~0xFFu; // FIXME: Does writing DMA Control clear the DMA TC IRQ?
+        myGUS.DMAControl &= ~0xFFu; // FIXME: Does writing DMA Control clear the DMA TC IRQ?
         myGUS.DMAControl |= (uint8_t)(myGUS.gRegData>>8);
-        // GUS_Update_DMA_Event_transfer();
         if (myGUS.DMAControl & 1) GUS_StartDMA();
         else GUS_StopDMA();
         critical_section_exit(&gus_crit);
