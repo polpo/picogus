@@ -4,7 +4,7 @@
 
 ISA card emulation on the Raspberry Pi Pico's RP2040 microcontroller. Initially focusing on [Gravis Ultrasound (GUS)](https://en.wikipedia.org/wiki/Gravis_Ultrasound) sound card emulation, hence the name PicoGUS.
 
-Current status: Beta! See the [main wiki page](https://github.com/polpo/picogus/wiki) for current status and the [compatibility list](https://github.com/polpo/picogus/wiki/Compatibility-list) for support status of various DOS programs. This project has a heavy demoscene focus due to the GUS's history so that's what I've concentrated on.
+Current status: Beta! See the [main wiki page](https://github.com/polpo/picogus/wiki) for current status and the [compatibility list](https://github.com/polpo/picogus/wiki/Compatibility-list) for support status of various DOS programs. This project has a heavy demoscene focus due to the GUS's history so that's what I've concentrated on, but support in games is quickly improving.
 
 Want to make your own beta PicoGUS? See the [build guide](https://github.com/polpo/picogus/wiki/Building-your-PicoGUS). **Important caveat**: due to the specs of the Pico, assumptions made by programs written to use the GUS, the imprecise nature of emulation, and the varying specs of retro DOS PC hardware, some things will likely never be perfect. **This is still a work in progress.**
 
@@ -16,9 +16,11 @@ Looking for the original project, using Raspberry Pi 3/4? See the [pigus repo](h
 
 See/hear PicoGUS in action on YouTube:
 
-[![Watch the September 2022 Update](https://img.youtube.com/vi/h4iWSnTc9Ag/hqdefault.jpg)](https://youtu.be/h4iWSnTc9Ag)
+[<img src="https://img.youtube.com/vi/h4iWSnTc9Ag/hqdefault.jpg" alt="September 2022 update" width=400>](https://youtu.be/h4iWSnTc9Ag)
+[<img src="https://img.youtube.com/vi/CkJvkJVRscQ/hqdefault.jpg" alt="October 2022 update" width=400>](https://youtu.be/CkJvkJVRscQ)
+[<img src="https://img.youtube.com/vi/F5Zk_hHHkTg/hqdefault.jpg" alt="December 2022 update" width=400>](https://youtu.be/F5Zk_hHHkTg)
+[<img src="https://img.youtube.com/vi/sOHTagrWcIE/hqdefault.jpg" alt="January 2023 update" width=400>](https://youtu.be/sOHTagrWcIE)
 
-[![Watch the November 2022 Update](https://img.youtube.com/vi/CkJvkJVRscQ/hqdefault.jpg)](https://youtu.be/CkJvkJVRscQ)
 
 ## Open Source Credits
 
