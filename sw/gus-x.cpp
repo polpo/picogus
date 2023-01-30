@@ -1657,18 +1657,13 @@ static void MakeTables(void) {
         ((double)pantable[15]) / (1 << RAMP_FRACT));
 }
 
-/*
-void GUS_SetPort(const uint16_t base_port) {
-    printf("GUS: setting port to %x\n", base_port);
-    myGUS.portbase = base_port - 0x200u;
-}
-*/
 void GUS_SetAudioBuffer(const uint16_t new_buffer_size) {
     // PICOGUS special port to set audio buffer size
     buffer_size = new_buffer_size;
 }
 void GUS_SetDMAInterval(const uint16_t newInterval) {
     // PICOGUS special port to set DMA interval
+    printf("setting dma interval to %u\n", newInterval);
     myGUS.dmaIntervalOverride = newInterval;
 }
 
@@ -1677,7 +1672,7 @@ class GUS/*:public Module_base*/{
 private:
     bool gus_enable;
 public:
-    GUS(void/*Bitu base_port*/) {
+    GUS(void) {
         int x;
 
         gus_enable = true;
@@ -1708,8 +1703,6 @@ public:
         // level AFTER the code has rendered and clipped samples to 16-bit range.
         myGUS.masterVolume = 0.00;
         myGUS.updateMasterVolume();
-
-        // GUS_SetPort(base_port);
 
         MakeTables();
     
@@ -1751,9 +1744,9 @@ public:
 };
 
 static GUS* test = NULL;
-void GUS_OnReset(void/*Bitu base_port*/) {
+void GUS_OnReset(void) {
     LOG_MSG("Allocating GUS emulation");
-    test = new GUS(/*base_port*/);
+    test = new GUS();
 
     critical_section_init(&gus_crit);
 }

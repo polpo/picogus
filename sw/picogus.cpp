@@ -437,8 +437,8 @@ int main()
 #endif // SOUND_OPL
 
 #ifdef SOUND_GUS
-    printf("Creating GUS at port %x\n", basePort);
-    GUS_OnReset(/*basePort*/);
+    printf("Creating GUS");
+    GUS_OnReset();
     multicore_launch_core1(&play_gus);
 #endif // SOUND_GUS
 
