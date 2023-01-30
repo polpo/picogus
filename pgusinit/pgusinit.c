@@ -19,7 +19,7 @@ typedef enum {
 
 
 void banner(void) {
-    printf("PicoGUSinit v1.0.0\n");
+    printf("PicoGUSinit v1.0.1\n");
     printf("(c) 2023 Ian Scott - licensed under the GNU GPL v2\n\n");
 }
 
@@ -40,7 +40,7 @@ void usage(void) {
     fprintf(stderr, "           (tweaking this can help programs that hang or have audio glitches)\n");
     fprintf(stderr, "    /d n - force DMA interval to n æs. Default: 0, Min: 1, Max: 256\n");
     fprintf(stderr, "           Specifying 0 restores the GUS default behavior.\n");
-    fprintf(stderr, "           (try /d 10 with games with streaming audio like Doom...)\n");
+    fprintf(stderr, "           (if games with streaming audio like Doom stutter, increase this)\n");
     fprintf(stderr, "The ULTRASND environment variable must be set in the following format:\n");
     fprintf(stderr, "\tset ULTRASND=xxx,y,n,z,n\n");
     fprintf(stderr, "Where xxx = port, y = DMA, z = IRQ. n is ignored.\n");
