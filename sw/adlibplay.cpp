@@ -18,7 +18,15 @@
 
 #include "pico/audio_i2s.h"
 
+#ifdef OPL_YMFM
+#include "ymfm_opl.h"
+extern ymfm::ym3812* myOPL;
+#include "pico/critical_section.h"
+extern critical_section_t opl_crit;
+#else
 #include "opl.h"
+extern "C" void OPL_Pico_Mix_callback(audio_buffer_t *);
+#endif
 
 #if PICO_ON_DEVICE
 #include "pico/binary_info.h"
@@ -63,16 +71,37 @@ struct audio_buffer_pool *init_audio() {
     return producer_pool;
 }
 
-extern "C" void OPL_Pico_Mix_callback(audio_buffer_t *);
 
 void play_adlib() {
     puts("starting core 1");
     uint32_t start, end;
 
     struct audio_buffer_pool *ap = init_audio();
+#ifdef OPL_YMFM
+    ymfm::ym3812::output_data output;
+#endif
     for (;;) {
         struct audio_buffer *buffer = take_audio_buffer(ap, true);
+#ifdef OPL_YMFM
+        int16_t *samples = (int16_t *) buffer->buffer->bytes;
+        // uint32_t audio_begin = time_us_32();
+        for (int i = 0; i < buffer->max_sample_count; ++i) {
+            critical_section_enter_blocking(&opl_crit);
+            myOPL->generate(&output);
+            critical_section_exit(&opl_crit);
+            samples[i << 1] = samples[(i << 1) + 1] = output.data[0];
+        }
+        /*
+        uint32_t audio_elapsed = time_us_32() - audio_begin;
+        if (audio_elapsed > 1280) {
+            printf("took too long: %u\n", audio_elapsed);
+        }
+        */
+        buffer->sample_count = buffer->max_sample_count;
+        // putchar('=');
+#else
         OPL_Pico_Mix_callback(buffer);
+#endif
         // putchar((unsigned char)buffer->buffer->bytes[1]);
         give_audio_buffer(ap, buffer);
     }

@@ -27,13 +27,20 @@ psram_spi_inst_t* async_spi_inst;
 #define BAUD_RATE   115200
 
 #ifdef SOUND_OPL
-#include "opl.h"
 static uint16_t basePort = 0x388u;
-
 void play_adlib(void);
+#ifdef OPL_YMFM
+#include "ymfm_opl.h"
+ymfm::ymfm_interface* myYMFM;
+ymfm::ym3812* myOPL;
+#include "pico/critical_section.h"
+critical_section_t opl_crit;
+#else
+#include "opl.h"
 extern "C" int OPL_Pico_Init(unsigned int);
 extern "C" void OPL_Pico_PortWrite(opl_port_t, unsigned int);
 extern "C" unsigned int OPL_Pico_PortRead(opl_port_t);
+#endif
 #endif
 
 #ifdef SOUND_GUS
@@ -261,16 +268,31 @@ __force_inline void handle_iow(void) {
     } else // if follows down below
 #endif // SOUND_GUS
 #ifdef SOUND_OPL
+    static uint8_t opl_addr;
     switch (port - basePort) {
     case 0:
         // Fast write
         pio_sm_put(pio0, iow_sm, IO_END);
+#ifdef OPL_YMFM
+        /*
+        pio_sm_put(pio0, iow_sm, IO_WAIT);
+        myOPL->write_address(iow_read & 0xFF);
+        */
+        opl_addr = iow_read & 0xFF;
+#else
         OPL_Pico_PortWrite(OPL_REGISTER_PORT, iow_read & 0xFF);
         // Fast write - return early as we've already written 0x0u to the PIO
+#endif
         return;
         break;
     case 1:
         pio_sm_put(pio0, iow_sm, IO_WAIT);
+#ifdef OPL_YMFM
+        critical_section_enter_blocking(&opl_crit);
+        myOPL->write_address(opl_addr);
+        myOPL->write_data(iow_read & 0xFF);
+        critical_section_exit(&opl_crit);
+#else
         OPL_Pico_PortWrite(OPL_DATA_PORT, iow_read & 0xFF);
         // __dsb();
         break;
@@ -367,7 +389,11 @@ __force_inline void handle_ior(void) {
     if (port == basePort) {
         // Tell PIO to wait for data
         pio_sm_put(pio0, ior_sm, IO_WAIT);
+#ifdef OPL_YMFM
+        uint32_t value = myOPL->read_status();
+#else
         uint32_t value = OPL_Pico_PortRead(OPL_REGISTER_PORT);
+#endif
         // OR with 0x0000ff00 is required to set pindirs in the PIO
         pio_sm_put(pio0, ior_sm, IOR_SET_VALUE | value);
     } else // if follows down below
@@ -510,7 +536,13 @@ int main()
 
 #ifdef SOUND_OPL
     puts("Creating OPL");
+#ifdef OPL_YMFM
+    myYMFM = new ymfm::ymfm_interface();
+    myOPL = new ymfm::ym3812(*myYMFM);
+    critical_section_init(&opl_crit);
+#else
     OPL_Pico_Init(basePort);
+#endif
     multicore_launch_core1(&play_adlib);
 #endif // SOUND_OPL
 

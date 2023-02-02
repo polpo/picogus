@@ -100,14 +100,19 @@ if(PROJECT_TYPE STREQUAL "OPL")
     target_sources(picogus PRIVATE adlibplay.cpp)
     target_link_libraries(
         picogus
-        opl
+        ymfm
     )
     target_compile_definitions(picogus PRIVATE
         SOUND_OPL=1
-        USE_EMU8950_OPL=1
-        EMU8950_ASM=1
+        OPL_YMFM=1
+        # USE_EMU8950_OPL=1
+        # EMU8950_ASM=1
     )
-    add_subdirectory(opl)
+    set(ASYNC_UART 1)
+    add_compile_definitions(
+        ASYNC_UART=1
+    )
+    add_subdirectory(ymfm)
     pico_enable_stdio_uart(picogus 0)
     pico_enable_stdio_usb(picogus 0)
     pico_enable_stdio_semihosting(picogus 0)
