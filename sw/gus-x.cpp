@@ -1370,7 +1370,7 @@ GUS_DMA_Event(Bitu val) {
     }
 
     if (!(myGUS.DMAControl & 0x01/*DMA enable*/)) {
-        puts("stopping");
+        // puts("stopping");
         DEBUG_LOG_MSG("GUS DMA event: DMA control 'enable DMA' bit was reset, stopping DMA transfer events");
         GUS_DMA_Active = false;
         return 0;
@@ -1405,7 +1405,7 @@ GUS_DMA_isr() {
     }
 
     if (!(myGUS.DMAControl & 0x01/*DMA enable*/)) {
-        puts("stopping");
+        // puts("stopping");
         DEBUG_LOG_MSG("GUS DMA event: DMA control 'enable DMA' bit was reset, stopping DMA transfer events");
         GUS_DMA_Active = false;
         return;
@@ -1440,10 +1440,11 @@ static uint32_t next_event = 0;
 #endif
 
 __force_inline void GUS_StopDMA() {
+    // Setting GUS_DMA_Active to false will cancel the next DMA event if it happens
     GUS_DMA_Active = false;
-#ifndef POLLING_DMA
-    PIC_RemoveEvents(GUS_DMA_Event);
-#else
+    // Clear DMA enable bit (from Interwave Programmer's Guide: "The hardware resets this bit when the TC line is asserted.")
+    myGUS.DMAControl &= 0x1FEu;
+#ifdef POLLING_DMA
     next_event = 0;
 #endif
     if (myGUS.dmaWaiting) {
@@ -1502,7 +1503,8 @@ __force_inline void GUS_StartDMA() {
     }
     
 #ifndef POLLING_DMA
-    PIC_AddEvent(GUS_DMA_Event, 13, 2);
+    // PIC_AddEvent(GUS_DMA_Event, 13, 2);
+    PIC_AddEvent(GUS_DMA_Event, myGUS.dmaInterval, 2);
 #else
     next_event = time_us_32() + 2;
 #endif
