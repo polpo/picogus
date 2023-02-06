@@ -1396,9 +1396,9 @@ GUS_DMA_Event(Bitu val) {
 
 void 
 GUS_DMA_isr() {
+    myGUS.dmaWaiting = false;
     // Pull data from PIO even if we have to throw it away, because otherwise it will be stalled
     const uint32_t dma_data = DMA_Complete_Write(&dma_config);
-    myGUS.dmaWaiting = false;
 
     if (!GUS_DMA_Active) {
         return;
@@ -1413,13 +1413,34 @@ GUS_DMA_isr() {
 
     const uint8_t dma_data8 = dma_data & 0xffu;
 #ifdef PSRAM
-    psram_write8_async(&psram_spi, myGUS.dmaAddr, dma_config.invertMsb ? dma_data8 ^ 0x80 : dma_data8);
+    // psram_write8_async(&psram_spi, myGUS.dmaAddr, dma_config.invertMsb ? dma_data8 ^ 0x80 : dma_data8);
+    static union {
+        uint32_t data32;
+        uint8_t data8[4];
+    } dma_data_union;
+    size_t dmaOffset = myGUS.dmaAddr & 0x3;
+    dma_data_union.data8[dmaOffset] = dma_config.invertMsb ? dma_data ^ 0x80 : dma_data8;
+    if ((dmaOffset) == 0x3) {
+        psram_write32_async(&psram_spi, myGUS.dmaAddr - 0x3, dma_data_union.data32);
+    }
 #else
-    GUSRam[myGUS.dmaAddr] = dma_data8;
+    GUSRam[myGUS.dmaAddr] = dma_config.invertMsb ? dma_data8 ^ 0x80 : dma_data8;
 #endif
 
     // uart_print_hex_u32(dma_data);
     if (dma_data & 0x100u) { // if TC
+#ifdef PSRAM
+        // If data is not flushed
+        if (dmaOffset != 0x3) { // 0, 1, or 2
+            psram_writen_async(&psram_spi, myGUS.dmaAddr - dmaOffset, dma_data_union.data32, dmaOffset + 1);
+            /*
+            for(int i = 0; i <= myGUS.dmaAddr & 0x3; ++i) {
+                psram_write8(&psram_spi, myGUS.dmaAddr - (0x3 - i), dma_data_union.data8[i]);
+            }
+            */
+            // psram_write32_async(&psram_spi, myGUS.dmaAddr - (myGUS.dmaAddr & 0x3), dma_data_union.data32);
+        }
+#endif
         critical_section_enter_blocking(&gus_crit);
         /* Raise the TC irq, and stop DMA */
         myGUS.DMAControl |= 0x100u; /* NTS: DOSBox SVN approach: Use bit 8 for DMA TC IRQ */
@@ -1506,7 +1527,7 @@ __force_inline void GUS_StartDMA() {
     // PIC_AddEvent(GUS_DMA_Event, 13, 2);
     PIC_AddEvent(GUS_DMA_Event, myGUS.dmaInterval, 2);
 #else
-    next_event = time_us_32() + 2;
+    next_event = time_us_32() + myGUS.dmaInterval;
 #endif
 }
 
