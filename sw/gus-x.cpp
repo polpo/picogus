@@ -560,7 +560,6 @@ class GUSChannels {
 
         __force_inline void generateSample(int32_t* stream) {
             int32_t tmpsamp;
-            int i;
 
             /* NTS: The GUS is *always* rendering the audio sample at the current position,
              *      even if the voice is stopped. This can be confirmed using DOSLIB, loading
@@ -579,8 +578,8 @@ class GUSChannels {
 
             // Output stereo sample if DAC enable on
             // if ((GUS_reset_reg & 0x02/*DAC enable*/) == 0x02) {
-                *stream += tmpsamp * VolLeft;
-                *(stream + 1) += tmpsamp * VolRight;
+                stream[0] += tmpsamp * VolLeft;
+                stream[1] += tmpsamp * VolRight;
                 WaveUpdate();
                 RampUpdate();
             // }
@@ -894,8 +893,7 @@ __force_inline static void CheckVoiceIrq(void) {
     for (;;) {
         uint32_t check=(1u << myGUS.IRQChan);
         if (totalmask & check) {
-            critical_section_exit(&gus_crit);
-            return;
+            break;
         }
         myGUS.IRQChan++;
         if (myGUS.IRQChan>=myGUS.ActiveChannels) myGUS.IRQChan=0;
@@ -1560,10 +1558,13 @@ __force_inline void GUS_StartDMA() {
 #endif
 }
 
+static int32_t __force_inline clamp(int32_t d, int32_t min, int32_t max) {
+  return d < min ? min : (d > max ? max : d);
+}
 
 extern uint32_t GUS_CallBack(Bitu max_len, int16_t* play_buffer) {
     static int32_t buffer[MIXER_BUFSIZE][2];
-    const uint32_t render_samples = buffer_size;
+    const uint32_t render_samples = MIXER_BUFSIZE;
     memset(buffer, 0, render_samples * sizeof(buffer[0]));
 
     // putchar('g');
@@ -1572,7 +1573,11 @@ extern uint32_t GUS_CallBack(Bitu max_len, int16_t* play_buffer) {
             for (Bitu c = 0; c < myGUS.ActiveChannels; ++c) {
                 guschan[c]->generateSample(buffer[s]);
             }
-            CheckVoiceIrq();
+            play_buffer[s << 1] = clamp(buffer[s][0] >> 14, -32768, 32767);
+            play_buffer[(s << 1) + 1] = clamp(buffer[s][1] >> 14, -32768, 32767);
+            if (s & buffer_size == buffer_size) {
+                CheckVoiceIrq();
+            }
         }
         /*
         for (Bitu i = 0; i < myGUS.ActiveChannels; i++) {
@@ -1606,48 +1611,35 @@ extern uint32_t GUS_CallBack(Bitu max_len, int16_t* play_buffer) {
     //
     //        --J.C.
 
-    Bitu play_i = 0;
+#if 0
+    // Bitu play_i = 0;
     for (Bitu i = 0; i < render_samples; i++) {
         buffer[i][0] >>= (VOL_SHIFT * AutoAmp) >> 9;
         buffer[i][1] >>= (VOL_SHIFT * AutoAmp) >> 9;
-        bool dampenedAutoAmp = false;
 
         if (buffer[i][0] > 32767) {
             buffer[i][0] = 32767;
-            if (enable_autoamp) {
-                AutoAmp -= 4; /* dampen faster than recovery */
-                dampenedAutoAmp = true;
-            }
         }
         else if (buffer[i][0] < -32768) {
             buffer[i][0] = -32768;
-            if (enable_autoamp) {
-                AutoAmp -= 4; /* dampen faster than recovery */
-                dampenedAutoAmp = true;
-            }
         }
 
         if (buffer[i][1] > 32767) {
             buffer[i][1] = 32767;
-            if (enable_autoamp && !dampenedAutoAmp) {
-                AutoAmp -= 4; /* dampen faster than recovery */
-                dampenedAutoAmp = true;
-            }
         }
         else if (buffer[i][1] < -32768) {
             buffer[i][1] = -32768;
-            if (enable_autoamp && !dampenedAutoAmp) {
-                AutoAmp -= 4; /* dampen faster than recovery */
-                dampenedAutoAmp = true;
-            }
         }
 
-        if (AutoAmp < myGUS.masterVolumeMul && !dampenedAutoAmp) {
-            AutoAmp++; /* recovery back to 100% normal volume */
-        }
+        // if (AutoAmp < myGUS.masterVolumeMul && !dampenedAutoAmp) {
+        //     AutoAmp++; /* recovery back to 100% normal volume */
+        // }
         play_buffer[play_i++] = buffer[i][0];
         play_buffer[play_i++] = buffer[i][1];
+        play_buffer[i >> 1] = clamp(buffer[i][0] >> 14, -32768, 32767);
+        play_buffer[(i >> 1) + 1] = clamp(buffer[i][1] >> 14, -32768, 32767);
     }
+#endif
 
     // CheckVoiceIrq();
     return render_samples;
