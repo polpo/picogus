@@ -558,6 +558,34 @@ class GUSChannels {
             UpdateVolumes();
         }
 
+        __force_inline void generateSample(int32_t* stream) {
+            int32_t tmpsamp;
+            int i;
+
+            /* NTS: The GUS is *always* rendering the audio sample at the current position,
+             *      even if the voice is stopped. This can be confirmed using DOSLIB, loading
+             *      the Ultrasound test program, loading a WAV file into memory, then using
+             *      the Ultrasound test program's voice control dialog to single-step the
+             *      voice through RAM (abruptly change the current position) while the voice
+             *      is stopped. You will hear "popping" noises come out the GUS audio output
+             *      as the current position changes and the piece of the sample rendered
+             *      abruptly changes as well. */
+            // normal output
+            // Get sample
+            if (WaveCtrl & WCTRL_16BIT)
+                tmpsamp = GetSample16();
+            else
+                tmpsamp = GetSample8();
+
+            // Output stereo sample if DAC enable on
+            // if ((GUS_reset_reg & 0x02/*DAC enable*/) == 0x02) {
+                *stream += tmpsamp * VolLeft;
+                *(stream + 1) += tmpsamp * VolRight;
+                WaveUpdate();
+                RampUpdate();
+            // }
+        }
+#if 0
         __force_inline void generateSamples(int32_t* stream, uint32_t len) {
             int32_t tmpsamp;
             int i;
@@ -587,6 +615,7 @@ class GUSChannels {
                 }
             }
         }
+#endif
 };
 
 static GUSChannels *guschan[32] = {NULL};
@@ -1532,16 +1561,24 @@ __force_inline void GUS_StartDMA() {
 }
 
 
-int32_t buffer[MIXER_BUFSIZE][2];
 extern uint32_t GUS_CallBack(Bitu max_len, int16_t* play_buffer) {
-    uint32_t render_samples = buffer_size;
+    static int32_t buffer[MIXER_BUFSIZE][2];
+    const uint32_t render_samples = buffer_size;
     memset(buffer, 0, render_samples * sizeof(buffer[0]));
 
     // putchar('g');
-    if ((GUS_reset_reg & 0x01/*!master reset*/) == 0x01) {
+    if ((GUS_reset_reg & 0x01/*!master reset*/) == 0x01 && (GUS_reset_reg & 0x02/*DAC enable*/) == 0x02) {
+        for (size_t s = 0; s < render_samples; ++s) {
+            for (Bitu c = 0; c < myGUS.ActiveChannels; ++c) {
+                guschan[c]->generateSample(buffer[s]);
+            }
+            CheckVoiceIrq();
+        }
+        /*
         for (Bitu i = 0; i < myGUS.ActiveChannels; i++) {
             guschan[i]->generateSamples(buffer[0], render_samples);
         }
+        */
     }
 
     // FIXME: I wonder if the GF1 chip DAC had more than 16 bits precision
@@ -1612,7 +1649,7 @@ extern uint32_t GUS_CallBack(Bitu max_len, int16_t* play_buffer) {
         play_buffer[play_i++] = buffer[i][1];
     }
 
-    CheckVoiceIrq();
+    // CheckVoiceIrq();
     return render_samples;
 }
 
