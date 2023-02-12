@@ -30,6 +30,10 @@
 extern psram_spi_inst_t psram_spi;
 #endif
 
+#if defined(INTERP_CLAMP) || defined(INTERP_LINEAR)
+#include "hardware/interp.h"
+#endif
+
 #include "pico/critical_section.h"
 critical_section_t gus_crit;
 
@@ -279,26 +283,16 @@ class GUSChannels {
         }
 
 #ifdef PSRAM
-        union uint8_t_pair {
-            uint16_t data16;
-            uint8_t data8[2];
-        };
-
-        union uint16_t_pair {
+        union int16_t_pair {
             uint32_t data32;
-            uint16_t data16[2];
-        };
-
-        struct sample32_pair {
-            int32_t low;
-            int32_t high;
+            int16_t data16[2];
         };
 
         INLINE uint8_t prime_cache(const uint32_t addr, const uint8_t threshold) const {
             uint32_t addr_hi = addr & 0xffff0u;
             uint8_t addr_part = addr & 0xfu;
             if (sample_cache.addr != addr_hi) {
-                if (sample_cache.addr_next == addr_hi) {
+                if (sample_cache.addr_next != -1 && sample_cache.addr_next == addr_hi) {
                     // We could avoid this memcpy by wrapping around the cache address... but I am tired
                     memcpy(sample_cache.data, sample_cache.data + 16, 16);
                 } else {
@@ -315,23 +309,23 @@ class GUSChannels {
             return addr_part;
         }
 
-        INLINE sample32_pair LoadSamples8(const uint32_t addr/*memory address without fractional bits*/) const {
+        INLINE int16_t_pair LoadSamples8(const uint32_t addr/*memory address without fractional bits*/) const {
             const uint8_t addr_part = prime_cache(addr, 0xfu);
-            return (struct sample32_pair){
-                .low = (int8_t)sample_cache.data[addr_part] << (int32_t)8,
-                .high = (int8_t)sample_cache.data[addr_part + 1] << (int32_t)8
-            };
+            return (union int16_t_pair){ .data16 = {
+                (int8_t)sample_cache.data[addr_part] << (int16_t)8,
+                (int8_t)sample_cache.data[addr_part + 1] << (int16_t)8
+            }};
         }
 
-        INLINE sample32_pair LoadSamples16(const uint32_t addr/*memory address without fractional bits*/) const {
+        INLINE int16_t_pair LoadSamples16(const uint32_t addr/*memory address without fractional bits*/) const {
             const uint32_t adjaddr = (addr & 0xC0000u/*256KB bank*/) | ((addr & 0x1FFFFu) << 1u/*16-bit sample value within bank*/);
             const uint8_t addr_part = prime_cache(adjaddr, 0xeu);
-            return (struct sample32_pair){
-                .low = (int16_t)*(uint16_t*)(sample_cache.data + addr_part),
-                .high = (int16_t)*(uint16_t*)(sample_cache.data + addr_part + 2)
-            };
+            return (union int16_t_pair){ .data16 = {
+                (int16_t)*(uint16_t*)(sample_cache.data + addr_part),
+                (int16_t)*(uint16_t*)(sample_cache.data + addr_part + 2)
+            }};
         }
-#endif
+#endif // PSRAM
 
         // Returns a single 16-bit sample from the Gravis's RAM
         INLINE int32_t GetSample8() const {
@@ -340,17 +334,23 @@ class GUSChannels {
             {
                 // Interpolate
 #ifdef PSRAM
-                sample32_pair p = LoadSamples8(useAddr);
-                int32_t diff = p.high - p.low;
+                union int16_t_pair p = LoadSamples8(useAddr);
+#ifdef INTERP_LINEAR
+                interp0->base01 = p.data32;
+                interp0->accum[1] = WaveAddr >> 1;
+                return interp0->peek[1];
+#else // INTERP_LINEAR
+                int32_t diff = (int32_t)p.data16[1] - (int32_t)p.data16[0];
                 int32_t scale = (int32_t)(WaveAddr & WAVE_FRACT_MASK);
-                return (p.low + ((diff * scale) >> WAVE_FRACT));
-#else
+                return ((int32_t)p.data16[0] + ((diff * scale) >> WAVE_FRACT));
+#endif // INTERP_LINEAR
+#else // PSRAM
                 int32_t w1 = LoadSample8(useAddr);
                 int32_t w2 = LoadSample8(useAddr + 1u);
                 int32_t diff = w2 - w1;
                 int32_t scale = (int32_t)(WaveAddr & WAVE_FRACT_MASK);
                 return (w1 + ((diff * scale) >> WAVE_FRACT));
-#endif
+#endif // PSRAM
             }
         }
 
@@ -360,17 +360,23 @@ class GUSChannels {
             {
                 // Interpolate
 #ifdef PSRAM
-                sample32_pair p = LoadSamples16(useAddr);
-                int32_t diff = p.high - p.low;
+                union int16_t_pair p = LoadSamples16(useAddr);
+#ifdef INTERP_LINEAR
+                interp0->base01 = p.data32;
+                interp0->accum[1] = WaveAddr >> 1;
+                return interp0->peek[1];
+#else // INTERP_LINEAR
+                int32_t diff = (int32_t)p.data16[1] - (int32_t)p.data16[0];
                 int32_t scale = (int32_t)(WaveAddr & WAVE_FRACT_MASK);
-                return (p.low + ((diff * scale) >> WAVE_FRACT));
-#else
+                return ((int32_t)p.data16[0] + ((diff * scale) >> WAVE_FRACT));
+#endif // INTERP_LINEAR
+#else // PSRAM
                 int32_t w1 = LoadSample16(useAddr);
                 int32_t w2 = LoadSample16(useAddr + 1u);
                 int32_t diff = w2 - w1;
                 int32_t scale = (int32_t)(WaveAddr & WAVE_FRACT_MASK);
                 return (w1 + ((diff * scale) >> WAVE_FRACT));
-#endif
+#endif // PSRAM
             }
         }
 
@@ -1558,8 +1564,16 @@ __force_inline void GUS_StartDMA() {
 #endif
 }
 
+
+#ifdef INTERP_CLAMP
+static int16_t __force_inline clamp16(int32_t d) {
+    interp1->accum[0] = d;
+    return interp1->peek[0];
+}
+#else
+#endif // INTERP_CLAMP
 static int32_t __force_inline clamp(int32_t d, int32_t min, int32_t max) {
-  return d < min ? min : (d > max ? max : d);
+    return d < min ? min : (d > max ? max : d);
 }
 
 extern uint32_t GUS_CallBack(Bitu max_len, int16_t* play_buffer) {
@@ -1573,8 +1587,14 @@ extern uint32_t GUS_CallBack(Bitu max_len, int16_t* play_buffer) {
             for (Bitu c = 0; c < myGUS.ActiveChannels; ++c) {
                 guschan[c]->generateSample(buffer[s]);
             }
+#ifdef INTERP_CLAMP
+            play_buffer[s << 1] = clamp16(buffer[s][0]);
+            play_buffer[(s << 1) + 1] = clamp16(buffer[s][1]);
+            // printf("%d %d %d\n", buffer[s][0] >> 14, clamp16(buffer[s][0]), clamp(buffer[s][0] >> 14, -32768, 32767));
+#else
             play_buffer[s << 1] = clamp(buffer[s][0] >> 14, -32768, 32767);
             play_buffer[(s << 1) + 1] = clamp(buffer[s][1] >> 14, -32768, 32767);
+#endif
             if (s & buffer_size == buffer_size) {
                 CheckVoiceIrq();
             }
@@ -1777,6 +1797,8 @@ public:
             myGUS.gRegData=0x700;
             GUSReset();
         }
+
+
     }
 
     ~GUS() {
@@ -1801,4 +1823,35 @@ void GUS_OnReset(void) {
     test = new GUS();
 
     critical_section_init(&gus_crit);
+}
+
+void GUS_Setup() {
+#if defined(INTERP_LINEAR) || defined(INTERP_CLAMP)
+        interp_config cfg;
+#endif
+#ifdef INTERP_LINEAR
+        cfg = interp_default_config();
+        // Linear interpolation setup
+        interp_config_set_blend(&cfg, true);
+        // interp_config_set_shift(&cfg, 1);
+        // interp_config_set_mask(&cfg, 0, 7);
+        interp_set_config(interp0, 0, &cfg);
+        cfg = interp_default_config();
+        interp_config_set_signed(&cfg, true);
+        interp_set_config(interp0, 1, &cfg);
+#endif
+
+#ifdef INTERP_CLAMP
+        // Clamp setup
+        cfg = interp_default_config();
+        interp_config_set_clamp(&cfg, true);
+        interp_config_set_shift(&cfg, 14);
+        // set mask according to new position of sign bit..
+        interp_config_set_mask(&cfg, 0, 17);
+        // ...so that the shifted value is correctly sign extended
+        interp_config_set_signed(&cfg, true);
+        interp_set_config(interp1, 0, &cfg);
+        interp1->base[0] = -32768;
+        interp1->base[1] = 32767;
+#endif
 }

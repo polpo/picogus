@@ -111,6 +111,7 @@ void play_gus() {
 #endif
 #endif
 #endif
+    GUS_Setup();
 
     struct audio_buffer_pool *ap = init_audio();
     for (;;) {
@@ -127,7 +128,7 @@ void play_gus() {
         int16_t *samples = (int16_t *) buffer->buffer->bytes;
 
         // uint32_t gus_audio_begin = time_us_32();
-        __dsb();
+        // __dsb();
         buffer->sample_count = GUS_CallBack(buffer->max_sample_count, samples);
         /*
         uint32_t gus_audio_elapsed = time_us_32() - gus_audio_begin;
