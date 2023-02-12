@@ -2,7 +2,7 @@
 
 #include "pico/platform.h"
 
-#define MIXER_BUFSIZE 256u
+#define MIXER_BUFSIZE 64u
 
 typedef uint32_t	Bitu;
 
