@@ -127,7 +127,7 @@ static bool dma_enable_on_dma_control_polling = false;
 static uint16_t vol16bit[4096];
 static uint32_t pantable[16];
 
-static uint32_t buffer_size = 16;
+static uint32_t buffer_size = 15;
 static uint32_t dma_interval = 0;
 
 class GUSChannels;
@@ -288,7 +288,7 @@ class GUSChannels {
             int16_t data16[2];
         };
 
-        INLINE uint8_t prime_cache(const uint32_t addr, const uint8_t threshold) const {
+        INLINE size_t prime_cache(const uint32_t addr, const uint8_t threshold) const {
             uint32_t addr_hi = addr & 0xffff0u;
             uint8_t addr_part = addr & 0xfu;
             if (sample_cache.addr != addr_hi) {
@@ -310,16 +310,16 @@ class GUSChannels {
         }
 
         INLINE int16_t_pair LoadSamples8(const uint32_t addr/*memory address without fractional bits*/) const {
-            const uint8_t addr_part = prime_cache(addr, 0xfu);
+            const size_t addr_part = prime_cache(addr, 0xfu);
             return (union int16_t_pair){ .data16 = {
-                (int8_t)sample_cache.data[addr_part] << (int16_t)8,
-                (int8_t)sample_cache.data[addr_part + 1] << (int16_t)8
+                (int16_t)((uint16_t)sample_cache.data[addr_part] << 8),
+                (int16_t)((uint16_t)sample_cache.data[addr_part + 1] << 8)
             }};
         }
 
         INLINE int16_t_pair LoadSamples16(const uint32_t addr/*memory address without fractional bits*/) const {
             const uint32_t adjaddr = (addr & 0xC0000u/*256KB bank*/) | ((addr & 0x1FFFFu) << 1u/*16-bit sample value within bank*/);
-            const uint8_t addr_part = prime_cache(adjaddr, 0xeu);
+            const size_t addr_part = prime_cache(adjaddr, 0xeu);
             return (union int16_t_pair){ .data16 = {
                 (int16_t)*(uint16_t*)(sample_cache.data + addr_part),
                 (int16_t)*(uint16_t*)(sample_cache.data + addr_part + 2)
@@ -1590,7 +1590,6 @@ extern uint32_t GUS_CallBack(Bitu max_len, int16_t* play_buffer) {
 #ifdef INTERP_CLAMP
             play_buffer[s << 1] = clamp16(buffer[s][0]);
             play_buffer[(s << 1) + 1] = clamp16(buffer[s][1]);
-            // printf("%d %d %d\n", buffer[s][0] >> 14, clamp16(buffer[s][0]), clamp(buffer[s][0] >> 14, -32768, 32767));
 #else
             play_buffer[s << 1] = clamp(buffer[s][0] >> 14, -32768, 32767);
             play_buffer[(s << 1) + 1] = clamp(buffer[s][1] >> 14, -32768, 32767);
@@ -1628,7 +1627,7 @@ extern uint32_t GUS_CallBack(Bitu max_len, int16_t* play_buffer) {
     //
     //        --J.C.
 
-#if 0
+#if 0  // revisit autoamp later, or send a higher bit depth to the dac
     // Bitu play_i = 0;
     for (Bitu i = 0; i < render_samples; i++) {
         buffer[i][0] >>= (VOL_SHIFT * AutoAmp) >> 9;
@@ -1728,7 +1727,7 @@ static void MakeTables(void) {
 
 void GUS_SetAudioBuffer(const uint16_t new_buffer_size) {
     // PICOGUS special port to set audio buffer size
-    buffer_size = new_buffer_size;
+    buffer_size = new_buffer_size - 1;
 }
 void GUS_SetDMAInterval(const uint16_t newInterval) {
     // PICOGUS special port to set DMA interval
