@@ -1601,11 +1601,8 @@ extern uint32_t GUS_CallBack(Bitu max_len, int16_t* play_buffer) {
                 CheckVoiceIrq();
             }
         }
-        /*
-        for (Bitu i = 0; i < myGUS.ActiveChannels; i++) {
-            guschan[i]->generateSamples(buffer[0], render_samples);
-        }
-        */
+    } else {
+        return 0;
     }
 
     // FIXME: I wonder if the GF1 chip DAC had more than 16 bits precision
