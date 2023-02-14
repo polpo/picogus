@@ -48,6 +48,13 @@ static uint16_t basePort = 0x330u;
 void play_mpu(void);
 #endif
 
+#ifdef SOUND_TANDY
+#include "emu76489/emu76489.h"
+static uint16_t basePort = 0x2c0u;
+void play_tandy(void);
+SNG* sn76489;
+#endif
+
 // PicoGUS control and data ports
 // 1D0 chosen as the base port as nothing is listed in Ralf Brown's Port List (http://www.cs.cmu.edu/~ralf/files.html)
 #define CONTROL_PORT 0x1D0
@@ -195,8 +202,8 @@ static constexpr uint32_t IOR_SET_VALUE = 0x0000ff00u;
 __force_inline void handle_iow(void) {
     uint32_t iow_read = pio_sm_get(pio0, iow_sm); //>> 16;
     // printf("%x", iow_read);
-    // printf("IOW: %x\n", iow_read);
     uint16_t port = (iow_read >> 8) & 0x3FF;
+    // printf("IOW: %x %x\n", port, iow_read & 0xFF);
 #ifdef SOUND_GUS
     if ((port >> 4 | 0x10) == gus_port_test) {
         bool fast_write = false;
@@ -264,6 +271,12 @@ __force_inline void handle_iow(void) {
         break;
     }
 #endif // SOUND_MPU
+#ifdef SOUND_TANDY
+    if (port == basePort) {
+        pio_sm_put(pio0, iow_sm, IO_WAIT);
+        SNG_writeIO(sn76489, iow_read & 0xFF);
+    } else // if follows down below
+#endif
     // PicoGUS control
     if (port == CONTROL_PORT) {
         pio_sm_put(pio0, iow_sm, IO_WAIT);
@@ -305,7 +318,7 @@ __force_inline void handle_ior(void) {
         pio_sm_put(pio0, ior_sm, IOR_SET_VALUE | value);
         // printf("GUS IOR: port: %x value: %x\n", port, value);
         // gpio_xor_mask(1u << LED_PIN);
-    }
+    } else // if follows down below
 #elif defined(SOUND_OPL)
     if (port == basePort) {
         // Tell PIO to wait for data
@@ -313,7 +326,7 @@ __force_inline void handle_ior(void) {
         uint32_t value = OPL_Pico_PortRead(OPL_REGISTER_PORT);
         // OR with 0x0000ff00 is required to set pindirs in the PIO
         pio_sm_put(pio0, ior_sm, IOR_SET_VALUE | value);
-    }
+    } else // if follows down below
 #elif defined(SOUND_MPU)
     if (port == basePort) {
         // Tell PIO to wait for data
@@ -329,9 +342,9 @@ __force_inline void handle_ior(void) {
         // printf("MPU IOR: port: %x value: %x\n", port, value);
         // OR with 0x0000ff00 is required to set pindirs in the PIO
         pio_sm_put(pio0, ior_sm, IOR_SET_VALUE | value);
-    }
+    } else // if follows down below
 #endif
-    else if (port == CONTROL_PORT) {
+    if (port == CONTROL_PORT) {
         // Tell PIO to wait for data
         pio_sm_put(pio0, ior_sm, IO_WAIT);
         uint32_t value = sel_reg;
@@ -445,6 +458,13 @@ int main()
 #ifdef SOUND_MPU
     multicore_launch_core1(&play_mpu);
 #endif // SOUND_MPU
+
+#ifdef SOUND_TANDY
+    puts("Creating SN76489");
+    sn76489 = SNG_new(3579545, 44100);
+    SNG_reset(sn76489);
+    multicore_launch_core1(&play_tandy);
+#endif // SOUND_TANDY
 
     for(int i=AD0_PIN; i<(AD0_PIN + 10); ++i) {
         gpio_disable_pulls(i);
