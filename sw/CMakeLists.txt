@@ -14,7 +14,7 @@ include(pico_sdk_import.cmake)
 include(pico_extras_import.cmake)
 
 project(picogus
-    VERSION "0.4.0"
+    VERSION "0.4.99"
     LANGUAGES C CXX ASM
 )
 
@@ -122,6 +122,27 @@ if(PROJECT_TYPE STREQUAL "MPU")
     target_sources(picogus PRIVATE mpuplay.cpp)
     # Use USB stdio because UART is used by MIDI
     pico_enable_stdio_uart(picogus 0)
+    pico_enable_stdio_usb(picogus 0)
+    pico_enable_stdio_semihosting(picogus 0)
+endif()
+
+if(PROJECT_TYPE STREQUAL "TANDY")
+    pico_set_program_name(picogus "picogus-tandy")
+    target_compile_definitions(picogus PRIVATE
+        SOUND_TANDY=1
+        USE_ALARM=1
+    )
+    target_sources(picogus PRIVATE
+        pico_pic.c
+        emu76489/emu76489.c
+    )
+    target_sources(picogus PRIVATE tandyplay.cpp)
+    set(ASYNC_UART 1)
+    add_compile_definitions(
+        ASYNC_UART=1
+    )
+    pico_enable_stdio_uart(picogus 0)
+    # pico_enable_stdio_uart(picogus 1)
     pico_enable_stdio_usb(picogus 0)
     pico_enable_stdio_semihosting(picogus 0)
 endif()
