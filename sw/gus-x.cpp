@@ -1672,6 +1672,7 @@ extern uint32_t GUS_CallBack(Bitu max_len, int16_t* play_buffer) {
         play_buffer[play_i++] = buffer[i][0];
         play_buffer[play_i++] = buffer[i][1];
     }
+#endif
 
     // CheckVoiceIrq();
     return render_samples;
