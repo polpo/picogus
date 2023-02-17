@@ -337,7 +337,7 @@ class GUSChannels {
                 union int16_t_pair p = LoadSamples8(useAddr);
 #ifdef INTERP_LINEAR
                 interp0->base01 = p.data32;
-                interp0->accum[1] = WaveAddr >> 1;
+                interp0->accum[1] = WaveAddr;
                 return interp0->peek[1];
 #else // INTERP_LINEAR
                 int32_t diff = (int32_t)p.data16[1] - (int32_t)p.data16[0];
@@ -363,7 +363,7 @@ class GUSChannels {
                 union int16_t_pair p = LoadSamples16(useAddr);
 #ifdef INTERP_LINEAR
                 interp0->base01 = p.data32;
-                interp0->accum[1] = WaveAddr >> 1;
+                interp0->accum[1] = WaveAddr;
                 return interp0->peek[1];
 #else // INTERP_LINEAR
                 int32_t diff = (int32_t)p.data16[1] - (int32_t)p.data16[0];
@@ -1846,10 +1846,9 @@ void GUS_Setup() {
         cfg = interp_default_config();
         // Linear interpolation setup
         interp_config_set_blend(&cfg, true);
-        // interp_config_set_shift(&cfg, 1);
-        // interp_config_set_mask(&cfg, 0, 7);
         interp_set_config(interp0, 0, &cfg);
         cfg = interp_default_config();
+        interp_config_set_shift(&cfg, 1); // Shift WaveAddr by 1
         interp_config_set_signed(&cfg, true);
         interp_set_config(interp0, 1, &cfg);
 #endif
