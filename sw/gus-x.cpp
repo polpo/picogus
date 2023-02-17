@@ -154,7 +154,6 @@ struct GFGus {
     uint8_t SampControl;
     uint8_t mixControl;
     uint8_t ActiveChannels;
-    uint8_t ActiveChannelsUser; /* what the guest wrote */
     uint8_t gRegControl;
     uint32_t basefreq;
 
@@ -639,7 +638,7 @@ void DEBUG_PrintGUS() { //debugger "GUS" command
                         myGUS.gCurChannel,
                         myGUS.gUltraMAXControl,
                         myGUS.gRegControl);
-        LOG_MSG("DMActrl=%02x (TC=%u) dmaAddr=%06x timerctl=%02x sampctl=%02x mixctl=%02x activech=%u (want=%u) DACrate=%uHz",
+        LOG_MSG("DMActrl=%02x (TC=%u) dmaAddr=%06x timerctl=%02x sampctl=%02x mixctl=%02x activech=%u DACrate=%uHz",
                         myGUS.DMAControl&0xFF,
                         (myGUS.DMAControl&0x100)?1:0,
                         myGUS.dmaAddr,
@@ -647,7 +646,6 @@ void DEBUG_PrintGUS() { //debugger "GUS" command
                         myGUS.SampControl,
                         myGUS.mixControl,
                         myGUS.ActiveChannels,
-                        myGUS.ActiveChannelsUser,
                         myGUS.basefreq);
         LOG_MSG("IRQen=%u IRQstat=%02x IRQchan=%04x RampIRQ=%04x WaveIRQ=%04x",
                         myGUS.irqenabled,
@@ -793,7 +791,6 @@ static void GUSReset(void) {
         myGUS.TimerControl = 0x00;
         myGUS.SampControl = 0x00;
         myGUS.ActiveChannels = 14;
-        myGUS.ActiveChannelsUser = 14;
         myGUS.ActiveMask=0xffffffffU >> (32-myGUS.ActiveChannels);
         // myGUS.basefreq = (uint32_t)(1000000.0/(1.619695497*(float)(myGUS.ActiveChannels)));
         myGUS.basefreq = sample_rates[myGUS.ActiveChannels - 1];
@@ -920,7 +917,7 @@ __force_inline static uint16_t ExecuteReadRegister(void) {
     switch (myGUS.gRegSelect) {
     case 0x8E:  // read active channel register
         // NTS: The GUS SDK documents the active channel count as bits 5-0, which is wrong. it's bits 4-0. bits 7-5 are always 1 on real hardware.
-        return ((uint16_t)(0xE0 | (myGUS.ActiveChannelsUser - 1))) << 8;
+        return ((uint16_t)(0xE0 | (myGUS.ActiveChannels - 1))) << 8;
     case 0x41: // Dma control register - read acknowledges DMA IRQ
         critical_section_enter_blocking(&gus_crit);
         tmpreg = myGUS.DMAControl & 0xbf;
@@ -1120,7 +1117,7 @@ __force_inline static void ExecuteGlobRegister(void) {
 
         // gus_chan->FillUp();
         myGUS.gRegSelect = myGUS.gRegData>>8;       //JAZZ Jackrabbit seems to assume this?
-        myGUS.ActiveChannelsUser = 1+((myGUS.gRegData>>8) & 31); // NTS: The GUS SDK documents this field as bits 5-0, which is wrong, it's bits 4-0. 5-0 would imply 64 channels.
+        myGUS.ActiveChannels = 1+((myGUS.gRegData>>8) & 31); // NTS: The GUS SDK documents this field as bits 5-0, which is wrong, it's bits 4-0. 5-0 would imply 64 channels.
 
         /* The GUS SDK claims that if a channel count less than 14 is written, then it caps to 14.
          * That's not true. Perhaps what the SDK is doing, but the actual hardware acts differently.
@@ -1140,7 +1137,6 @@ __force_inline static void ExecuteGlobRegister(void) {
          * NOTED: Gravis Ultrasound Plug & Play (interwave) cards *do* enforce the 14-channel minimum.
          *        You can write less than 14 channels to this register, but unlike the Classic and Max
          *        cards they will not run faster than 44.1KHz. */
-        myGUS.ActiveChannels = myGUS.ActiveChannelsUser;
 
         // force min channels to 14 - I don't want to subject the poor RP2040 to anything more than 44.1kHz
         if(myGUS.ActiveChannels < 14) myGUS.ActiveChannels = 14;
@@ -1573,19 +1569,21 @@ static int16_t __force_inline clamp16(int32_t d) {
     return interp1->peek[0];
 }
 #else
-#endif // INTERP_CLAMP
 static int32_t __force_inline clamp(int32_t d, int32_t min, int32_t max) {
     return d < min ? min : (d > max ? max : d);
 }
+#endif // INTERP_CLAMP
 
 extern uint32_t GUS_CallBack(Bitu max_len, int16_t* play_buffer) {
     static int32_t buffer[MIXER_BUFSIZE][2];
-    const uint32_t render_samples = buffer_size;
-    memset(buffer, 0, render_samples * sizeof(buffer[0]));
+    uint32_t s = 0;
 
     // putchar('g');
     if ((GUS_reset_reg & 0x01/*!master reset*/) == 0x01 && (GUS_reset_reg & 0x02/*DAC enable*/) == 0x02) {
-        for (size_t s = 0; s < render_samples; ++s) {
+        const uint32_t render_samples = MIXER_BUFSIZE;
+        memset(buffer, 0, render_samples * sizeof(buffer[0]));
+        while (s < render_samples) {
+            uint32_t cur_rate = myGUS.basefreq;
             for (Bitu c = 0; c < myGUS.ActiveChannels; ++c) {
                 guschan[c]->generateSample(buffer[s]);
             }
@@ -1599,9 +1597,14 @@ extern uint32_t GUS_CallBack(Bitu max_len, int16_t* play_buffer) {
             if (s & buffer_size == buffer_size) {
                 CheckVoiceIrq();
             }
+            ++s;
+            if (cur_rate != myGUS.basefreq) {
+                // Bail out if our sampling rate changed. This will produce 1 sample at the
+                // wrong rate, but it's better than producing up to render_samples at the 
+                // wrong rate...
+                break;
+            }
         }
-    } else {
-        return 0;
     }
 
     // FIXME: I wonder if the GF1 chip DAC had more than 16 bits precision
@@ -1675,7 +1678,7 @@ extern uint32_t GUS_CallBack(Bitu max_len, int16_t* play_buffer) {
 #endif
 
     // CheckVoiceIrq();
-    return render_samples;
+    return s;
 }
 
 // Generate logarithmic to linear volume conversion tables
