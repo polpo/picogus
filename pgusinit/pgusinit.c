@@ -330,6 +330,9 @@ int main(int argc, char* argv[]) {
     case 3:
         printf("Running in Tandy 3-voice mode on port %x\n", port);
         break;
+    default:
+        printf("Running in unknown mode on port %x (maybe upgrade pgusinit?)\n", port);
+        break;
     }
     printf("PicoGUS initialized!\n");
 
