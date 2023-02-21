@@ -2,9 +2,14 @@
 
 ![PicoGUS Logo](picogus-logo.svg)
 
-ISA card emulation on the Raspberry Pi Pico's RP2040 microcontroller. Mostly focused on [Gravis Ultrasound (GUS)](https://en.wikipedia.org/wiki/Gravis_Ultrasound) sound card emulation, hence the name PicoGUS, but it can also emulate AdLib (OPL2) and MPU-401 intelligent mode MIDI output.
+ISA sound card emulation on the Raspberry Pi Pico's RP2040 microcontroller. PicoGUS can emulate:
 
-Current status: Beta! See the [main wiki page](https://github.com/polpo/picogus/wiki) for current status and the [compatibility list](https://github.com/polpo/picogus/wiki/Compatibility-list) for support status of various DOS programs. This project has a heavy demoscene focus due to the GUS's history so that's what I've concentrated on, but support in games is quickly improving.
+* [Gravis Ultrasound (GUS)](https://en.wikipedia.org/wiki/Gravis_Ultrasound) - the primary focus of PicoGUS, hence the name
+* [AdLib (OPL2)](https://en.wikipedia.org/wiki/Ad_Lib,_Inc.)
+* [MPU-401 (with intelligent mode)](https://en.wikipedia.org/wiki/MPU-401) - outputs MIDI data on 3.5mm MIDI TRS connector
+* [Tandy 3-voice](http://www.vgmpf.com/Wiki/index.php?title=Tandy_3_Voice)
+
+Current status: Beta! See the [main wiki page](https://github.com/polpo/picogus/wiki) for current status and the [compatibility list](https://github.com/polpo/picogus/wiki/Compatibility-list) for support status of various DOS programs and other system compatibility notes. This project has a heavy demoscene focus due to the GUS's history so that's what I've concentrated on, but GUS support in games is quickly improving.
 
 Want to make your own beta PicoGUS? See the [build guide](https://github.com/polpo/picogus/wiki/Building-your-PicoGUS). **Important caveat**: due to the specs of the Pico, assumptions made by programs written to use the GUS, the imprecise nature of emulation, and the varying specs of retro DOS PC hardware, some things will likely never be perfect. **This is still a work in progress.**
 
@@ -29,6 +34,7 @@ See/hear PicoGUS in action on YouTube:
 * `gus-x.cpp` adapted from [DOSBox-X](https://github.com/joncampbell123/dosbox-x)
 * OPL/AdLib emulation from [rp2040-doom](https://github.com/kilograham/rp2040-doom) (based on [emu8950](https://github.com/digital-sound-antiques/emu8950))
 * MPU-401 emulation adapted from [HardMPU](https://github.com/ab0tj/HardMPU) and [DOSBox-X](https://github.com/joncampbell123/dosbox-x)
+* Tandy 3-voice emulation from [emu76489](https://github.com/digital-sound-antiques/emu76489)
 
 ## License
 
