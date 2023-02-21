@@ -173,7 +173,7 @@ pico_add_extra_outputs(picogus)
 add_custom_target(
     program
     DEPENDS picogus
-    COMMAND openocd -f interface/cmsis-dap.cfg -f target/rp2040.cfg -c "adapter speed 5000;program picogus.elf verify reset exit"
+    COMMAND openocd -f interface/cmsis-dap.cfg -f target/rp2040.cfg -c "adapter speed 5000\; program picogus.elf verify reset exit"
 )
 
 unset(PROJECT_TYPE CACHE)
