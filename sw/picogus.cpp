@@ -173,6 +173,8 @@ __force_inline uint8_t read_picogus_high(void) {
         return 1;
 #elif defined(SOUND_MPU)
         return 2;
+#elif defined(SOUND_TANDY)
+        return 3;
 #else
         return 0xff;
 #endif

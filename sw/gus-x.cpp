@@ -154,7 +154,6 @@ struct GFGus {
     uint8_t SampControl;
     uint8_t mixControl;
     uint8_t ActiveChannels;
-    uint8_t ActiveChannelsUser; /* what the guest wrote */
     uint8_t gRegControl;
     uint32_t basefreq;
 
@@ -337,7 +336,7 @@ class GUSChannels {
                 union int16_t_pair p = LoadSamples8(useAddr);
 #ifdef INTERP_LINEAR
                 interp0->base01 = p.data32;
-                interp0->accum[1] = WaveAddr >> 1;
+                interp0->accum[1] = WaveAddr;
                 return interp0->peek[1];
 #else // INTERP_LINEAR
                 int32_t diff = (int32_t)p.data16[1] - (int32_t)p.data16[0];
@@ -363,7 +362,7 @@ class GUSChannels {
                 union int16_t_pair p = LoadSamples16(useAddr);
 #ifdef INTERP_LINEAR
                 interp0->base01 = p.data32;
-                interp0->accum[1] = WaveAddr >> 1;
+                interp0->accum[1] = WaveAddr;
                 return interp0->peek[1];
 #else // INTERP_LINEAR
                 int32_t diff = (int32_t)p.data16[1] - (int32_t)p.data16[0];
@@ -638,7 +637,7 @@ void DEBUG_PrintGUS() { //debugger "GUS" command
                         myGUS.gCurChannel,
                         myGUS.gUltraMAXControl,
                         myGUS.gRegControl);
-        LOG_MSG("DMActrl=%02x (TC=%u) dmaAddr=%06x timerctl=%02x sampctl=%02x mixctl=%02x activech=%u (want=%u) DACrate=%uHz",
+        LOG_MSG("DMActrl=%02x (TC=%u) dmaAddr=%06x timerctl=%02x sampctl=%02x mixctl=%02x activech=%u DACrate=%uHz",
                         myGUS.DMAControl&0xFF,
                         (myGUS.DMAControl&0x100)?1:0,
                         myGUS.dmaAddr,
@@ -646,7 +645,6 @@ void DEBUG_PrintGUS() { //debugger "GUS" command
                         myGUS.SampControl,
                         myGUS.mixControl,
                         myGUS.ActiveChannels,
-                        myGUS.ActiveChannelsUser,
                         myGUS.basefreq);
         LOG_MSG("IRQen=%u IRQstat=%02x IRQchan=%04x RampIRQ=%04x WaveIRQ=%04x",
                         myGUS.irqenabled,
@@ -792,7 +790,6 @@ static void GUSReset(void) {
         myGUS.TimerControl = 0x00;
         myGUS.SampControl = 0x00;
         myGUS.ActiveChannels = 14;
-        myGUS.ActiveChannelsUser = 14;
         myGUS.ActiveMask=0xffffffffU >> (32-myGUS.ActiveChannels);
         // myGUS.basefreq = (uint32_t)(1000000.0/(1.619695497*(float)(myGUS.ActiveChannels)));
         myGUS.basefreq = sample_rates[myGUS.ActiveChannels - 1];
@@ -918,7 +915,7 @@ __force_inline static uint16_t ExecuteReadRegister(void) {
     switch (myGUS.gRegSelect) {
     case 0x8E:  // read active channel register
         // NTS: The GUS SDK documents the active channel count as bits 5-0, which is wrong. it's bits 4-0. bits 7-5 are always 1 on real hardware.
-        return ((uint16_t)(0xE0 | (myGUS.ActiveChannelsUser - 1))) << 8;
+        return ((uint16_t)(0xE0 | (myGUS.ActiveChannels - 1))) << 8;
     case 0x41: // Dma control register - read acknowledges DMA IRQ
         critical_section_enter_blocking(&gus_crit);
         tmpreg = myGUS.DMAControl & 0xbf;
@@ -1118,7 +1115,7 @@ __force_inline static void ExecuteGlobRegister(void) {
 
         // gus_chan->FillUp();
         myGUS.gRegSelect = myGUS.gRegData>>8;       //JAZZ Jackrabbit seems to assume this?
-        myGUS.ActiveChannelsUser = 1+((myGUS.gRegData>>8) & 31); // NTS: The GUS SDK documents this field as bits 5-0, which is wrong, it's bits 4-0. 5-0 would imply 64 channels.
+        myGUS.ActiveChannels = 1+((myGUS.gRegData>>8) & 31); // NTS: The GUS SDK documents this field as bits 5-0, which is wrong, it's bits 4-0. 5-0 would imply 64 channels.
 
         /* The GUS SDK claims that if a channel count less than 14 is written, then it caps to 14.
          * That's not true. Perhaps what the SDK is doing, but the actual hardware acts differently.
@@ -1138,7 +1135,6 @@ __force_inline static void ExecuteGlobRegister(void) {
          * NOTED: Gravis Ultrasound Plug & Play (interwave) cards *do* enforce the 14-channel minimum.
          *        You can write less than 14 channels to this register, but unlike the Classic and Max
          *        cards they will not run faster than 44.1KHz. */
-        myGUS.ActiveChannels = myGUS.ActiveChannelsUser;
 
         // force min channels to 14 - I don't want to subject the poor RP2040 to anything more than 44.1kHz
         if(myGUS.ActiveChannels < 14) myGUS.ActiveChannels = 14;
@@ -1427,6 +1423,9 @@ GUS_DMA_Event(Bitu val) {
     return 0;
 }
 
+constexpr size_t DMA_BUFSIZE = 8;
+constexpr size_t DMA_BUFBITS = DMA_BUFSIZE - 1;
+
 void 
 GUS_DMA_isr() {
     myGUS.dmaWaiting = false;
@@ -1446,15 +1445,11 @@ GUS_DMA_isr() {
 
     const uint8_t dma_data8 = dma_data & 0xffu;
 #ifdef PSRAM
-    // psram_write8_async(&psram_spi, myGUS.dmaAddr, dma_config.invertMsb ? dma_data8 ^ 0x80 : dma_data8);
-    static union {
-        uint32_t data32;
-        uint8_t data8[4];
-    } dma_data_union;
-    size_t dmaOffset = myGUS.dmaAddr & 0x3;
-    dma_data_union.data8[dmaOffset] = dma_config.invertMsb ? dma_data ^ 0x80 : dma_data8;
-    if ((dmaOffset) == 0x3) {
-        psram_write32_async(&psram_spi, myGUS.dmaAddr - 0x3, dma_data_union.data32);
+    static uint8_t dma_buffer[DMA_BUFSIZE];
+    size_t dmaOffset = myGUS.dmaAddr & DMA_BUFBITS;
+    dma_buffer[dmaOffset] = dma_config.invertMsb ? dma_data ^ 0x80 : dma_data8;
+    if (dmaOffset == DMA_BUFBITS) {
+        psram_write_async_fast(&psram_spi, myGUS.dmaAddr - DMA_BUFBITS, dma_buffer, DMA_BUFSIZE);
     }
 #else
     GUSRam[myGUS.dmaAddr] = dma_config.invertMsb ? dma_data8 ^ 0x80 : dma_data8;
@@ -1464,14 +1459,8 @@ GUS_DMA_isr() {
     if (dma_data & 0x100u) { // if TC
 #ifdef PSRAM
         // If data is not flushed
-        if (dmaOffset != 0x3) { // 0, 1, or 2
-            psram_writen_async(&psram_spi, myGUS.dmaAddr - dmaOffset, dma_data_union.data32, dmaOffset + 1);
-            /*
-            for(int i = 0; i <= myGUS.dmaAddr & 0x3; ++i) {
-                psram_write8(&psram_spi, myGUS.dmaAddr - (0x3 - i), dma_data_union.data8[i]);
-            }
-            */
-            // psram_write32_async(&psram_spi, myGUS.dmaAddr - (myGUS.dmaAddr & 0x3), dma_data_union.data32);
+        if (dmaOffset != DMA_BUFBITS) { // 0, 1, or 2
+            psram_write_async_fast(&psram_spi, myGUS.dmaAddr - dmaOffset, dma_buffer, dmaOffset + 1);
         }
 #endif
         critical_section_enter_blocking(&gus_crit);
@@ -1571,19 +1560,21 @@ static int16_t __force_inline clamp16(int32_t d) {
     return interp1->peek[0];
 }
 #else
-#endif // INTERP_CLAMP
 static int32_t __force_inline clamp(int32_t d, int32_t min, int32_t max) {
     return d < min ? min : (d > max ? max : d);
 }
+#endif // INTERP_CLAMP
 
 extern uint32_t GUS_CallBack(Bitu max_len, int16_t* play_buffer) {
     static int32_t buffer[MIXER_BUFSIZE][2];
-    const uint32_t render_samples = MIXER_BUFSIZE;
-    memset(buffer, 0, render_samples * sizeof(buffer[0]));
+    uint32_t s = 0;
 
     // putchar('g');
     if ((GUS_reset_reg & 0x01/*!master reset*/) == 0x01 && (GUS_reset_reg & 0x02/*DAC enable*/) == 0x02) {
-        for (size_t s = 0; s < render_samples; ++s) {
+        const uint32_t render_samples = MIXER_BUFSIZE;
+        memset(buffer, 0, render_samples * sizeof(buffer[0]));
+        while (s < render_samples) {
+            uint32_t cur_rate = myGUS.basefreq;
             for (Bitu c = 0; c < myGUS.ActiveChannels; ++c) {
                 guschan[c]->generateSample(buffer[s]);
             }
@@ -1596,6 +1587,13 @@ extern uint32_t GUS_CallBack(Bitu max_len, int16_t* play_buffer) {
 #endif
             if (s & buffer_size == buffer_size) {
                 CheckVoiceIrq();
+            }
+            ++s;
+            if (cur_rate != myGUS.basefreq) {
+                // Bail out if our sampling rate changed. This will produce 1 sample at the
+                // wrong rate, but it's better than producing up to render_samples at the 
+                // wrong rate...
+                break;
             }
         }
     } else {
@@ -1658,7 +1656,7 @@ extern uint32_t GUS_CallBack(Bitu max_len, int16_t* play_buffer) {
 #endif
 
     // CheckVoiceIrq();
-    return render_samples;
+    return s;
 }
 
 // Generate logarithmic to linear volume conversion tables
@@ -1829,10 +1827,9 @@ void GUS_Setup() {
         cfg = interp_default_config();
         // Linear interpolation setup
         interp_config_set_blend(&cfg, true);
-        // interp_config_set_shift(&cfg, 1);
-        // interp_config_set_mask(&cfg, 0, 7);
         interp_set_config(interp0, 0, &cfg);
         cfg = interp_default_config();
+        interp_config_set_shift(&cfg, 1); // Shift WaveAddr by 1
         interp_config_set_signed(&cfg, true);
         interp_set_config(interp0, 1, &cfg);
 #endif

@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <hardware/flash.h>
 #include "pico/multicore.h"
+#include "pico/stdlib.h"
 
 static union {
     uint8_t buf[512];
@@ -38,15 +39,23 @@ void pico_firmware_process_block(void)
     }
     if (pico_firmware_curBlock == 0) {
         puts("Starting firmware write...");
+        // Stop second core
         multicore_reset_core1();
+        // Clock down the RP2040 so the flash at its default 1/2 clock divider is within spec (<=133MHz)
+        set_sys_clock_khz(240000, true);
         pico_firmware_numBlocks = uf2_buf.uf2.numBlocks;
         printf("numBlocks: %u\n", pico_firmware_numBlocks);
         pico_firmware_payloadSize = uf2_buf.uf2.payloadSize;
         uint32_t totalSize = pico_firmware_numBlocks * pico_firmware_payloadSize;
         // Point of no return... erasing the flash!
+        uint32_t ints = save_and_disable_interrupts();
         flash_range_erase(0, (totalSize / 4096) * 4096 + 4096);
+        restore_interrupts(ints);
     }
-    flash_range_program(pico_firmware_curBlock * pico_firmware_payloadSize, uf2_buf.uf2.data, pico_firmware_payloadSize);
+    uint32_t curAddress = pico_firmware_curBlock * pico_firmware_payloadSize;
+    uint32_t ints = save_and_disable_interrupts();
+    flash_range_program(curAddress, uf2_buf.uf2.data, pico_firmware_payloadSize);
+    restore_interrupts(ints);
     printf("curBlock: %u\n", pico_firmware_curBlock);
     ++pico_firmware_curBlock;
     if (pico_firmware_curBlock == pico_firmware_numBlocks) {
