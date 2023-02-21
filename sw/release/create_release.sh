@@ -2,11 +2,6 @@
 
 set -e
 
-if [ -z $PICOGUS_VERSION ]; then
-    echo 'Please set the environment variable $PICOGUS_VERSION'
-    exit 1
-fi
-
 RELEASE_DIR="$( dirname -- "$( readlink -f -- "$0"; )"; )"
 SW_HOME="$(readlink -f "$RELEASE_DIR"/..)"
 BUILD_DIR="$SW_HOME"/build
@@ -50,6 +45,12 @@ cd -
 build GUS "gus" "-DGUS_DEFAULT_PORT=0x240"
 build OPL "adlib"
 build MPU "mpu"
+build TANDY "tandy"
+
+# Get release version
+cd "$BUILD_DIR"
+PICOGUS_VERSION=$(cmake --system-information | awk -F= '$1~/CMAKE_PROJECT_VERSION:STATIC/{print$2}')
+cd -
 
 # Create zip file
 cd "$STAGING_DIR"

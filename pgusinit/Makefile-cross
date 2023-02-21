@@ -5,4 +5,4 @@ pgusinit.exe: pgusinit.c
 	$(CC) $(CFLAGS) $<
 
 clean:
-	rm -f $(bin)
+	rm -f pgusinit.o pgusinit.exe
