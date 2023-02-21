@@ -21,6 +21,7 @@ build () {
     cmake .. --fresh -DPROJECT_TYPE=$PROJECT_TYPE $EXTRA_CMAKE
     make clean && make -j
     cp picogus.uf2 "$STAGING_DIR"/pg-$FW_SUFFIX.uf2
+    cd -
 }
 
 # Build pgusinit
@@ -53,5 +54,6 @@ PICOGUS_VERSION=$(cmake --system-information | awk -F= '$1~/CMAKE_PROJECT_VERSIO
 cd -
 
 # Create zip file
+rm -f picogus-$PICOGUS_VERSION.zip
 cd "$STAGING_DIR"
 zip -9 ../picogus-$PICOGUS_VERSION.zip *
