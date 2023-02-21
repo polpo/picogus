@@ -139,7 +139,7 @@ __force_inline void write_picogus_high(uint8_t value) {
 __force_inline uint8_t read_picogus_low(void) {
     switch (sel_reg) {
     case 0x04: // Base port
-#if defined(SOUND_GUS) || defined(SOUND_OPL) || defined(SOUND_MPU)
+#if defined(SOUND_GUS) || defined(SOUND_OPL) || defined(SOUND_MPU) || defined(SOUND_TANDY)
         return basePort & 0xff;
 #else
         return 0xff;
@@ -180,7 +180,7 @@ __force_inline uint8_t read_picogus_high(void) {
 #endif
         break;
     case 0x04: // Base port
-#if defined(SOUND_GUS) || defined(SOUND_OPL) || defined(SOUND_MPU)
+#if defined(SOUND_GUS) || defined(SOUND_OPL) || defined(SOUND_MPU) || defined(SOUND_TANDY)
         return basePort >> 8;
 #else
         return 0xff;

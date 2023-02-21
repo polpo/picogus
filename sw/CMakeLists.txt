@@ -137,12 +137,7 @@ if(PROJECT_TYPE STREQUAL "TANDY")
         emu76489/emu76489.c
     )
     target_sources(picogus PRIVATE tandyplay.cpp)
-    set(ASYNC_UART 1)
-    add_compile_definitions(
-        ASYNC_UART=1
-    )
-    pico_enable_stdio_uart(picogus 0)
-    # pico_enable_stdio_uart(picogus 1)
+    pico_enable_stdio_uart(picogus 1)
     pico_enable_stdio_usb(picogus 0)
     pico_enable_stdio_semihosting(picogus 0)
 endif()
