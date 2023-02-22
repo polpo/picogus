@@ -55,6 +55,14 @@ void play_tandy(void);
 SNG* sn76489;
 #endif
 
+#ifdef SOUND_CMS
+static uint16_t basePort = 0x220u;
+void play_cms(void);
+#include "saa1099/saa1099.h"
+saa1099_device *saa0, *saa1;
+static uint8_t cms_detect = 0xFF;
+#endif
+
 // PicoGUS control and data ports
 // 1D0 chosen as the base port as nothing is listed in Ralf Brown's Port List (http://www.cs.cmu.edu/~ralf/files.html)
 #define CONTROL_PORT 0x1D0
@@ -139,7 +147,7 @@ __force_inline void write_picogus_high(uint8_t value) {
 __force_inline uint8_t read_picogus_low(void) {
     switch (sel_reg) {
     case 0x04: // Base port
-#if defined(SOUND_GUS) || defined(SOUND_OPL) || defined(SOUND_MPU) || defined(SOUND_TANDY)
+#if defined(SOUND_GUS) || defined(SOUND_OPL) || defined(SOUND_MPU) || defined(SOUND_TANDY) || defined(SOUND_CMS)
         return basePort & 0xff;
 #else
         return 0xff;
@@ -175,12 +183,14 @@ __force_inline uint8_t read_picogus_high(void) {
         return 2;
 #elif defined(SOUND_TANDY)
         return 3;
+#elif defined(SOUND_CMS)
+        return 4;
 #else
         return 0xff;
 #endif
         break;
     case 0x04: // Base port
-#if defined(SOUND_GUS) || defined(SOUND_OPL) || defined(SOUND_MPU) || defined(SOUND_TANDY)
+#if defined(SOUND_GUS) || defined(SOUND_OPL) || defined(SOUND_MPU) || defined(SOUND_TANDY) || defined(SOUND_CMS)
         return basePort >> 8;
 #else
         return 0xff;
@@ -278,7 +288,34 @@ __force_inline void handle_iow(void) {
         pio_sm_put(pio0, iow_sm, IO_WAIT);
         SNG_writeIO(sn76489, iow_read & 0xFF);
     } else // if follows down below
-#endif
+#endif // SOUND_TANDY
+#ifdef SOUND_CMS
+    switch (port - basePort) {
+    // SAA data/address ports
+    case 0x0:
+        pio_sm_put(pio0, iow_sm, IO_WAIT);
+        saa0->data_w(iow_read & 0xFF);
+        break;
+    case 0x1:
+        pio_sm_put(pio0, iow_sm, IO_WAIT);
+        saa0->control_w(iow_read & 0xFF);
+        break;
+    case 0x2:
+        pio_sm_put(pio0, iow_sm, IO_WAIT);
+        saa1->data_w(iow_read & 0xFF);
+        break;
+    case 0x3:
+        pio_sm_put(pio0, iow_sm, IO_WAIT);
+        saa1->control_w(iow_read & 0xFF);
+        break;
+    // CMS autodetect ports
+    case 0x6:
+    case 0x7:
+        pio_sm_put(pio0, iow_sm, IO_WAIT);
+        cms_detect = iow_read & 0xFF;
+        break;
+    }
+#endif // SOUND_CMS
     // PicoGUS control
     if (port == CONTROL_PORT) {
         pio_sm_put(pio0, iow_sm, IO_WAIT);
@@ -345,7 +382,20 @@ __force_inline void handle_ior(void) {
         // OR with 0x0000ff00 is required to set pindirs in the PIO
         pio_sm_put(pio0, ior_sm, IOR_SET_VALUE | value);
     } else // if follows down below
-#endif
+#elif defined(SOUND_CMS)
+    switch (port - basePort) {
+    // CMS autodetect ports
+    case 0x4:
+        pio_sm_put(pio0, ior_sm, IO_WAIT);
+        pio_sm_put(pio0, ior_sm, IOR_SET_VALUE | 0x7F);
+        return;
+    case 0xa:
+    case 0xb:
+        pio_sm_put(pio0, ior_sm, IO_WAIT);
+        pio_sm_put(pio0, ior_sm, IOR_SET_VALUE | cms_detect);
+        return;
+    }
+#endif // SOUND_CMS
     if (port == CONTROL_PORT) {
         // Tell PIO to wait for data
         pio_sm_put(pio0, ior_sm, IO_WAIT);
@@ -466,6 +516,14 @@ int main()
     sn76489 = SNG_new(3579545, 44100);
     SNG_reset(sn76489);
     multicore_launch_core1(&play_tandy);
+#endif // SOUND_TANDY
+
+#ifdef SOUND_CMS
+    puts("Creating SAA1099 1");
+    saa0 = new saa1099_device(7159090);
+    puts("Creating SAA1099 2");
+    saa1 = new saa1099_device(7159090);
+    multicore_launch_core1(&play_cms);
 #endif // SOUND_TANDY
 
     for(int i=AD0_PIN; i<(AD0_PIN + 10); ++i) {

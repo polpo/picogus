@@ -142,6 +142,23 @@ if(PROJECT_TYPE STREQUAL "TANDY")
     pico_enable_stdio_semihosting(picogus 0)
 endif()
 
+if(PROJECT_TYPE STREQUAL "CMS")
+    pico_set_program_name(picogus "picogus-cms")
+    target_compile_definitions(picogus PRIVATE
+        SOUND_CMS=1
+        USE_ALARM=1
+    )
+
+    target_sources(picogus PRIVATE
+        pico_pic.c
+        saa1099/saa1099.cpp
+    )
+    target_sources(picogus PRIVATE cmsplay.cpp)
+    pico_enable_stdio_uart(picogus 1)
+    pico_enable_stdio_usb(picogus 0)
+    pico_enable_stdio_semihosting(picogus 0)
+endif()
+
 pico_generate_pio_header(picogus ${CMAKE_CURRENT_LIST_DIR}/isa_io.pio)
 pico_generate_pio_header(picogus ${CMAKE_CURRENT_LIST_DIR}/isa_dma.pio)
 

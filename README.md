@@ -8,6 +8,7 @@ ISA sound card emulation on the Raspberry Pi Pico's RP2040 microcontroller. Pico
 * [AdLib (OPL2)](https://en.wikipedia.org/wiki/Ad_Lib,_Inc.)
 * [MPU-401 (with intelligent mode)](https://en.wikipedia.org/wiki/MPU-401) - outputs MIDI data on 3.5mm MIDI TRS connector
 * [Tandy 3-voice](http://www.vgmpf.com/Wiki/index.php?title=Tandy_3_Voice)
+* [CMS/Game Blaster](http://nerdlypleasures.blogspot.com/2012/10/all-you-ever-wanted-to-know-about.html)
 
 Current status: Beta! See the [main wiki page](https://github.com/polpo/picogus/wiki) for current status and the [compatibility list](https://github.com/polpo/picogus/wiki/Compatibility-list) for support status of various DOS programs and other system compatibility notes. This project has a heavy demoscene focus due to the GUS's history so that's what I've concentrated on, but GUS support in games is quickly improving.
 
@@ -35,6 +36,7 @@ See/hear PicoGUS in action on YouTube:
 * OPL/AdLib emulation from [rp2040-doom](https://github.com/kilograham/rp2040-doom) (based on [emu8950](https://github.com/digital-sound-antiques/emu8950))
 * MPU-401 emulation adapted from [HardMPU](https://github.com/ab0tj/HardMPU) and [DOSBox-X](https://github.com/joncampbell123/dosbox-x)
 * Tandy 3-voice emulation from [emu76489](https://github.com/digital-sound-antiques/emu76489)
+* CMS emulation adapted from [MAME](https://github.com/mamedev/mame)
 
 ## License
 

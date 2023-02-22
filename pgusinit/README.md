@@ -26,6 +26,7 @@ Firmware files that come with the releases:
 * `pg-adlib.uf2` - AdLib emulation
 * `pg-mpu.uf2` - MPU-401 with intelligent mode emulation
 * `pg-tandy.uf2` - Tandy 3-Voice emulation
+* `pg-cms.uf2` - CMS/Game Blaster emulation
 
 ### GUS emulation mode
 
@@ -47,10 +48,10 @@ specified in ULTRASND.
 See the Compatibility List wiki for notes on programs that require these
 options to be set: https://github.com/polpo/picogus/wiki/Compatibility-list
 
-### AdLib, MPU-401, and Tandy emulation modes
+### AdLib, MPU-401, Tandy, and CMS emulation modes
 
 * `/p x` - sets the base port of the emulated card to x. Defaults to 388 for
-  AdLib, 330 for MPU-401, and 2C0 for Tandy.
+  AdLib, 330 for MPU-401, 2C0 for Tandy, and 220 for CMS.
 
 ## Compiling
 

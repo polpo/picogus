@@ -19,7 +19,7 @@ typedef enum {
 
 
 void banner(void) {
-    printf("PicoGUSinit v1.1.0\n");
+    printf("PicoGUSinit v1.2.0\n");
     printf("(c) 2023 Ian Scott - licensed under the GNU GPL v2\n\n");
 }
 
@@ -29,12 +29,11 @@ void usage(void) {
     //              "................................................................................\n"
     fprintf(stderr, "usage: pgusinit [/?] | [/b x] [/a n] [/d n] | [/f fw.uf2]\n");
     fprintf(stderr, "\n");
-    fprintf(stderr, "Options:\n");
     fprintf(stderr, "    /?   - show this message\n");
     fprintf(stderr, "    /f fw.uf2 - Program the PicoGUS with the firmware file fw.uf2.\n");
-    fprintf(stderr, "AdLib, MPU-401, Tandy modes only:\n");
+    fprintf(stderr, "AdLib, MPU-401, Tandy, CMS modes only:\n");
     fprintf(stderr, "    /b x - set the base address of the emulated card. Defaults:\n");
-    fprintf(stderr, "           AdLib: 388; MPU-401: 330; Tandy: 2C0\n");
+    fprintf(stderr, "           AdLib: 388; MPU-401: 330; Tandy: 2C0; CMS: 220\n");
     fprintf(stderr, "GUS mode only:\n");
     fprintf(stderr, "    /a n - set audio buffer to n samples. Default: 16, Min: 8, Max: 256\n");
     fprintf(stderr, "           (tweaking this can help programs that hang or have audio glitches)\n");
@@ -329,6 +328,9 @@ int main(int argc, char* argv[]) {
         break;
     case 3:
         printf("Running in Tandy 3-voice mode on port %x\n", port);
+        break;
+    case 4:
+        printf("Running in CMS/Game Blaster mode on port %x\n", port);
         break;
     default:
         printf("Running in unknown mode on port %x (maybe upgrade pgusinit?)\n", port);

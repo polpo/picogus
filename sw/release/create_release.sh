@@ -47,6 +47,7 @@ build GUS "gus" "-DGUS_DEFAULT_PORT=0x240"
 build OPL "adlib"
 build MPU "mpu"
 build TANDY "tandy"
+build CMS "cms"
 
 # Get release version
 cd "$BUILD_DIR"
