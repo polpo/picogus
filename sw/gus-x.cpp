@@ -1461,13 +1461,8 @@ GUS_DMA_isr() {
 #ifdef PSRAM
         // If data is not flushed
         if (dmaOffset != 0x3) { // 0, 1, or 2
-            psram_writen_async(&psram_spi, myGUS.dmaAddr - dmaOffset, dma_data_union.data32, dmaOffset + 1);
-            /*
-            for(int i = 0; i <= myGUS.dmaAddr & 0x3; ++i) {
-                psram_write8(&psram_spi, myGUS.dmaAddr - (0x3 - i), dma_data_union.data8[i]);
-            }
-            */
-            // psram_write32_async(&psram_spi, myGUS.dmaAddr - (myGUS.dmaAddr & 0x3), dma_data_union.data32);
+            // Due to the aligned nature of DMA writes, if we stomp on 1-3 bytes it's not a problem
+            psram_write32_async(&psram_spi, myGUS.dmaAddr - dmaOffset, dma_data_union.data32);
         }
 #endif
         critical_section_enter_blocking(&gus_crit);
