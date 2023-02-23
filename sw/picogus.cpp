@@ -32,7 +32,7 @@ void play_adlib(void);
 #ifdef OPL_YMFM
 #include "ymfm_opl.h"
 ymfm::ymfm_interface* myYMFM;
-ymfm::ym3812* myOPL;
+ymfm::ymf262* myOPL;
 #include "pico/critical_section.h"
 critical_section_t opl_crit;
 #else
@@ -269,6 +269,7 @@ __force_inline void handle_iow(void) {
 #endif // SOUND_GUS
 #ifdef SOUND_OPL
     static uint8_t opl_addr;
+    static uint8_t opl_addr_hi;
     switch (port - basePort) {
     case 0:
         // Fast write
@@ -281,8 +282,8 @@ __force_inline void handle_iow(void) {
         opl_addr = iow_read & 0xFF;
 #else
         OPL_Pico_PortWrite(OPL_REGISTER_PORT, iow_read & 0xFF);
-        // Fast write - return early as we've already written 0x0u to the PIO
 #endif
+        // Fast write - return early as we've already written 0x0u to the PIO
         return;
         break;
     case 1:
@@ -296,6 +297,22 @@ __force_inline void handle_iow(void) {
         OPL_Pico_PortWrite(OPL_DATA_PORT, iow_read & 0xFF);
         // __dsb();
         break;
+#ifdef OPL_YMFM
+    case 2:
+        // Fast write
+        pio_sm_put(pio0, iow_sm, IO_END);
+        opl_addr_hi = iow_read & 0xFF;
+        // Fast write - return early as we've already written 0x0u to the PIO
+        return;
+        break;
+    case 3:
+        pio_sm_put(pio0, iow_sm, IO_WAIT);
+        critical_section_enter_blocking(&opl_crit);
+        myOPL->write_address_hi(opl_addr_hi);
+        myOPL->write_data(iow_read & 0xFF);
+        critical_section_exit(&opl_crit);
+        break;
+#endif // OPL_YMFM
     }
 #endif // SOUND_OPL
 #ifdef SOUND_MPU
@@ -538,7 +555,7 @@ int main()
     puts("Creating OPL");
 #ifdef OPL_YMFM
     myYMFM = new ymfm::ymfm_interface();
-    myOPL = new ymfm::ym3812(*myYMFM);
+    myOPL = new ymfm::ymf262(*myYMFM);
     critical_section_init(&opl_crit);
 #else
     OPL_Pico_Init(basePort);

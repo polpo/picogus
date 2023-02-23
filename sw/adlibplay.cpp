@@ -20,7 +20,7 @@
 
 #ifdef OPL_YMFM
 #include "ymfm_opl.h"
-extern ymfm::ym3812* myOPL;
+extern ymfm::ymf262* myOPL;
 #include "pico/critical_section.h"
 extern critical_section_t opl_crit;
 #else
@@ -38,7 +38,7 @@ bi_decl(bi_3pins_with_names(PICO_AUDIO_I2S_DATA_PIN, "I2S DIN", PICO_AUDIO_I2S_C
 struct audio_buffer_pool *init_audio() {
 
     static audio_format_t audio_format = {
-            .sample_freq = 49716,
+            .sample_freq = 49716 / 3,
             .format = AUDIO_BUFFER_FORMAT_PCM_S16,
             .channel_count = 2,
     };
@@ -78,25 +78,25 @@ void play_adlib() {
 
     struct audio_buffer_pool *ap = init_audio();
 #ifdef OPL_YMFM
-    ymfm::ym3812::output_data output;
+    ymfm::ymf262::output_data output;
 #endif
     for (;;) {
         struct audio_buffer *buffer = take_audio_buffer(ap, true);
 #ifdef OPL_YMFM
         int16_t *samples = (int16_t *) buffer->buffer->bytes;
-        // uint32_t audio_begin = time_us_32();
+        uint32_t audio_begin = time_us_32();
         for (int i = 0; i < buffer->max_sample_count; ++i) {
             critical_section_enter_blocking(&opl_crit);
             myOPL->generate(&output);
             critical_section_exit(&opl_crit);
-            samples[i << 1] = samples[(i << 1) + 1] = output.data[0];
+            samples[i << 1] = output.data[0];
+            samples[(i << 1) + 1] = output.data[1];
         }
-        /*
         uint32_t audio_elapsed = time_us_32() - audio_begin;
-        if (audio_elapsed > 1280) {
-            printf("took too long: %u\n", audio_elapsed);
-        }
-        */
+        // if (audio_elapsed > 1280) {
+        //     printf("took too long: %u %u\n", audio_elapsed, buffer->max_sample_count);
+        // }
+        printf("%u ", audio_elapsed);
         buffer->sample_count = buffer->max_sample_count;
         // putchar('=');
 #else
