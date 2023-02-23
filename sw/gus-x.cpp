@@ -1423,9 +1423,6 @@ GUS_DMA_Event(Bitu val) {
     return 0;
 }
 
-constexpr size_t DMA_BUFSIZE = 8;
-constexpr size_t DMA_BUFBITS = DMA_BUFSIZE - 1;
-
 void 
 GUS_DMA_isr() {
     myGUS.dmaWaiting = false;
@@ -1445,11 +1442,15 @@ GUS_DMA_isr() {
 
     const uint8_t dma_data8 = dma_data & 0xffu;
 #ifdef PSRAM
-    static uint8_t dma_buffer[DMA_BUFSIZE];
-    size_t dmaOffset = myGUS.dmaAddr & DMA_BUFBITS;
-    dma_buffer[dmaOffset] = dma_config.invertMsb ? dma_data ^ 0x80 : dma_data8;
-    if (dmaOffset == DMA_BUFBITS) {
-        psram_write_async_fast(&psram_spi, myGUS.dmaAddr - DMA_BUFBITS, dma_buffer, DMA_BUFSIZE);
+    // psram_write8_async(&psram_spi, myGUS.dmaAddr, dma_config.invertMsb ? dma_data8 ^ 0x80 : dma_data8);
+    static union {
+        uint32_t data32;
+        uint8_t data8[4];
+    } dma_data_union;
+    size_t dmaOffset = myGUS.dmaAddr & 0x3;
+    dma_data_union.data8[dmaOffset] = dma_config.invertMsb ? dma_data ^ 0x80 : dma_data8;
+    if ((dmaOffset) == 0x3) {
+        psram_write32_async(&psram_spi, myGUS.dmaAddr - 0x3, dma_data_union.data32);
     }
 #else
     GUSRam[myGUS.dmaAddr] = dma_config.invertMsb ? dma_data8 ^ 0x80 : dma_data8;
@@ -1459,8 +1460,14 @@ GUS_DMA_isr() {
     if (dma_data & 0x100u) { // if TC
 #ifdef PSRAM
         // If data is not flushed
-        if (dmaOffset != DMA_BUFBITS) { // 0, 1, or 2
-            psram_write_async_fast(&psram_spi, myGUS.dmaAddr - dmaOffset, dma_buffer, dmaOffset + 1);
+        if (dmaOffset != 0x3) { // 0, 1, or 2
+            psram_writen_async(&psram_spi, myGUS.dmaAddr - dmaOffset, dma_data_union.data32, dmaOffset + 1);
+            /*
+            for(int i = 0; i <= myGUS.dmaAddr & 0x3; ++i) {
+                psram_write8(&psram_spi, myGUS.dmaAddr - (0x3 - i), dma_data_union.data8[i]);
+            }
+            */
+            // psram_write32_async(&psram_spi, myGUS.dmaAddr - (myGUS.dmaAddr & 0x3), dma_data_union.data32);
         }
 #endif
         critical_section_enter_blocking(&gus_crit);
