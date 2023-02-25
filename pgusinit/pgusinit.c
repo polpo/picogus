@@ -38,7 +38,7 @@ void usage(char *argv0) {
     fprintf(stderr, "GUS mode only:\n");
     fprintf(stderr, "    /a n - set audio buffer to n samples. Default: 16, Min: 8, Max: 256\n");
     fprintf(stderr, "           (tweaking this can help programs that hang or have audio glitches)\n");
-    fprintf(stderr, "    /d n - force DMA interval to n ï¿½s. Default: 0, Min: 0, Max: 256\n");
+    fprintf(stderr, "    /d n - force DMA interval to n æs. Default: 0, Min: 0, Max: 256\n");
     fprintf(stderr, "           Specifying 0 restores the GUS default behavior.\n");
     fprintf(stderr, "           (if games with streaming audio like Doom stutter, increase this)\n");
     fprintf(stderr, "The ULTRASND environment variable must be set in the following format:\n");
@@ -315,7 +315,7 @@ int main(int argc, char* argv[]) {
         if (dma_interval == 0) {
             printf("DMA interval set to default behavior\n");
         } else {
-            printf("DMA interval forced to %u ï¿½s\n", dma_interval);
+            printf("DMA interval forced to %u æs\n", dma_interval);
         }
         outp(CONTROL_PORT, 0x04); // Select port register
         port = inpw(DATA_PORT_LOW); // Get port
