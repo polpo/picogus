@@ -58,9 +58,23 @@ SNG* sn76489;
 #ifdef SOUND_CMS
 static uint16_t basePort = 0x220u;
 void play_cms(void);
-#include "saa1099/saa1099.h"
-saa1099_device *saa0, *saa1;
+#include "square/square.h"
+// saa1099_device *saa0, *saa1;
+cms_t *cms;
 static uint8_t cms_detect = 0xFF;
+
+typedef struct cms_buffer_t {
+    struct {
+        uint16_t addr;
+        uint8_t data;
+    } cmds[256];
+    uint8_t head;
+    uint8_t tail;
+} cms_buffer_t;
+cms_buffer_t cms_buffer = { {0}, 0, 0 };
+
+#include "pico/critical_section.h"
+critical_section_t cms_crit;
 #endif
 
 // PicoGUS control and data ports
@@ -293,26 +307,55 @@ __force_inline void handle_iow(void) {
     switch (port - basePort) {
     // SAA data/address ports
     case 0x0:
-        pio_sm_put(pio0, iow_sm, IO_WAIT);
-        saa0->data_w(iow_read & 0xFF);
+        pio_sm_put(pio0, iow_sm, IO_END);
+        // critical_section_enter_blocking(&cms_crit);
+        // cms->write_data(0x0, iow_read & 0xFF);
+        cms_buffer.cmds[cms_buffer.head++] = {
+            port,
+            (uint8_t)(iow_read & 0xFF)
+        };
+        // critical_section_exit(&cms_crit);
+        // saa0->data_w(iow_read & 0xFF);
+        return;
         break;
     case 0x1:
-        pio_sm_put(pio0, iow_sm, IO_WAIT);
-        saa0->control_w(iow_read & 0xFF);
+        pio_sm_put(pio0, iow_sm, IO_END);
+        // saa0->control_w(iow_read & 0xFF);
+        // cms->write_addr(0x1, iow_read & 0xFF);
+        cms_buffer.cmds[cms_buffer.head++] = {
+            port,
+            (uint8_t)(iow_read & 0xFF)
+        };
+        return;
         break;
     case 0x2:
-        pio_sm_put(pio0, iow_sm, IO_WAIT);
-        saa1->data_w(iow_read & 0xFF);
+        pio_sm_put(pio0, iow_sm, IO_END);
+        // saa1->data_w(iow_read & 0xFF);
+        // critical_section_enter_blocking(&cms_crit);
+        // cms->write_data(0x2, iow_read & 0xFF);
+        // critical_section_exit(&cms_crit);
+        cms_buffer.cmds[cms_buffer.head++] = {
+            port,
+            (uint8_t)(iow_read & 0xFF)
+        };
+        return;
         break;
     case 0x3:
-        pio_sm_put(pio0, iow_sm, IO_WAIT);
-        saa1->control_w(iow_read & 0xFF);
+        pio_sm_put(pio0, iow_sm, IO_END);
+        // cms->write_addr(0x3, iow_read & 0xFF);
+        // saa1->control_w(iow_read & 0xFF);
+        cms_buffer.cmds[cms_buffer.head++] = {
+            port,
+            (uint8_t)(iow_read & 0xFF)
+        };
+        return;
         break;
     // CMS autodetect ports
     case 0x6:
     case 0x7:
-        pio_sm_put(pio0, iow_sm, IO_WAIT);
+        pio_sm_put(pio0, iow_sm, IO_END);
         cms_detect = iow_read & 0xFF;
+        return;
         break;
     }
 #endif // SOUND_CMS
@@ -520,9 +563,11 @@ int main()
 
 #ifdef SOUND_CMS
     puts("Creating SAA1099 1");
-    saa0 = new saa1099_device(7159090);
+    // saa0 = new saa1099_device(7159090);
     puts("Creating SAA1099 2");
-    saa1 = new saa1099_device(7159090);
+    // saa1 = new saa1099_device(7159090);
+    critical_section_init(&cms_crit);
+    cms = new cms_t();
     multicore_launch_core1(&play_cms);
 #endif // SOUND_TANDY
 

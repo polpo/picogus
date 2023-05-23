@@ -14,7 +14,7 @@ include(pico_sdk_import.cmake)
 include(pico_extras_import.cmake)
 
 project(picogus
-    VERSION "0.6.1"
+    VERSION "0.6.99"
     LANGUAGES C CXX ASM
 )
 
@@ -29,6 +29,8 @@ endif()
 
 # Initialise the Raspberry Pi Pico SDK
 pico_sdk_init()
+
+add_compile_options(-flto=jobserver)
 
 # Add executable. Default name is the project name, version 0.1
 add_executable(picogus picogus.cpp)
@@ -50,6 +52,7 @@ add_compile_definitions(
 target_sources(picogus PRIVATE pico_reflash.c)
 
 if(PROJECT_TYPE STREQUAL "GUS")
+    # target_compile_options(picogus PRIVATE -save-temps -fverbose-asm)
     if(NOT GUS_DEFAULT_PORT)
         set(GUS_DEFAULT_PORT "0x240")
     endif()
@@ -147,11 +150,12 @@ if(PROJECT_TYPE STREQUAL "CMS")
     target_compile_definitions(picogus PRIVATE
         SOUND_CMS=1
         USE_ALARM=1
+        SQUARE_FLOAT_OUTPUT=1
     )
 
     target_sources(picogus PRIVATE
         pico_pic.c
-        saa1099/saa1099.cpp
+        square/square.cpp
     )
     target_sources(picogus PRIVATE cmsplay.cpp)
     pico_enable_stdio_uart(picogus 1)

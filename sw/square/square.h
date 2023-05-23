@@ -312,7 +312,11 @@ public:
     //
     // output
     //
+#ifdef SQUARE_FLOAT_OUTPUT
     void generate_frames(float *dest, uint32_t frames, float gain = 1.0f);
+#else
+    void generate_frames(int32_t *dest, uint32_t frames, int32_t gain = 1);
+#endif
 
 private:
     //
@@ -320,7 +324,11 @@ private:
     //
     uint32_t step_from_divisor(voice_t &voice);
     uint32_t noise_step(noise_t &noise, int gen);
+#ifdef SQUARE_FLOAT_OUTPUT
     template<int _Voicenum> void add_voice(float &lresult, float &rresult, float lvolume, float rvolume);
+#else
+    template<int _Voicenum> void add_voice(int32_t &lresult, int32_t &rresult, int16_t lvolume, int16_t rvolume);
+#endif
 
     //
     // internal state

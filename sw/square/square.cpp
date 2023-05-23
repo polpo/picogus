@@ -447,7 +447,11 @@ void saa1099_generator_t::process_event(uint8_t reg, uint8_t data)
 // that codegen can be optimized for different voices' behaviors
 //
 template<int _Voicenum>
+#ifdef SQUARE_FLOAT_OUTPUT
 void saa1099_generator_t::add_voice(float &lresult, float &rresult, float lvolume, float rvolume)
+#else
+void saa1099_generator_t::add_voice(int32_t &lresult, int32_t &rresult, int16_t lvolume, int16_t rvolume)
+#endif
 {
     auto &voice = m_voice[_Voicenum];
 
@@ -471,9 +475,14 @@ void saa1099_generator_t::add_voice(float &lresult, float &rresult, float lvolum
         return;
 
     // apply outlevel to the volume
+#ifdef SQUARE_FLOAT_OUTPUT
     float outscale = float(1 << outlevel);
     lvolume *= outscale;
     rvolume *= outscale;
+#else
+    lvolume << outlevel;
+    rvolume << outlevel;
+#endif
 
     // non-envelope case
     if (_Voicenum % 3 != 2 || (m_envelope[_Voicenum / 3].type & 0x80) == 0)
@@ -528,26 +537,42 @@ void saa1099_generator_t::add_voice(float &lresult, float &rresult, float lvolum
         }
 
         // apply to left
+#ifdef SQUARE_FLOAT_OUTPUT
         float ffactor = float(factor) * (1.0f / 16.0f);
         lresult += ffactor * lvolume;
+#else
+        // lresult += (int32_t)lvolume * factor / 16;
+        lresult += lvolume;
+#endif
 
         // bit 0 means right is inverted
         if ((env.type & 0x01) != 0)
             factor ^= 15;
+#ifdef SQUARE_FLOAT_OUTPUT
         rresult += ffactor * rvolume;
+#else
+        // rresult += (int32_t)rvolume * factor / 16;
+        rresult += rvolume;
+#endif
     }
 }
 
 //
 // generate the requested number of audio frames
 //
+#ifdef SQUARE_FLOAT_OUTPUT
 void saa1099_generator_t::generate_frames(float *dest, uint32_t frames, float gain)
+#else
+void saa1099_generator_t::generate_frames(int32_t *dest, uint32_t frames, int32_t gain)
+#endif
 {
     // if not enabled, nothing to do
     if (!m_enable)
         return;
 
     // precompute volumes
+    float vvolume[6][2];
+#ifdef SQUARE_FLOAT_OUTPUT
     float vvolume[6][2];
     vvolume[0][0] = float(m_voice[0].lvolume) * gain * (1.0f / 32768.0f);
     vvolume[0][1] = float(m_voice[0].rvolume) * gain * (1.0f / 32768.0f);
@@ -561,14 +586,34 @@ void saa1099_generator_t::generate_frames(float *dest, uint32_t frames, float ga
     vvolume[4][1] = float(m_voice[4].rvolume) * gain * (1.0f / 32768.0f);
     vvolume[5][0] = float(m_voice[5].lvolume) * gain * (1.0f / 32768.0f);
     vvolume[5][1] = float(m_voice[5].rvolume) * gain * (1.0f / 32768.0f);
+#else
+    int16_t vvolume[6][2];
+    vvolume[0][0] = m_voice[0].lvolume;
+    vvolume[0][1] = m_voice[0].rvolume;
+    vvolume[1][0] = m_voice[1].lvolume;
+    vvolume[1][1] = m_voice[1].rvolume;
+    vvolume[2][0] = m_voice[2].lvolume;
+    vvolume[2][1] = m_voice[2].rvolume;
+    vvolume[3][0] = m_voice[3].lvolume;
+    vvolume[3][1] = m_voice[3].rvolume;
+    vvolume[4][0] = m_voice[4].lvolume;
+    vvolume[4][1] = m_voice[4].rvolume;
+    vvolume[5][0] = m_voice[5].lvolume;
+    vvolume[5][1] = m_voice[5].rvolume;
+#endif
 
     // generate square wavs
     bool env0_clock = ((m_envelope[0].type & 0xa0) == 0x80);
     bool env1_clock = ((m_envelope[1].type & 0xa0) == 0x80);
     for (uint32_t frame = 0; frame < frames; frame++)
     {
+#ifdef SQUARE_FLOAT_OUTPUT
         float lresult = 0;
         float rresult = 0;
+#else
+        int32_t lresult = 0;
+        int32_t rresult = 0;
+#endif
 
         // channel 0
         m_voice[0].pos += m_voice[0].step;
