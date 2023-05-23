@@ -184,7 +184,11 @@ public:
     //
     // output
     //
+#ifdef SQUARE_FLOAT_OUTPUT
     void generate_frames(float *dest, uint32_t frames, float gain = 1.0f);
+#else
+    void generate_frames(int32_t *dest, uint32_t frames);
+#endif
 
 private:
     //
@@ -315,7 +319,7 @@ public:
 #ifdef SQUARE_FLOAT_OUTPUT
     void generate_frames(float *dest, uint32_t frames, float gain = 1.0f);
 #else
-    void generate_frames(int32_t *dest, uint32_t frames, int32_t gain = 1);
+    void generate_frames(int32_t *dest, uint32_t frames);
 #endif
 
 private:

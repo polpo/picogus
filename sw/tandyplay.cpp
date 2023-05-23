@@ -18,15 +18,19 @@
 
 #include "pico/audio_i2s.h"
 
-#include "emu76489/emu76489.h"
-extern SNG* sn76489;
+#include "square/square.h"
+
+#include "cmd_buffers.h"
+extern tandy_buffer_t tandy_buffer;
+
+#include <string.h>
 
 #if PICO_ON_DEVICE
 #include "pico/binary_info.h"
 bi_decl(bi_3pins_with_names(PICO_AUDIO_I2S_DATA_PIN, "I2S DIN", PICO_AUDIO_I2S_CLOCK_PIN_BASE, "I2S BCK", PICO_AUDIO_I2S_CLOCK_PIN_BASE+1, "I2S LRCK"));
 #endif
 
-#define SAMPLES_PER_BUFFER 1024
+#define SAMPLES_PER_BUFFER 8
 
 struct audio_buffer_pool *init_audio() {
 
@@ -57,7 +61,6 @@ struct audio_buffer_pool *init_audio() {
         panic("PicoAudio: Unable to open audio device.\n");
     }
 
-    //ok = audio_i2s_connect(producer_pool);
     ok = audio_i2s_connect_extra(producer_pool, false, 0, 0, NULL);
     assert(ok);
     audio_i2s_set_enabled(true);
@@ -66,17 +69,37 @@ struct audio_buffer_pool *init_audio() {
 
 void play_tandy() {
     puts("starting core 1 tandy");
-    uint32_t start, end;
+    tandysound_t tandysound;
     struct audio_buffer_pool *ap = init_audio();
+#ifdef SQUARE_FLOAT_OUTPUT
+    float buf[SAMPLES_PER_BUFFER * 2];
+#else
+    int32_t buf[SAMPLES_PER_BUFFER * 2];
+#endif
     for (;;) {
+        while (tandy_buffer.tail != tandy_buffer.head) {
+            tandysound.write_register(0, tandy_buffer.cmds[tandy_buffer.tail]);
+            ++tandy_buffer.tail;
+        }
+        memset(buf, 0, sizeof(buf));
         struct audio_buffer *buffer = take_audio_buffer(ap, true);
         int16_t *samples = (int16_t *) buffer->buffer->bytes;
-        // putchar('/');
       
-        for (int i = 0; i < buffer->max_sample_count; ++i) {
-            samples[i << 1] = samples[(i << 1) + 1] = SNG_calc(sn76489);
+#ifdef SQUARE_FLOAT_OUTPUT
+        tandysound.generator().generate_frames(buf, SAMPLES_PER_BUFFER, 1.0f);
+#else
+        tandysound.generator().generate_frames(buf, SAMPLES_PER_BUFFER);
+#endif
+        for (int i = 0; i < SAMPLES_PER_BUFFER; ++i) {
+#ifdef SQUARE_FLOAT_OUTPUT
+            samples[i << 1] = (int32_t)(buf[i << 1] * 32768.0f) >> 1;
+            samples[(i << 1) + 1] = (int32_t)(buf[(i << 1) + 1] * 32768.0f) >> 1;
+#else
+            samples[i << 1] = buf[i << 1] >> 1;
+            samples[(i << 1) + 1] = buf[(i << 1) + 1] >> 1;
+#endif
         }
-        buffer->sample_count = buffer->max_sample_count;
+        buffer->sample_count = SAMPLES_PER_BUFFER;
 
         give_audio_buffer(ap, buffer);
     }

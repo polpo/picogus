@@ -238,32 +238,54 @@ void tandy_generator_t::process_event(uint8_t data)
 //
 // generate the requested number of audio frames
 //
+#ifdef SQUARE_FLOAT_OUTPUT
 void tandy_generator_t::generate_frames(float *dest, uint32_t frames, float gain)
+#else
+void tandy_generator_t::generate_frames(int32_t *dest, uint32_t frames)
+#endif
 {
     // generate square wavs
+#ifdef SQUARE_FLOAT_OUTPUT
     float vvolume[4];
     vvolume[0] = float(m_voice[0].volume) * gain * (1.0f / 32768.0f);
     vvolume[1] = float(m_voice[1].volume) * gain * (1.0f / 32768.0f);
     vvolume[2] = float(m_voice[2].volume) * gain * (1.0f / 32768.0f);
     vvolume[3] = float(m_voice[3].volume) * gain * (1.0f / 32768.0f);
+#endif
     for (uint32_t frame = 0; frame < frames; frame++)
     {
+#ifdef SQUARE_FLOAT_OUTPUT
         float result = 0;
+#else
+        int32_t result = 0;
+#endif
 
         // channel 0
         m_voice[0].pos += m_voice[0].step;
         if ((m_voice[0].pos & FRAC_HALF) != 0)
+#ifdef SQUARE_FLOAT_OUTPUT
             result += vvolume[0];
+#else
+            result += m_voice[0].volume;
+#endif
 
         // channel 1
         m_voice[1].pos += m_voice[1].step;
         if ((m_voice[1].pos & FRAC_HALF) != 0)
+#ifdef SQUARE_FLOAT_OUTPUT
             result += vvolume[1];
+#else
+            result += m_voice[1].volume;
+#endif
 
         // channel 2
         m_voice[2].pos += m_voice[2].step;
         if ((m_voice[2].pos & FRAC_HALF) != 0)
+#ifdef SQUARE_FLOAT_OUTPUT
             result += vvolume[2];
+#else
+            result += m_voice[2].volume;
+#endif
 
         // noise channel: on rising edge, clock the PRNG
         m_voice[3].pos += m_voice[3].step;
@@ -280,7 +302,11 @@ void tandy_generator_t::generate_frames(float *dest, uint32_t frames, float gain
 
         // PRNG output bit controls the noise contribution
         if ((m_prng & 1) != 0)
+#ifdef SQUARE_FLOAT_OUTPUT
             result += vvolume[3];
+#else
+            result += m_voice[3].volume;
+#endif
 
         // output stereo; note that output is inverted
         *dest++ -= result;
@@ -541,8 +567,7 @@ void saa1099_generator_t::add_voice(int32_t &lresult, int32_t &rresult, int16_t 
         float ffactor = float(factor) * (1.0f / 16.0f);
         lresult += ffactor * lvolume;
 #else
-        // lresult += (int32_t)lvolume * factor / 16;
-        lresult += lvolume;
+        lresult += (int32_t)lvolume * factor / 16;
 #endif
 
         // bit 0 means right is inverted
@@ -551,8 +576,7 @@ void saa1099_generator_t::add_voice(int32_t &lresult, int32_t &rresult, int16_t 
 #ifdef SQUARE_FLOAT_OUTPUT
         rresult += ffactor * rvolume;
 #else
-        // rresult += (int32_t)rvolume * factor / 16;
-        rresult += rvolume;
+        rresult += (int32_t)rvolume * factor / 16;
 #endif
     }
 }
@@ -563,7 +587,7 @@ void saa1099_generator_t::add_voice(int32_t &lresult, int32_t &rresult, int16_t 
 #ifdef SQUARE_FLOAT_OUTPUT
 void saa1099_generator_t::generate_frames(float *dest, uint32_t frames, float gain)
 #else
-void saa1099_generator_t::generate_frames(int32_t *dest, uint32_t frames, int32_t gain)
+void saa1099_generator_t::generate_frames(int32_t *dest, uint32_t frames)
 #endif
 {
     // if not enabled, nothing to do
@@ -586,20 +610,6 @@ void saa1099_generator_t::generate_frames(int32_t *dest, uint32_t frames, int32_
     vvolume[4][1] = float(m_voice[4].rvolume) * gain * (1.0f / 32768.0f);
     vvolume[5][0] = float(m_voice[5].lvolume) * gain * (1.0f / 32768.0f);
     vvolume[5][1] = float(m_voice[5].rvolume) * gain * (1.0f / 32768.0f);
-#else
-    int16_t vvolume[6][2];
-    vvolume[0][0] = m_voice[0].lvolume;
-    vvolume[0][1] = m_voice[0].rvolume;
-    vvolume[1][0] = m_voice[1].lvolume;
-    vvolume[1][1] = m_voice[1].rvolume;
-    vvolume[2][0] = m_voice[2].lvolume;
-    vvolume[2][1] = m_voice[2].rvolume;
-    vvolume[3][0] = m_voice[3].lvolume;
-    vvolume[3][1] = m_voice[3].rvolume;
-    vvolume[4][0] = m_voice[4].lvolume;
-    vvolume[4][1] = m_voice[4].rvolume;
-    vvolume[5][0] = m_voice[5].lvolume;
-    vvolume[5][1] = m_voice[5].rvolume;
 #endif
 
     // generate square wavs
@@ -617,11 +627,19 @@ void saa1099_generator_t::generate_frames(int32_t *dest, uint32_t frames, int32_
 
         // channel 0
         m_voice[0].pos += m_voice[0].step;
+#ifdef SQUARE_FLOAT_OUTPUT
         this->add_voice<0>(lresult, rresult, vvolume[0][0], vvolume[0][1]);
+#else
+        this->add_voice<0>(lresult, rresult, m_voice[0].lvolume, m_voice[0].rvolume);
+#endif
 
         // channel 1
         m_voice[1].pos += m_voice[1].step;
+#ifdef SQUARE_FLOAT_OUTPUT
         this->add_voice<1>(lresult, rresult, vvolume[1][0], vvolume[1][1]);
+#else
+        this->add_voice<1>(lresult, rresult, m_voice[1].lvolume, m_voice[1].rvolume);
+#endif
 
         // step envelope 0 if enabled
         if (env0_clock)
@@ -629,15 +647,27 @@ void saa1099_generator_t::generate_frames(int32_t *dest, uint32_t frames, int32_
 
         // channel 2
         m_voice[2].pos += m_voice[2].step;
+#ifdef SQUARE_FLOAT_OUTPUT
         this->add_voice<2>(lresult, rresult, vvolume[2][0], vvolume[2][1]);
+#else
+        this->add_voice<2>(lresult, rresult, m_voice[2].lvolume, m_voice[2].rvolume);
+#endif
 
         // channel 3
         m_voice[3].pos += m_voice[3].step;
+#ifdef SQUARE_FLOAT_OUTPUT
         this->add_voice<3>(lresult, rresult, vvolume[3][0], vvolume[3][1]);
+#else
+        this->add_voice<3>(lresult, rresult, m_voice[3].lvolume, m_voice[3].rvolume);
+#endif
 
         // channel 4
         m_voice[4].pos += m_voice[4].step;
+#ifdef SQUARE_FLOAT_OUTPUT
         this->add_voice<4>(lresult, rresult, vvolume[4][0], vvolume[4][1]);
+#else
+        this->add_voice<4>(lresult, rresult, m_voice[4].lvolume, m_voice[4].rvolume);
+#endif
 
         // step envelope 1 if enabled
         if (env1_clock)
@@ -645,7 +675,11 @@ void saa1099_generator_t::generate_frames(int32_t *dest, uint32_t frames, int32_
 
         // channel 5
         m_voice[5].pos += m_voice[5].step;
+#ifdef SQUARE_FLOAT_OUTPUT
         this->add_voice<5>(lresult, rresult, vvolume[5][0], vvolume[5][1]);
+#else
+        this->add_voice<5>(lresult, rresult, m_voice[5].lvolume, m_voice[5].rvolume);
+#endif
 
         // output stereo
         *dest++ += lresult;

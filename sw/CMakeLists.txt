@@ -25,6 +25,7 @@ set(PICO_COPY_TO_RAM 1)
 
 if(NOT PROJECT_TYPE)
     set(PROJECT_TYPE "GUS")
+    message("PROJECT_TYPE not set, defaulting to ${PROJECT_TYPE}")
 endif()
 
 # Initialise the Raspberry Pi Pico SDK
@@ -55,6 +56,7 @@ if(PROJECT_TYPE STREQUAL "GUS")
     # target_compile_options(picogus PRIVATE -save-temps -fverbose-asm)
     if(NOT GUS_DEFAULT_PORT)
         set(GUS_DEFAULT_PORT "0x240")
+        message("GUS_DEFAULT_PORT not set, defaulting to ${GUS_DEFAULT_PORT}")
     endif()
     pico_set_program_name(picogus "picogus-gus")
     target_sources(picogus PRIVATE gusplay.cpp pico_pic.c isa_dma.c)
@@ -115,7 +117,6 @@ if(PROJECT_TYPE STREQUAL "MPU")
     pico_set_program_name(picogus "picogus-mpu401")
     target_compile_definitions(picogus PRIVATE
         SOUND_MPU=1
-        USE_ALARM=1
     )
     target_sources(picogus PRIVATE
         pico_pic.c
@@ -133,11 +134,11 @@ if(PROJECT_TYPE STREQUAL "TANDY")
     pico_set_program_name(picogus "picogus-tandy")
     target_compile_definitions(picogus PRIVATE
         SOUND_TANDY=1
-        USE_ALARM=1
+        # SQUARE_FLOAT_OUTPUT=1
     )
     target_sources(picogus PRIVATE
         pico_pic.c
-        emu76489/emu76489.c
+        square/square.cpp
     )
     target_sources(picogus PRIVATE tandyplay.cpp)
     pico_enable_stdio_uart(picogus 1)
@@ -149,8 +150,7 @@ if(PROJECT_TYPE STREQUAL "CMS")
     pico_set_program_name(picogus "picogus-cms")
     target_compile_definitions(picogus PRIVATE
         SOUND_CMS=1
-        USE_ALARM=1
-        SQUARE_FLOAT_OUTPUT=1
+        # SQUARE_FLOAT_OUTPUT=1
     )
 
     target_sources(picogus PRIVATE
@@ -191,6 +191,3 @@ add_custom_target(
     DEPENDS picogus
     COMMAND openocd -f interface/cmsis-dap.cfg -f target/rp2040.cfg -c "adapter speed 5000\; program picogus.elf verify reset exit"
 )
-
-unset(PROJECT_TYPE CACHE)
-unset(GUS_DEFAULT_PORT CACHE)

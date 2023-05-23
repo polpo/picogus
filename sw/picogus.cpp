@@ -49,32 +49,22 @@ void play_mpu(void);
 #endif
 
 #ifdef SOUND_TANDY
-#include "emu76489/emu76489.h"
+#include "square/square.h"
 static uint16_t basePort = 0x2c0u;
 void play_tandy(void);
-SNG* sn76489;
+
+#include "cmd_buffers.h"
+tandy_buffer_t tandy_buffer = { {0}, 0, 0 };
 #endif
 
 #ifdef SOUND_CMS
+#include "square/square.h"
 static uint16_t basePort = 0x220u;
 void play_cms(void);
-#include "square/square.h"
-// saa1099_device *saa0, *saa1;
-cms_t *cms;
 static uint8_t cms_detect = 0xFF;
 
-typedef struct cms_buffer_t {
-    struct {
-        uint16_t addr;
-        uint8_t data;
-    } cmds[256];
-    uint8_t head;
-    uint8_t tail;
-} cms_buffer_t;
+#include "cmd_buffers.h"
 cms_buffer_t cms_buffer = { {0}, 0, 0 };
-
-#include "pico/critical_section.h"
-critical_section_t cms_crit;
 #endif
 
 // PicoGUS control and data ports
@@ -299,51 +289,19 @@ __force_inline void handle_iow(void) {
 #endif // SOUND_MPU
 #ifdef SOUND_TANDY
     if (port == basePort) {
-        pio_sm_put(pio0, iow_sm, IO_WAIT);
-        SNG_writeIO(sn76489, iow_read & 0xFF);
+        pio_sm_put(pio0, iow_sm, IO_END);
+        tandy_buffer.cmds[tandy_buffer.head++] = iow_read & 0xFF;
+        return;
     } else // if follows down below
 #endif // SOUND_TANDY
 #ifdef SOUND_CMS
     switch (port - basePort) {
     // SAA data/address ports
     case 0x0:
-        pio_sm_put(pio0, iow_sm, IO_END);
-        // critical_section_enter_blocking(&cms_crit);
-        // cms->write_data(0x0, iow_read & 0xFF);
-        cms_buffer.cmds[cms_buffer.head++] = {
-            port,
-            (uint8_t)(iow_read & 0xFF)
-        };
-        // critical_section_exit(&cms_crit);
-        // saa0->data_w(iow_read & 0xFF);
-        return;
-        break;
     case 0x1:
-        pio_sm_put(pio0, iow_sm, IO_END);
-        // saa0->control_w(iow_read & 0xFF);
-        // cms->write_addr(0x1, iow_read & 0xFF);
-        cms_buffer.cmds[cms_buffer.head++] = {
-            port,
-            (uint8_t)(iow_read & 0xFF)
-        };
-        return;
-        break;
     case 0x2:
-        pio_sm_put(pio0, iow_sm, IO_END);
-        // saa1->data_w(iow_read & 0xFF);
-        // critical_section_enter_blocking(&cms_crit);
-        // cms->write_data(0x2, iow_read & 0xFF);
-        // critical_section_exit(&cms_crit);
-        cms_buffer.cmds[cms_buffer.head++] = {
-            port,
-            (uint8_t)(iow_read & 0xFF)
-        };
-        return;
-        break;
     case 0x3:
         pio_sm_put(pio0, iow_sm, IO_END);
-        // cms->write_addr(0x3, iow_read & 0xFF);
-        // saa1->control_w(iow_read & 0xFF);
         cms_buffer.cmds[cms_buffer.head++] = {
             port,
             (uint8_t)(iow_read & 0xFF)
@@ -555,21 +513,14 @@ int main()
 #endif // SOUND_MPU
 
 #ifdef SOUND_TANDY
-    puts("Creating SN76489");
-    sn76489 = SNG_new(3579545, 44100);
-    SNG_reset(sn76489);
+    puts("Creating tandysound");
     multicore_launch_core1(&play_tandy);
 #endif // SOUND_TANDY
 
 #ifdef SOUND_CMS
-    puts("Creating SAA1099 1");
-    // saa0 = new saa1099_device(7159090);
-    puts("Creating SAA1099 2");
-    // saa1 = new saa1099_device(7159090);
-    critical_section_init(&cms_crit);
-    cms = new cms_t();
+    puts("Creating CMS");
     multicore_launch_core1(&play_cms);
-#endif // SOUND_TANDY
+#endif // SOUND_CMS
 
     for(int i=AD0_PIN; i<(AD0_PIN + 10); ++i) {
         gpio_disable_pulls(i);
