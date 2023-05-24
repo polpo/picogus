@@ -133,7 +133,7 @@ Bit8u __force_inline QueueUsed() {
     return mpu.queue_used;
 }
 
-static void QueueByte(Bit8u data) {
+__force_inline static void QueueByte(Bit8u data) {
     if (mpu.state.block_ack) {mpu.state.block_ack=false;return;}
     if (mpu.queue_used==0 && mpu.intelligent) {
         mpu.state.irq_pending=true;
@@ -148,12 +148,12 @@ static void QueueByte(Bit8u data) {
     } /*else LOG(LOG_MISC,LOG_NORMAL)("MPU401:Data queue full");*/ /* SOFTMPU */
 }
 
-static void ClrQueue(void) {
+__force_inline static void ClrQueue(void) {
     mpu.queue_used=0;
     mpu.queue_pos=0;
 }
 
-Bit8u MPU401_ReadStatus(void) { /* SOFTMPU */
+__force_inline Bit8u MPU401_ReadStatus(void) { /* SOFTMPU */
     critical_section_enter_blocking(&mpu_crit);
     uint8_t ret=0x3f;   /* Bits 6 and 7 clear */
     if (mpu.state.cmd_pending) ret|=0x40;
@@ -162,7 +162,7 @@ Bit8u MPU401_ReadStatus(void) { /* SOFTMPU */
     return ret;
 }
 
-void MPU401_WriteCommand(Bit8u val, bool crit) { /* SOFTMPU */
+__force_inline void MPU401_WriteCommand(Bit8u val, bool crit) { /* SOFTMPU */
     if (mpu.mode==M_UART && val!=0xff) return;
     if (crit) {
         critical_section_enter_blocking(&mpu_crit);
@@ -332,7 +332,7 @@ write_command_return:
     }
 }
 
-Bit8u MPU401_ReadData(void) { /* SOFTMPU */
+__force_inline Bit8u MPU401_ReadData(void) { /* SOFTMPU */
     critical_section_enter_blocking(&mpu_crit);
     Bit8u ret=MSG_MPU_ACK;  // HardMPU: we shouldn't be running this function if the queue is empty.
     if (mpu.queue_used) {
@@ -370,7 +370,7 @@ Bit8u MPU401_ReadData(void) { /* SOFTMPU */
     return ret;
 }
 
-void MPU401_WriteData(Bit8u val, bool crit) { /* SOFTMPU */
+__force_inline void MPU401_WriteData(Bit8u val, bool crit) { /* SOFTMPU */
     if (crit) {
         critical_section_enter_blocking(&mpu_crit);
     }
@@ -565,7 +565,7 @@ write_return:
     }
 }
 
-static void MPU401_IntelligentOut(Bit8u chan) {
+__force_inline static void MPU401_IntelligentOut(Bit8u chan) {
     Bit8u val, i; /* SOFTMPU */
     switch (mpu.playbuf[chan].type) {
         case T_OVERFLOW:
@@ -587,7 +587,7 @@ static void MPU401_IntelligentOut(Bit8u chan) {
     }
 }
 
-static void UpdateTrack(Bit8u chan) {
+__force_inline static void UpdateTrack(Bit8u chan) {
     MPU401_IntelligentOut(chan);
     if (mpu.state.amask&(1<<chan)) {
         mpu.playbuf[chan].vlength=0;
@@ -599,7 +599,7 @@ static void UpdateTrack(Bit8u chan) {
     }
 }
 
-static void UpdateConductor(void) {
+__force_inline static void UpdateConductor(void) {
     for (unsigned int i=0;i < mpu.condbuf.vlength;i++) {
         if (mpu.condbuf.value[i] == 0xfc) {
             mpu.condbuf.value[i] = 0;
@@ -647,7 +647,7 @@ next_event:
     return MPU401_TIMECONSTANT/((mpu.clock.tempo*mpu.clock.timebase*mpu.clock.tempo_rel)/0x40);
 }
 
-static void MPU401_EOIHandlerDispatch(void) {
+__force_inline static void MPU401_EOIHandlerDispatch(void) {
     if (mpu.state.send_now) {
         mpu.state.eoi_scheduled=true;
         PIC_AddEvent(MPU401_EOIHandler, 60, 1); // Possible a bit longer
@@ -656,7 +656,7 @@ static void MPU401_EOIHandlerDispatch(void) {
 }
 
 //Updates counters and requests new data on "End of Input"
-uint32_t MPU401_EOIHandler(Bitu val) {
+__force_inline uint32_t MPU401_EOIHandler(Bitu val) {
     if (val) {
         critical_section_enter_blocking(&mpu_crit);
     }
@@ -698,7 +698,7 @@ static uint32_t  MPU401_ResetDone(Bitu val) { /* SOFTMPU */
     return 0;
 }
 
-static void MPU401_Reset(void) {
+__force_inline static void MPU401_Reset(void) {
     Bit8u i; /* SOFTMPU */
 
     PIC_DeActivateIRQ();
@@ -736,7 +736,7 @@ static void MPU401_Reset(void) {
 
 
 /* HardMPU: Initialisation */
-void MPU401_Init()
+__force_inline void MPU401_Init()
 {
     /* Initalise PIC code */
     /* PIC_Init(); */

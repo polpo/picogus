@@ -142,7 +142,7 @@ Bit8u __force_inline static uart_tx_status()
     return uart_is_writable(uart0) ? 0 : 1;
 }
 
-static void PlayMsg(Bit8u* msg, Bitu len)
+__force_inline static void PlayMsg(Bit8u* msg, Bitu len)
 {
     // despite the name of this function, we're just going to buffer this message to send later.
     for (Bitu i = 0; i < len; i++) {
@@ -157,13 +157,13 @@ static void PlayMsg(Bit8u* msg, Bitu len)
     }
 }
 
-static void send_midi_byte_now(Bit8u byte) {
+__force_inline static void send_midi_byte_now(Bit8u byte) {
     wait_for_uart();
     output_to_uart(byte);
 }
 
 /* SOFTMPU: Fake "All Notes Off" for Roland RA-50 */
-static void FakeAllNotesOff(Bit8u chan)
+__force_inline static void FakeAllNotesOff(Bit8u chan)
 {
     Bit8u note;
     channel* pChan;
