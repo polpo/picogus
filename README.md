@@ -36,8 +36,8 @@ See/hear PicoGUS in action on YouTube:
 * `gus-x.cpp` adapted from [DOSBox-X](https://github.com/joncampbell123/dosbox-x)
 * OPL/AdLib emulation from [rp2040-doom](https://github.com/kilograham/rp2040-doom) (based on [emu8950](https://github.com/digital-sound-antiques/emu8950))
 * MPU-401 emulation adapted from [HardMPU](https://github.com/ab0tj/HardMPU) and [DOSBox-X](https://github.com/joncampbell123/dosbox-x)
-* Tandy 3-voice emulation from [emu76489](https://github.com/digital-sound-antiques/emu76489)
-* CMS emulation adapted from [MAME](https://github.com/mamedev/mame)
+* Tandy 3-voice emulation based on code contributed by [Aaron Giles](https://aarongiles.com/), adapted from [DREAMM](https://aarongiles.com/dreamm/) 
+* CMS emulation based on code contributed by [Aaron Giles](https://aarongiles.com/), adapted from [DREAMM](https://aarongiles.com/dreamm/) 
 
 ## License
 
