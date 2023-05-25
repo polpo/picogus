@@ -26,6 +26,7 @@ See/hear PicoGUS in action on YouTube:
 [<img src="https://img.youtube.com/vi/CkJvkJVRscQ/hqdefault.jpg" alt="October 2022 update" width=400>](https://youtu.be/CkJvkJVRscQ)
 [<img src="https://img.youtube.com/vi/F5Zk_hHHkTg/hqdefault.jpg" alt="December 2022 update" width=400>](https://youtu.be/F5Zk_hHHkTg)
 [<img src="https://img.youtube.com/vi/sOHTagrWcIE/hqdefault.jpg" alt="January 2023 update" width=400>](https://youtu.be/sOHTagrWcIE)
+[<img src="https://img.youtube.com/vi/2LBXzy4Fus0/hqdefault.jpg" alt="March 2023 update" width=400>](https://youtu.be/2LBXzy4Fus0)
 
 ## Open Source Credits
 
