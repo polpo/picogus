@@ -3,6 +3,8 @@
 //
 //  Misc square wave audio device emulation
 //  (c) Aaron Giles
+//
+//  Modified by Ian Scott for PicoGUS: added int32_t output
 //=========================================================
 //
 //  This code is derived from the DREAMM source code, and is released under
