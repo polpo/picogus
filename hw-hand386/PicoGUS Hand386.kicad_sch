@@ -3999,7 +3999,7 @@
   )
 
   (symbol (lib_id "Connector:Bus_ISA_8bit") (at 46.355 62.23 0) (unit 1)
-    (in_bom yes) (on_board no) (dnp no)
+    (in_bom yes) (on_board yes) (dnp no)
     (uuid 00000000-0000-0000-0000-000060405b30)
     (property "Reference" "J3" (at 45.72 13.97 0)
       (effects (font (size 1.27 1.27)))
@@ -4007,7 +4007,7 @@
     (property "Value" "Bus_ISA_8bit" (at 46.355 17.78 0)
       (effects (font (size 1.27 1.27)))
     )
-    (property "Footprint" "Connector_PinSocket_2.00mm:PinSocket_2x30_P2.00mm_Horizontal" (at 46.355 62.23 0)
+    (property "Footprint" "PiGUS library:EDGE-60" (at 46.355 62.23 0)
       (effects (font (size 1.27 1.27)) hide)
     )
     (property "Datasheet" "https://en.wikipedia.org/wiki/Industry_Standard_Architecture" (at 46.355 62.23 0)
@@ -4712,7 +4712,7 @@
   )
 
   (symbol (lib_id "PiGUS library:Pico") (at 109.22 61.595 0) (unit 1)
-    (in_bom yes) (on_board no) (dnp no) (fields_autoplaced)
+    (in_bom yes) (on_board yes) (dnp no) (fields_autoplaced)
     (uuid 420c1bc2-ccdb-4320-8e64-356ed391cc95)
     (property "Reference" "U1" (at 109.22 29.845 0)
       (effects (font (size 1.27 1.27)))

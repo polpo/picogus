@@ -416,7 +416,7 @@
     "pinned_symbol_libs": []
   },
   "meta": {
-    "filename": "PicoGUS.kicad_pro",
+    "filename": "PicoGUS Hand386.kicad_pro",
     "version": 1
   },
   "net_settings": {
@@ -461,20 +461,7 @@
     },
     "net_colors": null,
     "netclass_assignments": null,
-    "netclass_patterns": [
-      {
-        "netclass": "pwr",
-        "pattern": "+3V3"
-      },
-      {
-        "netclass": "pwr",
-        "pattern": "+5V"
-      },
-      {
-        "netclass": "pwr",
-        "pattern": "GND"
-      }
-    ]
+    "netclass_patterns": []
   },
   "pcbnew": {
     "last_paths": {
@@ -482,8 +469,8 @@
       "idf": "",
       "netlist": "",
       "specctra_dsn": "",
-      "step": "",
-      "vrml": ""
+      "step": "PicoGUS Hand386.step",
+      "vrml": "PicoGUS-Hand386-mm.wrl"
     },
     "page_layout_descr_file": ""
   },
