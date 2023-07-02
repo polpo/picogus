@@ -19,25 +19,26 @@ typedef enum {
 
 
 void banner(void) {
-    printf("PicoGUSinit v1.2.0\n");
+    printf("PicoGUSinit v1.2.1\n");
     printf("(c) 2023 Ian Scott - licensed under the GNU GPL v2\n\n");
 }
 
 
-void usage(void) {
+void usage(char *argv0) {
     // Max line length @ 80 chars:
     //              "................................................................................\n"
-    fprintf(stderr, "usage: pgusinit [/?] | [/b x] [/a n] [/d n] | [/f fw.uf2]\n");
+    fprintf(stderr, "Usage:\n");
+    fprintf(stderr, "  %s [/?] | [/p x] [/a n] [/d n] | [/f fw.uf2]\n", argv0);
     fprintf(stderr, "\n");
     fprintf(stderr, "    /?   - show this message\n");
     fprintf(stderr, "    /f fw.uf2 - Program the PicoGUS with the firmware file fw.uf2.\n");
     fprintf(stderr, "AdLib, MPU-401, Tandy, CMS modes only:\n");
-    fprintf(stderr, "    /b x - set the base address of the emulated card. Defaults:\n");
+    fprintf(stderr, "    /p x - set the (hex) base address of the emulated card. Defaults:\n");
     fprintf(stderr, "           AdLib: 388; MPU-401: 330; Tandy: 2C0; CMS: 220\n");
     fprintf(stderr, "GUS mode only:\n");
     fprintf(stderr, "    /a n - set audio buffer to n samples. Default: 16, Min: 8, Max: 256\n");
     fprintf(stderr, "           (tweaking this can help programs that hang or have audio glitches)\n");
-    fprintf(stderr, "    /d n - force DMA interval to n æs. Default: 0, Min: 1, Max: 256\n");
+    fprintf(stderr, "    /d n - force DMA interval to n Ã¦s. Default: 0, Min: 0, Max: 255\n");
     fprintf(stderr, "           Specifying 0 restores the GUS default behavior.\n");
     fprintf(stderr, "           (if games with streaming audio like Doom stutter, increase this)\n");
     fprintf(stderr, "The ULTRASND environment variable must be set in the following format:\n");
@@ -48,9 +49,9 @@ void usage(void) {
 }
 
 
-void err_ultrasnd(void) {
+void err_ultrasnd(char *argv0) {
     fprintf(stderr, "ERROR: no ULTRASND variable set or is malformed!\n");
-    usage();
+    usage(argv0);
 }
 
 
@@ -65,10 +66,10 @@ void err_protocol(uint8_t expected, uint8_t got) {
 }
 
 
-int init_gus(void) {
+int init_gus(char *argv0) {
     char* ultrasnd = getenv("ULTRASND");
     if (ultrasnd == NULL) {
-        err_ultrasnd();
+        err_ultrasnd(argv0);
         return 1;
     }
 
@@ -79,7 +80,7 @@ int init_gus(void) {
     int e;
     e = sscanf(ultrasnd, "%hx,%hhu,%*hhu,%hhu,%*hhu", &port, &irq, &dma);
     if (e != 3) {
-        err_ultrasnd();
+        err_ultrasnd(argv0);
         return 2;
     }
 
@@ -171,7 +172,7 @@ int write_firmware(const char* fw_filename) {
                 return 13;
             }
             fflush(stdout);
-            fprintf(stderr, "Programming");
+            fprintf(stderr, "Programming %d blocks", numBlocks);
         }
 
         if (i != uf2_buf.uf2.blockNo) {
@@ -216,47 +217,47 @@ int main(int argc, char* argv[]) {
     banner();
     int i = 1;
     while (i < argc) {
-        if (strcmp(argv[i], "/?") == 0) {
-            usage();
+        if (stricmp(argv[i], "/?") == 0) {
+            usage(argv[0]);
             return 0;
-        } else if (strcmp(argv[i], "/a") == 0) {
+        } else if (stricmp(argv[i], "/a") == 0) {
             if (i + 1 >= argc) {
-                usage();
+                usage(argv[0]);
                 return 255;
             }
             e = sscanf(argv[++i], "%hu", &buffer_size);
             if (e != 1 || buffer_size < 8 || buffer_size > 256) {
-                usage();
+                usage(argv[0]);
                 return 3;
             }
-        } else if (strcmp(argv[i], "/d") == 0) {
+        } else if (stricmp(argv[i], "/d") == 0) {
             if (i + 1 >= argc) {
-                usage();
+                usage(argv[0]);
                 return 255;
             }
             e = sscanf(argv[++i], "%hu", &dma_interval);
-            if (e != 1 || dma_interval > 256) {
-                usage();
+            if (e != 1 || dma_interval > 255) {
+                usage(argv[0]);
                 return 4;
             }
-        } else if (strcmp(argv[i], "/p") == 0) {
+        } else if (stricmp(argv[i], "/p") == 0) {
             if (i + 1 >= argc) {
-                usage();
+                usage(argv[0]);
                 return 255;
             }
             e = sscanf(argv[++i], "%hx", &port_override);
             if (e != 1 || port_override > 0x3ffu) {
-                usage();
+                usage(argv[0]);
                 return 4;
             }
-        } else if (strcmp(argv[i], "/f") == 0) {
+        } else if (stricmp(argv[i], "/f") == 0) {
             if (i + 1 >= argc) {
-                usage();
+                usage(argv[0]);
                 return 255;
             }
             e = sscanf(argv[++i], "%255s", fw_filename);
             if (e != 1) {
-                usage();
+                usage(argv[0]);
                 return 5;
             }
         }
@@ -301,7 +302,7 @@ int main(int argc, char* argv[]) {
 
     switch(mode) {
     case 0:
-        init_gus();
+        init_gus(argv[0]);
         if (!buffer_size) {
             buffer_size = 16;
         }
@@ -314,7 +315,7 @@ int main(int argc, char* argv[]) {
         if (dma_interval == 0) {
             printf("DMA interval set to default behavior\n");
         } else {
-            printf("DMA interval forced to %u æs\n", dma_interval);
+            printf("DMA interval forced to %u Ã¦s\n", dma_interval);
         }
         outp(CONTROL_PORT, 0x04); // Select port register
         port = inpw(DATA_PORT_LOW); // Get port
