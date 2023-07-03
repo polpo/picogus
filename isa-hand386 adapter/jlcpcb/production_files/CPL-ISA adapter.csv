@@ -1,0 +1,13 @@
+Designator,Val,Package,Mid X,Mid Y,Rotation,Layer
+FB1,FerriteBead_Small,L_0805_2012Metric,195.3,-54.8,180.0,top
+J1,Conn_02x30_Odd_Even,Hand386_PicoGUS,199.9115,-89.996,0.0,top
+J2,Conn_02x30_Odd_Even,Hand386_PicoGUS,227.9115,-89.996,0.0,top
+J3,Bus_ISA_8bit,BUS_PC,167.9575,-132.0165,0.0,top
+J4,IRQDMA_JP,PinHeader_2x09_P2.54mm_Vertical,154.6,-123.325,90.0,top
+J5,Wavetable,Wavetable,114.465,-83.73,0.0,top
+J6,AudioJack3,Jack_3.5mm_CUI_SJ1-3533NG_Horizontal,212.9,-45.9,-90.0,top
+R1,1K,R_0805_2012Metric,196.2,-47.1,0.0,top
+R2,1K,R_0805_2012Metric,196.2,-44.6,0.0,top
+R3,1K,R_0805_2012Metric,200.1,-44.6,0.0,top
+R4,1K,R_0805_2012Metric,200.1,-47.1,0.0,top
+RV1,10K,PTD9022015FB102,188.4,-43.7,90.0,top
