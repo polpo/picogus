@@ -4,6 +4,8 @@
 #include "hardware/pio.h"
 #include "hardware/irq.h"
 #include "hardware/regs/vreg_and_chip_reset.h"
+#include "hardware/vreg.h"
+#include "hardware/clocks.h"
 
 #include "pico_reflash.h"
 
@@ -78,7 +80,7 @@ static uint8_t sel_reg = 0;
 static uint16_t cur_data = 0;
 static uint32_t cur_read = 0;
 
-constexpr uint LED_PIN = PICO_DEFAULT_LED_PIN;
+constexpr uint LED_PIN = 1 << PICO_DEFAULT_LED_PIN;
 
 static uint iow_sm;
 static uint ior_sm;
@@ -235,12 +237,13 @@ __force_inline void handle_iow(void) {
             fast_write = true;
             break;
         default:
+            // gpio_xor_mask(LED_PIN);
             // Slow write, set iochrdy by writing non-0
             pio_sm_put(pio0, iow_sm, IO_WAIT);
             break;
         }
         // uint32_t write_begin = time_us_32();
-        __dsb();
+        // __dsb();
         write_gus(port, iow_read & 0xFF);
         // uint32_t write_elapsed = time_us_32() - write_begin;
         // if (write_elapsed > 1) {
@@ -250,9 +253,8 @@ __force_inline void handle_iow(void) {
             // Fast write - return early as we've already written 0x0u to the PIO
             return;
         }
-        __dsb();
+        // __dsb();
         // printf("GUS IOW: port: %x value: %x\n", port, value);
-        // gpio_xor_mask(1u << LED_PIN);
         // puts("IOW");
     } else // if follows down below
 #endif // SOUND_GUS
@@ -268,7 +270,7 @@ __force_inline void handle_iow(void) {
     case 1:
         pio_sm_put(pio0, iow_sm, IO_WAIT);
         OPL_Pico_PortWrite(OPL_DATA_PORT, iow_read & 0xFF);
-        __dsb();
+        // __dsb();
         break;
     }
 #endif // SOUND_OPL
@@ -283,7 +285,7 @@ __force_inline void handle_iow(void) {
         pio_sm_put(pio0, iow_sm, IO_WAIT);
         MPU401_WriteCommand(iow_read & 0xFF, true);
         // printf("MPU IOW: port: %x value: %x\n", port, iow_read & 0xFF);
-        __dsb();
+        // __dsb();
         break;
     }
 #endif // SOUND_MPU
@@ -357,7 +359,7 @@ __force_inline void handle_ior(void) {
         // OR with 0x0000ff00 is required to set pindirs in the PIO
         pio_sm_put(pio0, ior_sm, IOR_SET_VALUE | value);
         // printf("GUS IOR: port: %x value: %x\n", port, value);
-        // gpio_xor_mask(1u << LED_PIN);
+        // gpio_xor_mask(LED_PIN);
     } else // if follows down below
 #elif defined(SOUND_OPL)
     if (port == basePort) {
@@ -435,7 +437,7 @@ void ior_isr(void) {
 
 void err_blink(void) {
     for (;;) {
-        gpio_xor_mask(1u << LED_PIN);
+        gpio_xor_mask(LED_PIN);
         busy_wait_ms(100);
     }
 }
@@ -447,9 +449,19 @@ void err_blink(void) {
 int main()
 {
     // Overclock!
+    vreg_set_voltage(VREG_VOLTAGE_1_30);
     // set_sys_clock_khz(266000, true);
-    set_sys_clock_khz(280000, true);
-    // vreg_set_voltage(VREG_VOLTAGE_1_20);
+    // set_sys_clock_khz(420000, true);
+    set_sys_clock_khz(400000, true);
+
+    // Set clk_peri to use the XOSC
+    // clock_configure(clk_peri,
+    //                 0,
+    //                 CLOCKS_CLK_PERI_CTRL_AUXSRC_VALUE_XOSC_CLKSRC,
+    //                 12 * MHZ,
+    //                 12 * MHZ);
+    // clock_configure(clk_peri, 0, CLOCKS_CLK_PERI_CTRL_AUXSRC_VALUE_CLK_SYS,
+    //         12 * MHZ, 12 * MHZ);
 
     // stdio_init_all();
 #ifdef ASYNC_UART
@@ -457,9 +469,7 @@ int main()
 #else
     stdio_init_all();
 #endif
-
     puts(firmware_string);
-
     io_rw_32 *reset_reason = (io_rw_32 *) (VREG_AND_CHIP_RESET_BASE + VREG_AND_CHIP_RESET_CHIP_RESET_OFFSET);
     if (*reset_reason & VREG_AND_CHIP_RESET_CHIP_RESET_HAD_POR_BITS) {
         puts("I was reset due to power on reset or brownout detection.");
@@ -469,8 +479,8 @@ int main()
         puts("I was reset due the debug port");
     }
 
-    gpio_init(LED_PIN);
-    gpio_set_dir(LED_PIN, GPIO_OUT);
+    gpio_init(PICO_DEFAULT_LED_PIN);
+    gpio_set_dir(PICO_DEFAULT_LED_PIN, GPIO_OUT);
 
     gpio_init(IRQ_PIN);
     gpio_set_dir(IRQ_PIN, GPIO_OUT);
@@ -569,7 +579,7 @@ int main()
     irq_set_enabled(PIO0_IRQ_1, true);
 #endif
 
-    gpio_xor_mask(1u << LED_PIN);
+    gpio_xor_mask(LED_PIN);
 
 #ifndef USE_ALARM
     PIC_Init();
@@ -579,12 +589,12 @@ int main()
 #ifndef USE_IRQ
         if (!pio_sm_is_rx_fifo_empty(pio0, iow_sm)) {
             handle_iow();
-            // gpio_xor_mask(1u << LED_PIN);
+            // gpio_xor_mask(LED_PIN);
         }
 
         if (!pio_sm_is_rx_fifo_empty(pio0, ior_sm)) {
             handle_ior();
-            // gpio_xor_mask(1u << LED_PIN);
+            // gpio_xor_mask(LED_PIN);
         }
 #endif
 #ifndef USE_ALARM

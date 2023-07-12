@@ -77,7 +77,7 @@ if(PROJECT_TYPE STREQUAL "GUS")
         PSRAM_PIN_MISO=0
         # POLLING_DMA=1
         INTERP_CLAMP=1
-        INTERP_LINEAR=1
+        # INTERP_LINEAR=1
     )
     add_subdirectory(rp2040-psram)
     target_link_libraries(picogus rp2040-psram hardware_interp)
