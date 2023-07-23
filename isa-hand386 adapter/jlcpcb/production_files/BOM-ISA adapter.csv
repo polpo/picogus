@@ -1,0 +1,12 @@
+Comment,Designator,Footprint,LCSC
+FerriteBead_Small,FB1,L_0805_2012Metric,C1015
+10K,RV1,PTD9022015FB102,C17414
+1K,"R1,R2,R3,R4",R_0805_2012Metric,C17513
+Bus_ISA_8bit,J3,BUS_PC,
+MountingHole_3.2mm_M3_Pad,H1,MountingHole_3.2mm_M3_Pad,
+Conn_02x30_Odd_Even,J1,Hand386_PicoGUS,
+Conn_02x30_Odd_Even,J2,Hand386_PicoGUS,
+IRQDMA_JP,J4,PinHeader_2x09_P2.54mm_Vertical,
+MountingHole_3.2mm_M3_Pad,H2,MountingHole_3.2mm_M3_Pad,
+AudioJack3,J6,Jack_3.5mm_CUI_SJ1-3533NG_Horizontal,
+Wavetable,J5,Wavetable,
