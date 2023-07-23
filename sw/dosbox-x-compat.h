@@ -2,8 +2,6 @@
 
 #include "pico/platform.h"
 
-#define MIXER_BUFSIZE 256u
-
 typedef uint32_t	Bitu;
 
 //#define INLINE inline __attribute__((always_inline))

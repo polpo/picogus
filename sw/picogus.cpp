@@ -499,7 +499,7 @@ int main()
 #ifdef PSRAM_CORE0
 #ifdef PSRAM
     puts("Initing PSRAM...");
-    psram_spi = psram_spi_init(pio1, -1);
+    psram_spi = psram_spi_init_clkdiv(pio1, -1, 1.6);
 #if TEST_PSRAM
     test_psram(&psram_spi);
 #endif // TEST_PSRAM

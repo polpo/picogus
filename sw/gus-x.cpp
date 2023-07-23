@@ -127,7 +127,7 @@ static bool dma_enable_on_dma_control_polling = false;
 static uint16_t vol16bit[4096];
 static uint32_t pantable[16];
 
-static uint32_t buffer_size = 4;
+static uint32_t brender_samplesuffer_size = 4;
 static uint32_t dma_interval = 0;
 
 class GUSChannels;
@@ -1568,39 +1568,30 @@ static int32_t __force_inline clamp(int32_t d, int32_t min, int32_t max) {
 #endif // INTERP_CLAMP
 
 extern uint32_t GUS_CallBack(Bitu max_len, int16_t* play_buffer) {
-    // static int32_t buffer[MIXER_BUFSIZE][2];
-    static int32_t buffer[2];
+    static int32_t accum[2];
     uint32_t s = 0;
 
-    // putchar('g');
     if ((GUS_reset_reg & 0x01/*!master reset*/) == 0x01 && (GUS_reset_reg & 0x02/*DAC enable*/) == 0x02) {
-        // const uint32_t render_samples = buffer_size;
         while (s < buffer_size) {
-            buffer[0] = buffer[1] = 0;
-            // memset(buffer, 0, 2 * sizeof(buffer[0]));
+            accum[0] = accum[1] = 0;
             uint32_t cur_rate = myGUS.basefreq;
             for (Bitu c = 0; c < myGUS.ActiveChannels; ++c) {
-                guschan[c]->generateSample(buffer);
+                guschan[c]->generateSample(accum);
             }
 #ifdef INTERP_CLAMP
-            play_buffer[s << 1] = clamp16(buffer[0]);
-            play_buffer[(s << 1) + 1] = clamp16(buffer[1]);
+            play_buffer[s << 1] = clamp16(accum[0]);
+            play_buffer[(s << 1) + 1] = clamp16(accum[1]);
 #else
-            play_buffer[s << 1] = clamp(buffer[0] >> 14, -32768, 32767);
-            play_buffer[(s << 1) + 1] = clamp(buffer[1] >> 14, -32768, 32767);
+            play_buffer[s << 1] = clamp(accum[0] >> 14, -32768, 32767);
+            play_buffer[(s << 1) + 1] = clamp(accum[1] >> 14, -32768, 32767);
 #endif
-            // if (s & buffer_size == buffer_size) {
-            // }
             ++s;
             if (cur_rate != myGUS.basefreq) {
                 // Bail out if our sampling rate changed. This will produce 1 sample at the
-                // wrong rate, but it's better than producing up to render_samples at the 
+                // wrong rate, but it's better than producing up to buffer_size samples at the 
                 // wrong rate...
                 break;
             }
-            // if (s & 1) {
-            //     CheckVoiceIrq();
-            // }
         }
         CheckVoiceIrq();
     } else {

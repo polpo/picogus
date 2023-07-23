@@ -89,7 +89,7 @@ void play_gus() {
 #ifdef PSRAM_CORE1
 #ifdef PSRAM
     puts("Initing PSRAM...");
-    psram_spi = psram_spi_init(pio1, -1);
+    psram_spi = psram_spi_init_clkdiv(pio1, -1, 1.6);
 #if TEST_PSRAM
     puts("Writing PSRAM...");
     uint8_t deadbeef[8] = {0xd, 0xe, 0xa, 0xd, 0xb, 0xe, 0xe, 0xf};
