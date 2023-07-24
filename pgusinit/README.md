@@ -36,9 +36,9 @@ GUS emulation mode requires the ULTRASND variable to be set, in the format:
 is the IRQ. The port on the PicoGUS will be programmed to use the port
 specified in ULTRASND.
 
-* `/a n` - sets the audio buffer size to n samples. Defaults to 16 with a
-  minimum of 8 and maximum of 256. Some programs require a different value to
-  run properly.
+* `/a n` - sets the audio buffer size to n samples. Defaults to 4 with a
+  minimum of 1 and maximum of 256. Some programs require a different value to
+  run properly. Going lower than 4 is not advisable.
 * `/d n` - sets the DMA interval to n microseconds. Games that use streaming
   audio over DMA work better with higher values. Doom, for example, runs well
   with a value of 10-12. Note that increasing this will slow down sample

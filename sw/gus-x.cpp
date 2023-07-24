@@ -1723,7 +1723,7 @@ static void MakeTables(void) {
 
 void GUS_SetAudioBuffer(const uint16_t new_buffer_size) {
     // PICOGUS special port to set audio buffer size
-    buffer_size = new_buffer_size - 1;
+    buffer_size = new_buffer_size;
 }
 void GUS_SetDMAInterval(const uint16_t newInterval) {
     // PICOGUS special port to set DMA interval

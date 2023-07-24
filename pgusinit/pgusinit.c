@@ -36,7 +36,7 @@ void usage(char *argv0) {
     fprintf(stderr, "    /p x - set the (hex) base address of the emulated card. Defaults:\n");
     fprintf(stderr, "           AdLib: 388; MPU-401: 330; Tandy: 2C0; CMS: 220\n");
     fprintf(stderr, "GUS mode only:\n");
-    fprintf(stderr, "    /a n - set audio buffer to n samples. Default: 16, Min: 8, Max: 256\n");
+    fprintf(stderr, "    /a n - set audio buffer to n samples. Default: 4, Min: 1, Max: 256\n");
     fprintf(stderr, "           (tweaking this can help programs that hang or have audio glitches)\n");
     fprintf(stderr, "    /d n - force DMA interval to n æs. Default: 0, Min: 0, Max: 255\n");
     fprintf(stderr, "           Specifying 0 restores the GUS default behavior.\n");
@@ -226,7 +226,7 @@ int main(int argc, char* argv[]) {
                 return 255;
             }
             e = sscanf(argv[++i], "%hu", &buffer_size);
-            if (e != 1 || buffer_size < 8 || buffer_size > 256) {
+            if (e != 1 || buffer_size < 1 || buffer_size > 256) {
                 usage(argv[0]);
                 return 3;
             }
@@ -304,7 +304,7 @@ int main(int argc, char* argv[]) {
     case 0:
         init_gus(argv[0]);
         if (!buffer_size) {
-            buffer_size = 16;
+            buffer_size = 4;
         }
         outp(CONTROL_PORT, 0x10); // Select audio buffer register
         outp(DATA_PORT_HIGH, (unsigned char)(buffer_size - 1));

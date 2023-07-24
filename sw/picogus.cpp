@@ -138,7 +138,8 @@ __force_inline void write_picogus_high(uint8_t value) {
         break;
 #ifdef SOUND_GUS
     case 0x10: // Audio buffer size
-        GUS_SetAudioBuffer(value);
+        // Value is sent by pgusinit as the size - 1, so we need to add 1 back to it
+        GUS_SetAudioBuffer(value + 1);
         break;
     case 0x11: // DMA interval
         GUS_SetDMAInterval(value);
