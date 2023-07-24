@@ -127,7 +127,7 @@ static bool dma_enable_on_dma_control_polling = false;
 static uint16_t vol16bit[4096];
 static uint32_t pantable[16];
 
-static uint32_t brender_samplesuffer_size = 4;
+static uint32_t buffer_size = 4;
 static uint32_t dma_interval = 0;
 
 class GUSChannels;
