@@ -38,7 +38,7 @@ bi_decl(bi_3pins_with_names(PICO_AUDIO_I2S_DATA_PIN, "I2S DIN", PICO_AUDIO_I2S_C
 struct audio_buffer_pool *init_audio() {
 
     static audio_format_t audio_format = {
-            .sample_freq = 49716 / 3,
+            .sample_freq = 49716,
             .format = AUDIO_BUFFER_FORMAT_PCM_S16,
             .channel_count = 2,
     };
@@ -92,11 +92,11 @@ void play_adlib() {
             samples[i << 1] = output.data[0];
             samples[(i << 1) + 1] = output.data[1];
         }
-        uint32_t audio_elapsed = time_us_32() - audio_begin;
+        // uint32_t audio_elapsed = time_us_32() - audio_begin;
         // if (audio_elapsed > 1280) {
         //     printf("took too long: %u %u\n", audio_elapsed, buffer->max_sample_count);
         // }
-        printf("%u ", audio_elapsed);
+        // printf("%u ", audio_elapsed);
         buffer->sample_count = buffer->max_sample_count;
         // putchar('=');
 #else

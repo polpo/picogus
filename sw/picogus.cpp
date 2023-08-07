@@ -280,9 +280,9 @@ __force_inline void handle_iow(void) {
         myOPL->write_address(iow_read & 0xFF);
         */
         opl_addr = iow_read & 0xFF;
-#else
+#else // OPL_YMFM
         OPL_Pico_PortWrite(OPL_REGISTER_PORT, iow_read & 0xFF);
-#endif
+#endif // OPL_YMFM
         // Fast write - return early as we've already written 0x0u to the PIO
         return;
         break;
@@ -293,8 +293,9 @@ __force_inline void handle_iow(void) {
         myOPL->write_address(opl_addr);
         myOPL->write_data(iow_read & 0xFF);
         critical_section_exit(&opl_crit);
-#else
+#else // OPL_YMFM
         OPL_Pico_PortWrite(OPL_DATA_PORT, iow_read & 0xFF);
+#endif // OPL_YMFM
         // __dsb();
         break;
 #ifdef OPL_YMFM

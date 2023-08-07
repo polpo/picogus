@@ -14,7 +14,7 @@ include(pico_sdk_import.cmake)
 include(pico_extras_import.cmake)
 
 project(picogus
-    VERSION "0.7.0"
+    VERSION "0.7.99"
     LANGUAGES C CXX ASM
 )
 
@@ -101,6 +101,7 @@ if(PROJECT_TYPE STREQUAL "OPL")
     target_link_libraries(
         picogus
         ymfm
+        # opl
     )
     target_compile_definitions(picogus PRIVATE
         SOUND_OPL=1
@@ -108,12 +109,13 @@ if(PROJECT_TYPE STREQUAL "OPL")
         # USE_EMU8950_OPL=1
         # EMU8950_ASM=1
     )
-    set(ASYNC_UART 1)
-    add_compile_definitions(
-        ASYNC_UART=1
-    )
+    set(ASYNC_UART 0)
+    # add_compile_definitions(
+    #     ASYNC_UART=1
+    # )
     add_subdirectory(ymfm)
-    pico_enable_stdio_uart(picogus 0)
+    # add_subdirectory(opl)
+    pico_enable_stdio_uart(picogus 1)
     pico_enable_stdio_usb(picogus 0)
     pico_enable_stdio_semihosting(picogus 0)
 endif()
