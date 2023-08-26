@@ -27,13 +27,19 @@ psram_spi_inst_t* async_spi_inst;
 #define BAUD_RATE   115200
 
 #ifdef SOUND_OPL
+#ifdef OPL_NUKED
+#include "Nuked-OPL3/opl3.h"
+uint8_t opl_reg;
+opl3_chip nuked_chip = {};
+#else
 #include "opl.h"
-static uint16_t basePort = 0x388u;
-
-void play_adlib(void);
 extern "C" int OPL_Pico_Init(unsigned int);
 extern "C" void OPL_Pico_PortWrite(opl_port_t, unsigned int);
 extern "C" unsigned int OPL_Pico_PortRead(opl_port_t);
+#endif
+static uint16_t basePort = 0x388u;
+
+void play_adlib(void);
 #endif
 
 #ifdef SOUND_GUS
@@ -265,13 +271,21 @@ __force_inline void handle_iow(void) {
     case 0:
         // Fast write
         pio_sm_put(pio0, iow_sm, IO_END);
+#ifdef OPL_NUKED
+        opl_reg = iow_read & 0xFF;
+#else
         OPL_Pico_PortWrite(OPL_REGISTER_PORT, iow_read & 0xFF);
+#endif
         // Fast write - return early as we've already written 0x0u to the PIO
         return;
         break;
     case 1:
         pio_sm_put(pio0, iow_sm, IO_WAIT);
+#ifdef OPL_NUKED
+        OPL3_WriteRegBuffered(&nuked_chip, opl_reg, iow_read & 0xFF);
+#else
         OPL_Pico_PortWrite(OPL_DATA_PORT, iow_read & 0xFF);
+#endif
         // __dsb();
         break;
     }
@@ -364,6 +378,7 @@ __force_inline void handle_ior(void) {
         // gpio_xor_mask(LED_PIN);
     } else // if follows down below
 #elif defined(SOUND_OPL)
+#if 0  // commenting out because hand386
     if (port == basePort) {
         // Tell PIO to wait for data
         pio_sm_put(pio0, ior_sm, IO_WAIT);
@@ -371,6 +386,7 @@ __force_inline void handle_ior(void) {
         // OR with 0x0000ff00 is required to set pindirs in the PIO
         pio_sm_put(pio0, ior_sm, IOR_SET_VALUE | value);
     } else // if follows down below
+#endif
 #elif defined(SOUND_MPU)
     if (port == basePort) {
         // Tell PIO to wait for data
@@ -510,7 +526,9 @@ int main()
 
 #ifdef SOUND_OPL
     puts("Creating OPL");
+#ifndef OPL_NUKED
     OPL_Pico_Init(basePort);
+#endif
     multicore_launch_core1(&play_adlib);
 #endif // SOUND_OPL
 

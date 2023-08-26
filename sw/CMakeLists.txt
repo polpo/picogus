@@ -89,26 +89,30 @@ if(PROJECT_TYPE STREQUAL "GUS")
         )
         pico_enable_stdio_uart(picogus 0)
     else()
-        pico_enable_stdio_uart(picogus 1)
+        pico_enable_stdio_uart(picogus 0)
     endif()
-    pico_enable_stdio_usb(picogus 0)
+    pico_enable_stdio_usb(picogus 1)
     pico_enable_stdio_semihosting(picogus 0)
 endif()
 
 if(PROJECT_TYPE STREQUAL "OPL")
     pico_set_program_name(picogus "picogus-adlib")
-    target_sources(picogus PRIVATE adlibplay.cpp)
+    target_sources(picogus PRIVATE
+        adlibplay.cpp
+        Nuked-OPL3/opl3.c
+    )
     target_link_libraries(
         picogus
-        opl
+        # opl
     )
     target_compile_definitions(picogus PRIVATE
         SOUND_OPL=1
-        USE_EMU8950_OPL=1
-        EMU8950_ASM=1
+        # USE_EMU8950_OPL=1
+        # EMU8950_ASM=1
+        OPL_NUKED=1
     )
-    add_subdirectory(opl)
-    pico_enable_stdio_uart(picogus 0)
+    # add_subdirectory(opl)
+    pico_enable_stdio_uart(picogus 1)
     pico_enable_stdio_usb(picogus 0)
     pico_enable_stdio_semihosting(picogus 0)
 endif()

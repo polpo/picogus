@@ -18,7 +18,12 @@
 
 #include "pico/audio_i2s.h"
 
+#ifdef OPL_NUKED
+#include "Nuked-OPL3/opl3.h"
+extern opl3_chip nuked_chip;
+#else
 #include "opl.h"
+#endif
 
 #if PICO_ON_DEVICE
 #include "pico/binary_info.h"
@@ -70,9 +75,26 @@ void play_adlib() {
     uint32_t start, end;
 
     struct audio_buffer_pool *ap = init_audio();
+
+    OPL3_Reset(&nuked_chip, 49716);
+
     for (;;) {
         struct audio_buffer *buffer = take_audio_buffer(ap, true);
+#ifdef OPL_NUKED
+        int16_t *samples = (int16_t *) buffer->buffer->bytes;
+        uint32_t audio_begin = time_us_32();
+        // putchar('=');
+        for (int i = 0; i < buffer->max_sample_count; ++i) {
+            OPL3_Generate(&nuked_chip, samples + (i << 1));
+        }
+        uint32_t audio_elapsed = time_us_32() - audio_begin;
+        if (audio_elapsed > 1280) {
+            printf("took too long: %u\n", audio_elapsed);
+        }
+        buffer->sample_count = buffer->max_sample_count;
+#else
         OPL_Pico_Mix_callback(buffer);
+#endif
         // putchar((unsigned char)buffer->buffer->bytes[1]);
         give_audio_buffer(ap, buffer);
     }
