@@ -163,6 +163,30 @@ if(PROJECT_TYPE STREQUAL "CMS")
     pico_enable_stdio_semihosting(picogus 0)
 endif()
 
+if(PROJECT_TYPE STREQUAL "JOY")
+    pico_set_program_name(picogus "picogus-joy")
+    target_compile_definitions(picogus PRIVATE
+        USB_JOYSTICK=1
+    )
+
+    target_sources(picogus PRIVATE
+        joy_hid/joy_hid.c
+        usbplay.cpp
+    )
+    pico_enable_stdio_uart(picogus 1)
+    pico_enable_stdio_usb(picogus 0)
+    pico_enable_stdio_semihosting(picogus 0)
+
+    # Make sure TinyUSB can find tusb_config.h
+    target_include_directories(picogus PUBLIC
+            ${CMAKE_CURRENT_LIST_DIR}/joy_hid)
+
+    # In addition to pico_stdlib required for common PicoSDK functionality, add dependency on tinyusb_host
+    # for TinyUSB device support and tinyusb_board for the additional board support library used by the example
+    target_link_libraries(picogus tinyusb_host tinyusb_board hardware_pwm)
+endif()
+
+
 pico_generate_pio_header(picogus ${CMAKE_CURRENT_LIST_DIR}/isa_io.pio)
 pico_generate_pio_header(picogus ${CMAKE_CURRENT_LIST_DIR}/isa_dma.pio)
 

@@ -71,6 +71,15 @@ static uint8_t cms_detect = 0xFF;
 cms_buffer_t cms_buffer = { {0}, 0, 0 };
 #endif
 
+#ifdef USB_JOYSTICK
+static uint16_t basePort = 0x201u;
+void play_usb(void);
+#include "joy_hid/joy.h"
+extern "C" joystate_struct_t joystate_struct;
+uint8_t joystate_bin;
+#include "hardware/pwm.h"
+#endif
+
 // PicoGUS control and data ports
 // 1D0 chosen as the base port as nothing is listed in Ralf Brown's Port List (http://www.cs.cmu.edu/~ralf/files.html)
 #define CONTROL_PORT 0x1D0
@@ -321,6 +330,22 @@ __force_inline void handle_iow(void) {
         break;
     }
 #endif // SOUND_CMS
+#ifdef USB_JOYSTICK
+    if (port == basePort) {
+        // Set times in # of cycles (affected by clkdiv) for each PWM slice to count up and wrap back to 0
+        // TODO better calibrate this
+        pwm_set_wrap(0, 2000 + (joystate_struct.joy1_x << 6));
+        pwm_set_wrap(1, 2000 + (joystate_struct.joy1_y << 6));
+        pwm_set_wrap(2, 2000 + (joystate_struct.joy2_x << 6));
+        pwm_set_wrap(3, 2000 + (joystate_struct.joy2_y << 6));
+        // Convince PWM to run as one-shot by immediately setting wrap to 0. This will take effect once the wrap
+        // times set above hit, so after wrapping the counter value will stay at 0 instead of counting again
+        pwm_set_wrap(0, 0);
+        pwm_set_wrap(1, 0);
+        pwm_set_wrap(2, 0);
+        pwm_set_wrap(3, 0);
+    } else // if follows down below
+#endif
     // PicoGUS control
     if (port == CONTROL_PORT) {
         pio_sm_put(pio0, iow_sm, IO_WAIT);
@@ -401,6 +426,19 @@ __force_inline void handle_ior(void) {
         return;
     }
 #endif // SOUND_CMS
+#ifdef USB_JOYSTICK
+    if (port == basePort) {
+        pio_sm_put(pio0, ior_sm, IO_WAIT);
+        uint8_t value =
+            // Proportional bits: 1 if counter is still counting, 0 otherwise
+            (bool)pwm_get_counter(0) |
+            (bool)pwm_get_counter(1) << 1 |
+            (bool)pwm_get_counter(2) << 2 |
+            (bool)pwm_get_counter(3) << 3 |
+            joystate_struct.button_mask << 4;
+        pio_sm_put(pio0, ior_sm, IOR_SET_VALUE | value);
+    } else // if follows down below
+#endif
     if (port == CONTROL_PORT) {
         // Tell PIO to wait for data
         pio_sm_put(pio0, ior_sm, IO_WAIT);
@@ -453,6 +491,7 @@ int main()
     // Overclock!
     vreg_set_voltage(VREG_VOLTAGE_1_30);
     // set_sys_clock_khz(266000, true);
+    // set_sys_clock_khz(280000, true);
     // set_sys_clock_khz(420000, true);
     set_sys_clock_khz(400000, true);
 
@@ -532,6 +571,22 @@ int main()
 #ifdef SOUND_CMS
     puts("Creating CMS");
     multicore_launch_core1(&play_cms);
+#endif // SOUND_CMS
+
+#ifdef USB_JOYSTICK
+    // Init joystick as centered with no buttons pressed
+    joystate_struct = {127, 127, 127, 127, 0xf};
+    puts("Config joystick PWM");
+    pwm_config pwm_c = pwm_get_default_config();
+    // TODO better calibrate this
+    pwm_config_set_clkdiv(&pwm_c, 17.6);
+    // Start the PWM off constantly looping at 0
+    pwm_config_set_wrap(&pwm_c, 0);
+    pwm_init(0, &pwm_c, true);
+    pwm_init(1, &pwm_c, true);
+    pwm_init(2, &pwm_c, true);
+    pwm_init(3, &pwm_c, true);
+    multicore_launch_core1(&play_usb);
 #endif // SOUND_CMS
 
     for(int i=AD0_PIN; i<(AD0_PIN + 10); ++i) {
