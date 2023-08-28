@@ -273,7 +273,7 @@ void process_sony_ds4(uint8_t const* report, uint16_t len)
     sony_ds4_report_t ds4_report;
     memcpy(&ds4_report, report, sizeof(ds4_report));
 
-    joystate_struct.button_mask = !ds4_report.cross | (!ds4_report.circle << 1) | (!ds4_report.square << 2) | (!ds4_report.triangle << 3);
+    joystate_struct.button_mask = (!ds4_report.cross << 4) | (!ds4_report.circle << 5) | (!ds4_report.square << 6) | (!ds4_report.triangle << 7);
     switch (ds4_report.dpad) {
     case 0: // N
         joystate_struct.joy1_x = 127;

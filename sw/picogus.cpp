@@ -332,6 +332,7 @@ __force_inline void handle_iow(void) {
 #endif // SOUND_CMS
 #ifdef USB_JOYSTICK
     if (port == basePort) {
+        pio_sm_put(pio0, iow_sm, IO_END);
         // Set times in # of cycles (affected by clkdiv) for each PWM slice to count up and wrap back to 0
         // TODO better calibrate this
         pwm_set_wrap(0, 2000 + (joystate_struct.joy1_x << 6));
@@ -344,6 +345,7 @@ __force_inline void handle_iow(void) {
         pwm_set_wrap(1, 0);
         pwm_set_wrap(2, 0);
         pwm_set_wrap(3, 0);
+        return;
     } else // if follows down below
 #endif
     // PicoGUS control
@@ -432,10 +434,10 @@ __force_inline void handle_ior(void) {
         uint8_t value =
             // Proportional bits: 1 if counter is still counting, 0 otherwise
             (bool)pwm_get_counter(0) |
-            (bool)pwm_get_counter(1) << 1 |
-            (bool)pwm_get_counter(2) << 2 |
-            (bool)pwm_get_counter(3) << 3 |
-            joystate_struct.button_mask << 4;
+            ((bool)pwm_get_counter(1) << 1) |
+            ((bool)pwm_get_counter(2) << 2) |
+            ((bool)pwm_get_counter(3) << 3) |
+            joystate_struct.button_mask;
         pio_sm_put(pio0, ior_sm, IOR_SET_VALUE | value);
     } else // if follows down below
 #endif
