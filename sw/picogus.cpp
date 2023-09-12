@@ -9,8 +9,6 @@
 
 #include "pico_reflash.h"
 
-constexpr uint LED_PIN = 1 << PICO_DEFAULT_LED_PIN;
-
 #ifdef PSRAM
 #include "psram_spi.h"
 psram_spi_inst_t psram_spi;
@@ -91,6 +89,7 @@ static uint8_t sel_reg = 0;
 static uint16_t cur_data = 0;
 static uint32_t cur_read = 0;
 
+constexpr uint LED_PIN = 1 << PICO_DEFAULT_LED_PIN;
 
 static uint iow_sm;
 static uint ior_sm;

@@ -130,8 +130,6 @@ static uint32_t pantable[16];
 static uint32_t buffer_size = 4;
 static uint32_t dma_interval = 0;
 
-
-
 class GUSChannels;
 static void CheckVoiceIrq(void);
 
@@ -152,13 +150,6 @@ struct GFGus {
     uint32_t dmaInterval;
     uint32_t dmaIntervalOverride;
     bool dmaWaiting;
-#ifdef PSRAM
-    uint8_t dmaCache[65536];
-    // Signed so it can hold -1 for invalid address
-    int32_t dmaCacheStart = -1;
-    int32_t dmaCacheEnd = -1;
-#endif // PSRAM
-
     uint8_t TimerControl;
     uint8_t SampControl;
     uint8_t mixControl;
@@ -298,31 +289,20 @@ class GUSChannels {
 
         INLINE size_t prime_cache(const uint32_t addr, const uint8_t threshold) const {
             uint32_t addr_hi = addr & 0xffff0u;
+            uint8_t addr_part = addr & 0xfu;
             if (sample_cache.addr != addr_hi) {
                 if (sample_cache.addr_next != -1 && sample_cache.addr_next == addr_hi) {
-                    // If the samples are in the 2nd half of our cache
                     // We could avoid this memcpy by wrapping around the cache address... but I am tired
                     memcpy(sample_cache.data, sample_cache.data + 16, 16);
-                } else if (addr_hi >= myGUS.dmaCacheStart && (addr_hi + 16) <= myGUS.dmaCacheEnd) {
-                    // If the samples are in our DMA cache
-                    memcpy(sample_cache.data, myGUS.dmaCache + (addr_hi - myGUS.dmaCacheStart), 16);
-                    // putchar('h');
                 } else {
-                    // Otherwise read the samples from psram
                     psram_read(&psram_spi, addr_hi, sample_cache.data, 16);
                 }
                 sample_cache.addr = addr_hi;
             }
             // If we're about to read past the end of our cache, populate the other bank
             uint32_t addr_next = ((addr_hi + 16) & 0xffff0u);
-            uint8_t addr_part = addr & 0xfu;
             if (addr_part == threshold && sample_cache.addr_next != addr_next) {
-                if (addr_next >= myGUS.dmaCacheStart && (addr_next + 16) <= myGUS.dmaCacheEnd) {
-                    memcpy(sample_cache.data + 16, myGUS.dmaCache + (addr_next - myGUS.dmaCacheStart), 16);
-                    gpio_xor_mask(LED_PIN);
-                } else {
-                    psram_read(&psram_spi, addr_next, (sample_cache.data + 16), 16);
-                }
+                psram_read(&psram_spi, addr_next, (sample_cache.data + 16), 16);
                 sample_cache.addr_next = addr_next;
             }
             return addr_part;
@@ -789,8 +769,6 @@ static void GUSReset(void) {
         myGUS.RampIRQ = 0;
         myGUS.WaveIRQ = 0;
         myGUS.IRQChan = 0;
-
-        // myGUS.dmaCacheStart = myGUS.dmaCacheEnd = -1;
 
         myGUS.timers[0].delay = 80;
         myGUS.timers[1].delay = 320;
@@ -1462,7 +1440,7 @@ GUS_DMA_isr() {
         return;
     }
 
-    uint8_t dma_data8 = dma_data & 0xffu;
+    const uint8_t dma_data8 = dma_data & 0xffu;
 #ifdef PSRAM
     // psram_write8_async(&psram_spi, myGUS.dmaAddr, dma_config.invertMsb ? dma_data8 ^ 0x80 : dma_data8);
     static union {
@@ -1470,11 +1448,7 @@ GUS_DMA_isr() {
         uint8_t data8[4];
     } dma_data_union;
     size_t dmaOffset = myGUS.dmaAddr & 0x3;
-    if (dma_config.invertMsb) {
-        dma_data8 ^= 0x80;
-    }
-    dma_data_union.data8[dmaOffset] = dma_data8;
-    myGUS.dmaCache[myGUS.dmaAddr - myGUS.dmaCacheStart] = dma_data8;
+    dma_data_union.data8[dmaOffset] = dma_config.invertMsb ? dma_data ^ 0x80 : dma_data8;
     if ((dmaOffset) == 0x3) {
         psram_write32_async(&psram_spi, myGUS.dmaAddr - 0x3, dma_data_union.data32);
     }
@@ -1485,8 +1459,6 @@ GUS_DMA_isr() {
     // uart_print_hex_u32(dma_data);
     if (dma_data & 0x100u) { // if TC
 #ifdef PSRAM
-        myGUS.dmaCacheEnd = myGUS.dmaAddr;
-        // printf("%u %x\n", myGUS.dmaAddr - myGUS.dmaCacheStart, myGUS.dmaCache[myGUS.dmaAddr - myGUS.dmaCacheStart]);
         // If data is not flushed
         if (dmaOffset != 0x3) { // 0, 1, or 2
             // Due to the aligned nature of DMA writes, if we stomp on 1-3 bytes it's not a problem
@@ -1574,14 +1546,6 @@ __force_inline void GUS_StartDMA() {
             break;
         }
     }
-#ifdef PSRAM
-    // If we are repeatedly DMAing into the same buffer, preserve the DMA cache end
-    // so we can play from and DMA into it simultaneously
-    if (myGUS.dmaCacheStart != myGUS.dmaAddr) {
-        myGUS.dmaCacheStart = myGUS.dmaAddr;
-        myGUS.dmaCacheEnd = -1;
-    }
-#endif // PSRAM
     
 #ifndef POLLING_DMA
     // PIC_AddEvent(GUS_DMA_Event, 13, 2);
