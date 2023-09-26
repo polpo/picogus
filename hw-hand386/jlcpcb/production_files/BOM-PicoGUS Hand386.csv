@@ -7,6 +7,7 @@ PCM5100,U10,TSSOP-20_4.4x6.5mm_P0.65mm,C131154
 SN74CB3T3245,U2,TSSOP-20_4.4x6.5mm_P0.65mm,C15298
 2.2nF,"C18,C19",C_0402_1005Metric,C1531
 33,R4,R_0805_2012Metric,C161967
+10uF,C17,C_0603_1608Metric,C19702
 470,"R5,R6",R_0402_1005Metric,C25117
 10K,"R1,R2,R7",R_0402_1005Metric,C25744
 APS6404L-3SQN-SN,U8,SOIC-8_3.9x4.9mm_P1.27mm,C3028887
@@ -24,5 +25,8 @@ AudioJack3,J1,PJ-321A,C879743
 Bus_ISA_8bit,J3,EDGE-60,
 UART_TX,J6,PinHeader_1x02_P2.54mm_Vertical,
 Pico,U1,RPi_Pico_SMD_TH,
-10uF,C17,C_0603_1608Metric,
 Jumper_2_Bridged,JP1,PinHeader_1x02_P2.54mm_Vertical,
+SolderJumper_2_Closed,JP4,SolderJumper-2_P1.3mm_Bridged_RoundedPad1.0x1.5mm-nomask,
+SolderJumper_2_Closed,JP3,SolderJumper-2_P1.3mm_Bridged_RoundedPad1.0x1.5mm-nomask,
+SolderJumper_2_Closed,JP2,SolderJumper-2_P1.3mm_Bridged_RoundedPad1.0x1.5mm-nomask,
+Jumper_2_Open,JP5,PinHeader_1x02_P2.54mm_Vertical,
