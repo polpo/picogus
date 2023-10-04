@@ -151,11 +151,13 @@ if(PROJECT_TYPE STREQUAL "CMS")
     target_compile_definitions(picogus PRIVATE
         SOUND_CMS=1
         # SQUARE_FLOAT_OUTPUT=1
+        MAME_SAA=1
     )
 
     target_sources(picogus PRIVATE
         pico_pic.c
-        square/square.cpp
+        # square/square.cpp
+        saa1099/saa1099.cpp
     )
     target_sources(picogus PRIVATE cmsplay.cpp)
     pico_enable_stdio_uart(picogus 1)

@@ -180,7 +180,8 @@ void saa1099_device::device_start()
 {
 	/* copy global parameters */
 	// m_master_clock = clock();
-	m_sample_rate = m_master_clock / 256;
+	// m_sample_rate = m_master_clock / 256;
+	m_sample_rate = m_master_clock >> 8;
 
 	/* for each chip allocate one stream */
 	// m_stream = stream_alloc(0, 2, (int)m_sample_rate);
@@ -241,9 +242,12 @@ void saa1099_device::sound_stream_update(int16_t* outputs, int samples)
 	{
 		switch (m_noise_params[ch])
 		{
-		case 0: m_noise[ch].freq = m_master_clock/256 * 2; break;
-		case 1: m_noise[ch].freq = m_master_clock/512 * 2; break;
-		case 2: m_noise[ch].freq = m_master_clock/1024 * 2; break;
+		//case 0: m_noise[ch].freq = m_master_clock/256 * 2; break;
+		case 0: m_noise[ch].freq = m_master_clock >> 7; break;
+		//case 1: m_noise[ch].freq = m_master_clock/512 * 2; break;
+		case 1: m_noise[ch].freq = m_master_clock >> 8; break;
+		//case 2: m_noise[ch].freq = m_master_clock/1024 * 2; break;
+		case 2: m_noise[ch].freq = m_master_clock >> 9; break;
 		case 3: m_noise[ch].freq = m_channels[ch * 3].freq;   break; // todo: this case will be m_master_clock/[ch*3's octave divisor, 0 is = 256*2, higher numbers are higher] * 2 if the tone generator phase reset bit (0x1c bit 1) is set.
 		}
 	}
@@ -256,16 +260,21 @@ void saa1099_device::sound_stream_update(int16_t* outputs, int samples)
 		/* for each channel */
 		for (ch = 0; ch < 6; ch++)
 		{
-			if (m_channels[ch].freq == 0)
-				m_channels[ch].freq = ((m_sample_rate) << m_channels[ch].octave) /
+			if (m_channels[ch].freq == 0) {
+				// m_channels[ch].freq = ((m_sample_rate) << m_channels[ch].octave) /
+// -				m_channels[ch].freq = (double)((2 * m_master_clock / 512) << m_channels[ch].octave) /
+// -					(511.0 - (double)m_channels[ch].frequency);
+				m_channels[ch].freq = ((m_master_clock << m_channels[ch].octave) >> 8) /
 					(511 - m_channels[ch].frequency);
+                        }
 
 			/* check the actual position in the square wave */
 			m_channels[ch].counter -= m_channels[ch].freq;
 			while (m_channels[ch].counter < 0)
 			{
 				/* calculate new frequency now after the half wave is updated */
-				m_channels[ch].freq = ((m_sample_rate) << m_channels[ch].octave) /
+				//m_channels[ch].freq = ((m_sample_rate) << m_channels[ch].octave) /
+				m_channels[ch].freq = ((m_master_clock << m_channels[ch].octave) >> 8) /
 					(511 - m_channels[ch].frequency);
 
 				m_channels[ch].counter += m_sample_rate;

@@ -1,3 +1,4 @@
+// Encoding: cp437
 #include <conio.h>
 #include <dos.h> 
 #include <stdio.h>
@@ -19,7 +20,7 @@ typedef enum {
 
 
 void banner(void) {
-    printf("PicoGUSinit v1.2.1\n");
+    printf("PicoGUSinit v1.2.2 beta1\n");
     printf("(c) 2023 Ian Scott - licensed under the GNU GPL v2\n\n");
 }
 
@@ -38,7 +39,7 @@ void usage(char *argv0) {
     fprintf(stderr, "GUS mode only:\n");
     fprintf(stderr, "    /a n - set audio buffer to n samples. Default: 4, Min: 1, Max: 256\n");
     fprintf(stderr, "           (tweaking this can help programs that hang or have audio glitches)\n");
-    fprintf(stderr, "    /d n - force DMA interval to n Ã¦s. Default: 0, Min: 0, Max: 255\n");
+    fprintf(stderr, "    /d n - force DMA interval to n æs. Default: 0, Min: 0, Max: 255\n");
     fprintf(stderr, "           Specifying 0 restores the GUS default behavior.\n");
     fprintf(stderr, "           (if games with streaming audio like Doom stutter, increase this)\n");
     fprintf(stderr, "The ULTRASND environment variable must be set in the following format:\n");
@@ -61,7 +62,7 @@ void err_pigus(void) {
 
 
 void err_protocol(uint8_t expected, uint8_t got) {
-    fprintf(stderr, "ERROR: PicoGUS card using protocol %u, needs %u\n", expected, got); 
+    fprintf(stderr, "ERROR: PicoGUS card using protocol %u, needs %u\n", got, expected); 
     fprintf(stderr, "Please run the latest PicoGUS firmware and pgusinit.exe versions together!\n");
 }
 
@@ -161,13 +162,15 @@ int write_firmware(const char* fw_filename) {
             return 12;
         }
 
+        uint8_t gus_read;
         if (i == 0) {
             numBlocks = uf2_buf.uf2.numBlocks;
 
             // Put card into programming mode
             outp(CONTROL_PORT, 0xCC); // Knock on the door...
             outp(CONTROL_PORT, 0xFF); // Select firmware programming mode
-            if (inp(DATA_PORT_HIGH) != PICO_FIRMWARE_IDLE) {
+            gus_read = inp(DATA_PORT_HIGH);
+            if (gus_read != PICO_FIRMWARE_IDLE) {
                 fprintf(stderr, "ERROR: Card is not in programming mode?\n");
                 return 13;
             }
@@ -183,15 +186,24 @@ int write_firmware(const char* fw_filename) {
         for (uint16_t b = 0; b < 512; ++b) {
             // Write firmware byte
             outp(DATA_PORT_HIGH, uf2_buf.buf[b]);
+            if (b == 511) {
+                if (i == 0) {
+                    // If it's end of the first block, delay a bit more to allow flash to be erased.
+                    // We can't trust IOCHRDY completely to delay.
+                    sleep(1);
+                }
+                // If it's the last byte, print now to delay the next read a little bit. Some chipsets
+                // need a delay between writing the byte and reading the card status, despite IOCHRDY
+                fprintf(stderr, ".");
+            }
             if (i < (numBlocks - 1) || b < 511) { // If it's not the very last byte
-                if (inp(DATA_PORT_HIGH) != PICO_FIRMWARE_WRITING) {
-                    fprintf(stderr, "\nERROR: Card is not in firmware writing mode?\n");
+                gus_read = inp(DATA_PORT_HIGH);
+                if (gus_read != PICO_FIRMWARE_WRITING) {
+                    fprintf(stderr, "\nERROR: Card is not in firmware writing mode? Got mode: %u\n", gus_read);
                     return 15;
                 }
             }
         }
-        fprintf(stderr, ".");
-        //fprintf(stderr, "%u ", i);
     }
     fclose(fp);
 
@@ -315,7 +327,7 @@ int main(int argc, char* argv[]) {
         if (dma_interval == 0) {
             printf("DMA interval set to default behavior\n");
         } else {
-            printf("DMA interval forced to %u Ã¦s\n", dma_interval);
+            printf("DMA interval forced to %u æs\n", dma_interval);
         }
         outp(CONTROL_PORT, 0x04); // Select port register
         port = inpw(DATA_PORT_LOW); // Get port

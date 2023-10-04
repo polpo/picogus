@@ -60,7 +60,9 @@ tandy_buffer_t tandy_buffer = { {0}, 0, 0 };
 #endif
 
 #ifdef SOUND_CMS
+#ifndef MAME_SAA
 #include "square/square.h"
+#endif
 static uint16_t basePort = 0x220u;
 void play_cms(void);
 static uint8_t cms_detect = 0xFF;
@@ -588,7 +590,7 @@ int main()
     pwm_init(2, &pwm_c, true);
     pwm_init(3, &pwm_c, true);
     multicore_launch_core1(&play_usb);
-#endif // SOUND_CMS
+#endif // USB_JOYSTICK
 
     for(int i=AD0_PIN; i<(AD0_PIN + 10); ++i) {
         gpio_disable_pulls(i);
