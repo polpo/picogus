@@ -335,7 +335,8 @@ int OPL_Pico_Init(unsigned int port_base)
 
 unsigned int OPL_Pico_PortRead(opl_port_t port)
 {
-    unsigned int result = 0;
+    // OPL2 has 0x06 in its status register. If this is 0, it'll get detected as an OPL3...
+    unsigned int result = 0x06;
 
     if (port == OPL_REGISTER_PORT_OPL3)
     {
