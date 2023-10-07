@@ -165,6 +165,23 @@ if(PROJECT_TYPE STREQUAL "CMS")
     pico_enable_stdio_semihosting(picogus 0)
 endif()
 
+if(PROJECT_TYPE STREQUAL "SID")
+    pico_set_program_name(picogus "picogus-sid")
+    target_compile_definitions(picogus PRIVATE
+        SOUND_SID=1
+    )
+
+    target_sources(picogus PRIVATE
+        cRSID/SID.c
+    )
+    target_sources(picogus PRIVATE sidplay.cpp)
+    target_link_libraries(picogus hardware_interp)
+
+    pico_enable_stdio_uart(picogus 1)
+    pico_enable_stdio_usb(picogus 0)
+    pico_enable_stdio_semihosting(picogus 0)
+endif()
+
 if(PROJECT_TYPE STREQUAL "JOY")
     pico_set_program_name(picogus "picogus-joy")
     target_compile_definitions(picogus PRIVATE

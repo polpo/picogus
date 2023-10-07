@@ -71,6 +71,27 @@ static uint8_t cms_detect = 0xFF;
 cms_buffer_t cms_buffer = { {0}, 0, 0 };
 #endif
 
+#ifdef SOUND_SID
+#define min(a, b) ((a) < (b) ? (a) : (b))
+#include "pico/critical_section.h"
+critical_section_t sid_crit;
+#ifdef SID_INNOVA
+// Innovation SSI-2001 emulation
+static uint16_t basePort = 0x280u;
+static uint16_t sid_port_test = basePort >> 5;
+#else
+// HardSID emulation
+uint32_t last_sid_tick = 0;
+static uint16_t basePort = 0x300u;
+static uint8_t sid_data = 0;
+static uint8_t sid_reg = 0;
+#endif
+extern void play_sid(void);
+#include "cRSID/libcRSID.h"
+extern "C" cRSID_C64instance C64;
+// cRSID_SIDinstance* SID;
+#endif
+
 #ifdef USB_JOYSTICK
 static uint16_t basePort = 0x201u;
 void play_usb(void);
@@ -203,12 +224,14 @@ __force_inline uint8_t read_picogus_high(void) {
         return 3;
 #elif defined(SOUND_CMS)
         return 4;
+#elif defined(SOUND_SID)
+        return 5;
 #else
         return 0xff;
 #endif
         break;
     case 0x04: // Base port
-#if defined(SOUND_GUS) || defined(SOUND_OPL) || defined(SOUND_MPU) || defined(SOUND_TANDY) || defined(SOUND_CMS)
+#if defined(SOUND_GUS) || defined(SOUND_OPL) || defined(SOUND_MPU) || defined(SOUND_TANDY) || defined(SOUND_CMS) || defined(SOUND_SID)
         return basePort >> 8;
 #else
         return 0xff;
@@ -331,6 +354,43 @@ __force_inline void handle_iow(void) {
         break;
     }
 #endif // SOUND_CMS
+#ifdef SOUND_SID
+#ifdef SID_INNOVA
+    // Innovation SSI-2001 emulation
+    if ((port >> 5) == sid_port_test) {
+        pio_sm_put(pio0, iow_sm, IO_END);
+        C64.SID.BasePtr[port - basePort] = iow_read & 0xFF;
+        // printf("%x %x\n", port - basePort, C64.SID.BasePtr[port - basePort]);
+        return;
+    } else // if follows down below
+#else
+    // HardSID emulation
+    if (port == basePort) {
+        pio_sm_put(pio0, iow_sm, IO_END);
+        sid_data = iow_read & 0xFF;
+        // printf("hardsid0-w ");
+        return;
+    } else if (port == basePort + 1) {
+        pio_sm_put(pio0, iow_sm, IO_END);
+        uint8_t read = iow_read & 0xFF;
+        if (read & 0x20) {
+            pio_sm_put(pio0, iow_sm, IO_END);
+            sid_reg = read & 0x1F;
+        } else {
+            // pio_sm_put(pio0, iow_sm, IO_WAIT);
+            // critical_section_enter_blocking(&sid_crit);
+            // uint32_t write_time = time_us_32();
+            C64.SID.BasePtr[read & 0x1F] = sid_data;
+            // cRSID_emulateADSRs(&C64.SID, write_time - last_sid_tick);
+            // printf("a%u ", write_time - last_sid_tick);
+            // last_sid_tick = write_time;
+            // critical_section_exit(&sid_crit);
+        }
+            return;
+        // printf("hardsid1-w ");
+    } else // if follows down below
+#endif // SID_INNOVA
+#endif // SOUND_SID
 #ifdef USB_JOYSTICK
     if (port == basePort) {
         pio_sm_put(pio0, iow_sm, IO_END);
@@ -428,7 +488,23 @@ __force_inline void handle_ior(void) {
         pio_sm_put(pio0, ior_sm, IOR_SET_VALUE | cms_detect);
         return;
     }
-#endif // SOUND_CMS
+#elif defined(SOUND_SID)
+#ifdef SID_INNOVA
+    // Innovation SSI-2001 emulation
+    if ((port >> 5) == sid_port_test) {
+        pio_sm_put(pio0, ior_sm, IO_WAIT);
+        uint8_t value = C64.SID.BasePtr[port - basePort];
+        pio_sm_put(pio0, ior_sm, IOR_SET_VALUE | value);
+    } else // if follows down below
+#else
+    // HardSID emulation
+    if (port == basePort) {
+        pio_sm_put(pio0, ior_sm, IO_WAIT);
+        uint8_t value = C64.SID.BasePtr[sid_reg];
+        pio_sm_put(pio0, ior_sm, IOR_SET_VALUE | value);
+    }
+#endif // SID_INNOVA
+#endif // SOUND_SID
 #ifdef USB_JOYSTICK
     if (port == basePort) {
         pio_sm_put(pio0, ior_sm, IO_WAIT);
@@ -574,6 +650,11 @@ int main()
 #ifdef SOUND_CMS
     puts("Creating CMS");
     multicore_launch_core1(&play_cms);
+#endif // SOUND_CMS
+
+#ifdef SOUND_SID
+    puts("Creating SID");
+    multicore_launch_core1(&play_sid);
 #endif // SOUND_CMS
 
 #ifdef USB_JOYSTICK
