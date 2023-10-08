@@ -32,7 +32,7 @@ endif()
 
 # Initialise the Raspberry Pi Pico SDK
 pico_sdk_init()
-
+# Delete this line if you do not have a modified Pico-SDK. It prevents building.
 add_compile_options(-flto=jobserver)
 
 # Add executable. Default name is the project name, version 0.1
