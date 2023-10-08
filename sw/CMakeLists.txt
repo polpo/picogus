@@ -7,7 +7,9 @@ set(CMAKE_CXX_STANDARD 17)
 
 # Initialise pico_sdk from installed location
 # (note this can come from environment, CMake cache etc)
-set(PICO_SDK_PATH "${CMAKE_SOURCE_DIR}/../../pico/pico-sdk")
+# to manually set Pico SDK path, uncomment this with your path.
+# Otherwise, the environment variable PICO_SDK_PATH will be used.
+#set(PICO_SDK_PATH "${CMAKE_SOURCE_DIR}/../../pico/pico-sdk")
 
 # Pull in Raspberry Pi Pico SDK (must be before project)
 include(pico_sdk_import.cmake)
@@ -209,6 +211,9 @@ if(ASYNC_UART)
 endif()
 
 pico_add_extra_outputs(picogus)
+# print size
+add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+    COMMAND arm-none-eabi-size --format=berkeley "${PROJECT_NAME}.elf")
 
 add_custom_target(
     program

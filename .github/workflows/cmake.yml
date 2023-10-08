@@ -1,0 +1,103 @@
+name: CMake Build
+on: [push, pull_request]
+jobs:
+    build:
+      runs-on: ubuntu-latest
+      env: 
+        BUILD_TYPE: "Release"
+        PICOSDK_VER: "1.5.1"
+        PICOEXTRA_VER: "sdk-1.5.1"
+        # The Pico-SDK will listen to these environment vars
+        PICO_SDK_PATH: ${{github.workspace}}/pico/pico-sdk
+        PICO_EXTRAS_PATH: ${{github.workspace}}/pico/pico-extras
+        OUTPUT_DIR: ${{github.workspace}}/binaries
+      steps:
+      - name: Checkout repo with submodules
+        uses: actions/checkout@v4
+        with:
+            submodules: recursive
+
+      - name: Install Arm GNU Toolchain (arm-none-eabi-gcc)
+        uses: carlosperate/arm-none-eabi-gcc-action@v1
+        with:
+          release: '12.3.Rel1'
+
+      # Since we reference stable versions of Pico-SDK and pico-extras, we can cache their (HUGE!) downloads.
+      # If this were to reference changing branches (like "master"), this caching step must be removed!!!
+      - name: Cache Pico-SDK and Extras 
+        id: cache-sdk
+        uses: actions/cache@v3
+        with:
+          path: ${{github.workspace}}/pico/
+          key: ${{ env.PICOSDK_VER }}-${{ env.PICOEXTRA_VER }}          
+
+      # If we did not find stuff in the cache, download it fresh.
+      - name: Clone Pico-SDK
+        if: steps.cache-sdk.outputs.cache-hit != 'true'
+        run: git clone -b "$PICOSDK_VER" --recursive https://github.com/raspberrypi/pico-sdk.git $PICO_SDK_PATH
+      - name: Clone Pico-Extras
+        if: steps.cache-sdk.outputs.cache-hit != 'true'
+        run: git clone -b "$PICOEXTRA_VER" --recursive https://github.com/raspberrypi/pico-extras.git $PICO_EXTRAS_PATH
+
+      - name: Create Build Environment
+        run: cmake -E make_directory ${{github.workspace}}/build
+
+      - name: Patch CMake (disable LTO)
+        # in-place delete line
+        run: sed -i 's/add_compile_options(-flto=jobserver)//g' ${{github.workspace}}/sw/CMakeLists.txt
+
+      - name: Build GUS Firmware
+        shell: bash
+        working-directory: ${{github.workspace}}/build
+        run: |
+          mkdir -p $OUTPUT_DIR
+          cmake $GITHUB_WORKSPACE/sw -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DPROJECT_TYPE="GUS" 
+          cmake --build . --config $BUILD_TYPE --parallel $(nproc)
+          cp picogus.uf2 $OUTPUT_DIR/picogus-gus.uf2
+
+      - name: Build OPL / AdLib Firmware
+        working-directory: ${{github.workspace}}/build
+        shell: bash
+        run: |
+          cmake $GITHUB_WORKSPACE/sw -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DPROJECT_TYPE="OPL"
+          cmake --build . --config $BUILD_TYPE --parallel $(nproc)
+          cp picogus.uf2 $OUTPUT_DIR/picogus-opl.uf2
+
+      - name: Build MPU401 Firmware
+        working-directory: ${{github.workspace}}/build
+        shell: bash
+        run: |
+          cmake $GITHUB_WORKSPACE/sw -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DPROJECT_TYPE="MPU"
+          cmake --build . --config $BUILD_TYPE --parallel $(nproc)
+          cp picogus.uf2 $OUTPUT_DIR/picogus-mpu401.uf2
+
+      - name: Build Tandy Firmware
+        working-directory: ${{github.workspace}}/build
+        shell: bash
+        run: |
+          cmake $GITHUB_WORKSPACE/sw -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DPROJECT_TYPE="TANDY"
+          cmake --build . --config $BUILD_TYPE --parallel $(nproc)
+          cp picogus.uf2 $OUTPUT_DIR/picogus-tandy.uf2
+
+      - name: Build CMS Firmware
+        working-directory: ${{github.workspace}}/build
+        shell: bash
+        run: |
+          cmake $GITHUB_WORKSPACE/sw -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DPROJECT_TYPE="CMS"
+          cmake --build . --config $BUILD_TYPE --parallel $(nproc)
+          cp picogus.uf2 $OUTPUT_DIR/picogus-cms.uf2
+
+      - name: Build Joy Firmware
+        working-directory: ${{github.workspace}}/build
+        shell: bash
+        run: |
+          cmake $GITHUB_WORKSPACE/sw -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DPROJECT_TYPE="JOY"
+          cmake --build . --config $BUILD_TYPE --parallel $(nproc)
+          cp picogus.uf2 $OUTPUT_DIR/picogus-joy.uf2
+
+      # will generate PicoGUS Firmwares.zip as downloadable artifact with all .uf2 files
+      - name: Upload All Firmwares
+        uses: actions/upload-artifact@v3
+        with:
+          name: PicoGUS Firmwares
+          path: ${{env.OUTPUT_DIR}}
