@@ -2,6 +2,8 @@
 
 ![PicoGUS Logo](picogus-logo.svg)
 
+[![CMake Build](https://github.com/polpo/picogus/actions/workflows/cmake.yml/badge.svg)](https://github.com/polpo/picogus/actions/workflows/cmake.yml)
+
 ISA sound card emulation on the Raspberry Pi Pico's RP2040 microcontroller. PicoGUS can emulate:
 
 * [Gravis Ultrasound (GUS)](https://en.wikipedia.org/wiki/Gravis_Ultrasound) - the primary focus of PicoGUS, hence the name
