@@ -1,0 +1,34 @@
+{
+    "tabs": {
+        "type": "fixed",
+        "vwidth": "5mm",
+        "hwidth": "5mm"
+    },
+    "cuts": {
+        "type": "vcuts"
+    },
+    "framing": {
+        "type": "railslr",
+        "hspace": "0mm"
+    },
+    "tooling": {
+        "type": "4hole",
+        "hoffset": "1mm",
+        "voffset": "1mm",
+        "size": "1.152mm"
+    },
+    "fiducials": {
+        "type": "4fid",
+        "hoffset": "3.35mm",
+        "voffset": "3.35mm",
+        "opening": "2mm"
+    },
+    "text": {
+        "type": "simple",
+        "hoffset": "2mm",
+        "voffset": "2mm",
+        "orientation": "90deg",
+        "text": "JLCJLCJLCJLC",
+        "anchor": "ml"
+    }
+}

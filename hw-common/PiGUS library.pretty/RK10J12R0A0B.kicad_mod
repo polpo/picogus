@@ -1,0 +1,137 @@
+(footprint "RK10J12R0A0B" (version 20221018) (generator pcbnew)
+  (layer "F.Cu")
+  (descr "RK10J12R0A0B-1")
+  (tags "Variable Resistor")
+  (attr smd)
+  (fp_text reference "VR**" (at 0 1.35) (layer "F.SilkS") hide
+      (effects (font (size 1.27 1.27) (thickness 0.254)))
+    (tstamp 386ec4ee-617f-4f35-aba7-4b773cb69ab9)
+  )
+  (fp_text value "RK10J12R0A0B" (at 0 1.35) (layer "F.SilkS") hide
+      (effects (font (size 1.27 1.27) (thickness 0.254)))
+    (tstamp 37d97e5c-434a-4a46-82e9-26852a909b5c)
+  )
+  (fp_text user "REF**" (at 0 11.5 unlocked) (layer "F.SilkS")
+      (effects (font (size 1 1) (thickness 0.15)) (justify bottom))
+    (tstamp 6c8ef9a7-9b4d-4bf9-aa3e-a004a8923457)
+  )
+  (fp_text user "^^ pin 3 and 6 are the same pad" (at -4.7498 12.4206 unlocked) (layer "Cmts.User")
+      (effects (font (size 1 1) (thickness 0.15)) (justify left bottom))
+    (tstamp 9347b8f5-f706-4913-bb42-2cc988931662)
+  )
+  (fp_text user "${REFERENCE}" (at 0 -8.9) (layer "F.Fab")
+      (effects (font (size 1.27 1.27) (thickness 0.254)))
+    (tstamp 25223512-6dd1-4839-b581-f1ba9baa4576)
+  )
+  (fp_poly
+    (pts
+      (xy -5 -3.1582)
+      (xy -5 -1.7582)
+      (xy -7.2 -1.7582)
+      (xy -7.2 -3.1582)
+    )
+
+    (stroke (width 0) (type solid)) (fill solid) (layer "F.Paste") (tstamp e908ebcd-b93f-4a3d-965a-29da30f9e41c))
+  (fp_poly
+    (pts
+      (xy -4.6 9.7418)
+      (xy -4.6 8.3418)
+      (xy -3.4 8.3418)
+      (xy -3.4 9.7418)
+    )
+
+    (stroke (width 0) (type solid)) (fill solid) (layer "F.Paste") (tstamp 7965df5e-7e84-425e-a45c-60c01d607967))
+  (fp_poly
+    (pts
+      (xy -2.6 9.7418)
+      (xy -2.6 8.3418)
+      (xy -1.4 8.3418)
+      (xy -1.4 9.7418)
+    )
+
+    (stroke (width 0) (type solid)) (fill solid) (layer "F.Paste") (tstamp 7b0813e8-fec8-4da8-8006-a4b7d52d6de3))
+  (fp_poly
+    (pts
+      (xy -0.6 9.7418)
+      (xy -0.6 8.3418)
+      (xy 0.6 8.3418)
+      (xy 0.6 9.7418)
+    )
+
+    (stroke (width 0) (type solid)) (fill solid) (layer "F.Paste") (tstamp cca5ea8a-581f-4aed-8404-cbc2b40e8bb3))
+  (fp_poly
+    (pts
+      (xy 1.4 9.7418)
+      (xy 1.4 8.3418)
+      (xy 2.6 8.3418)
+      (xy 2.6 9.7418)
+    )
+
+    (stroke (width 0) (type solid)) (fill solid) (layer "F.Paste") (tstamp 6ce9b84e-3184-4ce4-afdf-6e6285203551))
+  (fp_poly
+    (pts
+      (xy 3.4 9.7418)
+      (xy 3.4 8.3418)
+      (xy 4.6 8.3418)
+      (xy 4.6 9.7418)
+    )
+
+    (stroke (width 0) (type solid)) (fill solid) (layer "F.Paste") (tstamp 7abdba08-0b51-4b1e-a5dc-e99f1ecd3714))
+  (fp_poly
+    (pts
+      (xy 7.2 -3.1582)
+      (xy 7.2 -1.7582)
+      (xy 5 -1.7582)
+      (xy 5 -3.1582)
+    )
+
+    (stroke (width 0) (type solid)) (fill solid) (layer "F.Paste") (tstamp 30e903ff-5ff4-4c7e-9cdb-34cf513e125b))
+  (fp_line (start -6 4.0418) (end -6 3.7418)
+    (stroke (width 0.254) (type solid)) (layer "F.SilkS") (tstamp 324e6798-818a-4672-828e-5dd89d6acf3c))
+  (fp_line (start -6 8.0418) (end -6 4.0418)
+    (stroke (width 0.254) (type solid)) (layer "F.SilkS") (tstamp 149357b6-3740-46f7-a4e6-072f7dd44a7f))
+  (fp_line (start 5.35 8.0418) (end -6 8.0418)
+    (stroke (width 0.254) (type solid)) (layer "F.SilkS") (tstamp 0c7dffa8-4308-40cc-9ec0-47984b04943a))
+  (fp_line (start 5.35 8.0418) (end 5.35 4.6418)
+    (stroke (width 0.254) (type solid)) (layer "F.SilkS") (tstamp 93a71662-2ee3-484d-9a17-50b0b3e1232c))
+  (fp_arc (start -6.149 -3.3532) (mid -0.016848 -6.982155) (end 6.132643 -3.382659)
+    (stroke (width 0.254) (type solid)) (layer "F.SilkS") (tstamp d2c6a945-94c7-4f25-8ec8-c87c6cf61b34))
+  (fp_arc (start 6.829 -1.5392) (mid 0.005879 7.05142) (end -6.831642 -1.527743)
+    (stroke (width 0.254) (type solid)) (layer "F.SilkS") (tstamp 75ffa782-9da1-40a4-b77d-24e219d60d14))
+  (fp_poly
+    (pts
+      (xy -6 4.516312)
+      (xy -6 6.516312)
+      (xy 5.3 6.516312)
+      (xy 5.3 4.516312)
+      (xy 4.8 4.516312)
+      (xy 4.8 6.016312)
+      (xy -5.5 6.016312)
+      (xy -5.5 4.516312)
+    )
+
+    (stroke (width 0) (type solid)) (fill solid) (layer "Cmts.User") (tstamp 1fcc1d6c-a2fa-415d-8bc7-cd9ca35401a8))
+  (fp_line (start -8.2 -8) (end 8.2 -8)
+    (stroke (width 0.1) (type solid)) (layer "F.CrtYd") (tstamp 3f36571d-3f7b-4b0e-8346-c7fa20d10aef))
+  (fp_line (start -8.2 10.7) (end -8.2 -8)
+    (stroke (width 0.1) (type solid)) (layer "F.CrtYd") (tstamp d440ecda-a843-4513-bba8-4163505684d9))
+  (fp_line (start 8.2 -8) (end 8.2 10.7)
+    (stroke (width 0.1) (type solid)) (layer "F.CrtYd") (tstamp f1ea66ad-de41-4c57-9991-19b59a8c7c9b))
+  (fp_line (start 8.2 10.7) (end -8.2 10.7)
+    (stroke (width 0.1) (type solid)) (layer "F.CrtYd") (tstamp 51a9e55c-a30c-456f-ad9d-236d28eabda9))
+  (pad "1" smd rect (at 2 9.0418 90) (size 1.4 1.2) (layers "F.Cu" "F.Paste" "F.Mask") (tstamp 76ad161b-cae7-4a43-9484-452533f0333d))
+  (pad "2" smd rect (at 0 9.0418 90) (size 1.4 1.2) (layers "F.Cu" "F.Paste" "F.Mask") (tstamp 83d751db-e494-45b3-9605-3d6e81b8dc4f))
+  (pad "3" smd rect (at -4 9.0418 90) (size 1.4 1.2) (layers "F.Cu" "F.Paste" "F.Mask") (tstamp 74c597ba-87db-4763-af5e-c7935db3ed52))
+  (pad "4" smd rect (at 4 9.0418 90) (size 1.4 1.2) (layers "F.Cu" "F.Paste" "F.Mask") (tstamp 1bf58ff5-4fe9-4bd8-9e65-1b600301710c))
+  (pad "5" smd rect (at -2 9.0418 90) (size 1.4 1.2) (layers "F.Cu" "F.Paste" "F.Mask") (tstamp 3e893778-119f-45eb-ae93-15e2f9f6ad2b))
+  (pad "6" smd rect (at -4 9.0418 90) (size 1.4 1.2) (layers "F.Cu" "F.Paste" "F.Mask") (tstamp fd2c2d7e-41b9-4586-b35a-e3c759da361c))
+  (pad "MP" smd rect (at -6.1 -2.4582 270) (size 1.4 2.2) (layers "F.Cu" "F.Paste" "F.Mask") (tstamp ed96bc3e-bfcf-4d6e-a694-54e1298ce1b3))
+  (pad "MP" thru_hole oval (at 0 -3.937 270) (size 1.6 3.2) (drill oval 1 2.5) (layers "*.Cu" "*.Mask") (tstamp 6109814d-f1c9-431e-b361-34e06f561e5b))
+  (pad "MP" thru_hole oval (at 0 3.937 270) (size 1.6 3.2) (drill oval 1 2.5) (layers "*.Cu" "*.Mask") (tstamp 4085ed0e-111e-4ed7-b1f3-16e49aeb12dc))
+  (pad "MP" smd rect (at 6.1 -2.4582 270) (size 1.4 2.2) (layers "F.Cu" "F.Paste" "F.Mask") (tstamp 1f5257e3-d56f-495d-adc9-8a7868240398))
+  (model "${KIPRJMOD}/parts/RK10J12R0A0B.stp"
+    (offset (xyz 0 0 0))
+    (scale (xyz 1 1 1))
+    (rotate (xyz 0 0 0))
+  )
+)
