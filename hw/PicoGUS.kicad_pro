@@ -98,7 +98,7 @@
         "silk_overlap": "ignore",
         "skew_out_of_range": "error",
         "solder_mask_bridge": "error",
-        "starved_thermal": "error",
+        "starved_thermal": "warning",
         "text_height": "warning",
         "text_thickness": "warning",
         "through_hole_pad_without_hole": "error",
@@ -535,6 +535,10 @@
     [
       "8fb4b197-630e-4faa-9892-8ecaeb71c13b",
       ""
+    ],
+    [
+      "9d2ec422-e50e-4bcf-9c81-7933040dc4f5",
+      "PCM5100 audio"
     ]
   ],
   "text_variables": {}
