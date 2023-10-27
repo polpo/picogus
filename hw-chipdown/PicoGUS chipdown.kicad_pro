@@ -519,7 +519,7 @@
       "idf": "",
       "netlist": "",
       "specctra_dsn": "",
-      "step": "",
+      "step": "PicoGUS chipdown.step",
       "vrml": ""
     },
     "page_layout_descr_file": ""

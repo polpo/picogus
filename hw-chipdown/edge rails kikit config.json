@@ -5,7 +5,8 @@
         "hwidth": "5mm"
     },
     "cuts": {
-        "type": "vcuts"
+        "type": "vcuts",
+        "layer": "Edge.Cuts"
     },
     "framing": {
         "type": "railslr",
@@ -19,8 +20,8 @@
     },
     "fiducials": {
         "type": "4fid",
-        "hoffset": "3.35mm",
-        "voffset": "3.35mm",
+        "hoffset": "3.85mm",
+        "voffset": "10mm",
         "opening": "2mm"
     },
     "text": {
@@ -30,5 +31,8 @@
         "orientation": "90deg",
         "text": "JLCJLCJLCJLC",
         "anchor": "ml"
+    },
+    "post": {
+        "refillzones": "True"
     }
 }
