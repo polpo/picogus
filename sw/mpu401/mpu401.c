@@ -33,6 +33,8 @@
 /* SOFTMPU: Moved exported functions & types to header */
 #include "export.h"
 
+extern uint LED_PIN;
+
 /* HardMPU includes */
 /*
 #include <avr/sfr_defs.h>
@@ -47,6 +49,12 @@ typedef int32_t Bits;
 typedef int8_t Bit8s;
 
 /*typedef void (*PIC_EventHandler)(Bitu val);*/ /* SOFTMPU */
+
+/* autodetect when Gateway runs
+static const char* gateway_msg = "\xf0\x41\x10\x16\x12\x20\x00\x00       Gateway";
+static uint8_t gateway_pos = 0;
+static uint8_t gateway_len = 22;
+*/
 
 #include "../pico_pic.h"
 /* SOFTMPU: Stubbed functions */
@@ -94,6 +102,8 @@ typedef enum MpuDataType MpuDataType; /* SOFTMPU */
 #define CONFIG_FAKEALLNOTESOFF  (mpu.config & 0x40)
 #define CONFIG_VERSIONFIX       (mpu.config & 0x20)
 #define CONFIG_MIDIPORT         (mpu.config & 0x10)
+
+static bool config_versionfix = false;
 
 static struct {
     bool intelligent;
@@ -268,8 +278,13 @@ __force_inline void MPU401_WriteCommand(Bit8u val, bool crit) { /* SOFTMPU */
             QueueByte(0);
             goto write_command_return;
         case 0xac:      /* Request version */
-            QueueByte(MSG_MPU_ACK);
-            QueueByte(MPU401_VERSION);
+            if (config_versionfix) {
+                QueueByte(MPU401_VERSION);
+                QueueByte(MSG_MPU_ACK);
+            } else {
+                QueueByte(MSG_MPU_ACK);
+                QueueByte(MPU401_VERSION);
+            }
             goto write_command_return;
         case 0xad:      /* Request revision */
             QueueByte(MSG_MPU_ACK);
@@ -377,6 +392,20 @@ __force_inline void MPU401_WriteData(Bit8u val, bool crit) { /* SOFTMPU */
     static Bit8u length,cnt,posd; /* SOFTMPU */
     if (mpu.mode==M_UART) {
         MIDI_RawOutByte(val);
+        /* autodetect when Gateway runs
+        if (val == gateway_msg[gateway_pos]) {
+            printf("v: %x (%c)\n", val, val);
+            ++gateway_pos;
+            if (gateway_pos == gateway_len) {
+                printf("Gateway hack enabled!");
+                gpio_xor_mask(LED_PIN);
+                config_versionfix = true;
+                gateway_pos = 0;
+            }
+        } else {
+            gateway_pos = 0;
+        }
+        */
         goto write_return;
     }
     switch (mpu.state.command_byte) {       /* 0xe# command data */
