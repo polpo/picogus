@@ -19,7 +19,12 @@
 
 #include "pico/audio_i2s.h"
 
+#ifdef MAME_CMS
+#include "saa1099/saa1099.h"
+saa1099_device *saa0, *saa1;
+#else
 #include "square/square.h"
+#endif
 #include "cmd_buffers.h"
 extern cms_buffer_t cms_buffer;
 
@@ -67,27 +72,61 @@ struct audio_buffer_pool *init_audio() {
 
 void play_cms() {
     puts("starting core 1 CMS");
+#ifdef MAME_CMS
+    puts("Creating SAA1099 1");
+    saa0 = new saa1099_device(7159090);
+    puts("Creating SAA1099 2");
+    saa1 = new saa1099_device(7159090);
+    // saa0->device_start();
+    // saa1->device_start();
+    int16_t buf0[SAMPLES_PER_BUFFER * 2];
+    int16_t buf1[SAMPLES_PER_BUFFER * 2];
+#else
     cms_t cms;
-    struct audio_buffer_pool *ap = init_audio();
 #ifdef SQUARE_FLOAT_OUTPUT
     float buf[SAMPLES_PER_BUFFER * 2];
 #else
     int32_t buf[SAMPLES_PER_BUFFER * 2];
 #endif
+#endif // MAME_CMS
+    struct audio_buffer_pool *ap = init_audio();
     for (;;) {
+        // putchar('.');
         while (cms_buffer.tail != cms_buffer.head) {
             auto cmd = cms_buffer.cmds[cms_buffer.tail];
+#ifdef MAME_CMS
+            // printf("%x ", cmd.addr & 0x3);
+            switch (cmd.addr & 0x3) {
+            case 0x0:
+                saa0->data_w(cmd.data);
+                break;
+            case 0x1:
+                saa0->control_w(cmd.data);
+                break;
+            case 0x2:
+                saa1->data_w(cmd.data);
+                break;
+            case 0x3:
+                saa1->control_w(cmd.data);
+                break;
+            }
+#else // MAME_CMS
             if (cmd.addr & 1) {
                 cms.write_addr(cmd.addr, cmd.data);
             } else {
                 cms.write_data(cmd.addr, cmd.data);
             }
+#endif // MAME_CMS
             ++cms_buffer.tail;
         }
-        memset(buf, 0, sizeof(buf));
         struct audio_buffer *buffer = take_audio_buffer(ap, true);
         int16_t *samples = (int16_t *) buffer->buffer->bytes;
-    
+
+#ifdef MAME_CMS    
+        saa0->sound_stream_update(buf0, SAMPLES_PER_BUFFER);
+        saa1->sound_stream_update(buf1, SAMPLES_PER_BUFFER);
+#else
+        memset(buf, 0, sizeof(buf));
         // uint32_t cms_audio_begin = time_us_32();
 #ifdef SQUARE_FLOAT_OUTPUT
         cms.generator(0).generate_frames(buf, SAMPLES_PER_BUFFER, 1.0f);
@@ -95,15 +134,21 @@ void play_cms() {
 #else
         cms.generator(0).generate_frames(buf, SAMPLES_PER_BUFFER);
         cms.generator(1).generate_frames(buf, SAMPLES_PER_BUFFER);
-#endif
+#endif // SQUARE_FLOAT_OUTPUT
+#endif // MAME_CMS
         for(uint32_t i = 0; i < SAMPLES_PER_BUFFER; ++i) {
+#ifdef MAME_CMS
+            samples[i << 1] = ((int32_t)buf0[i << 1] + (int32_t)buf1[i << 1]) >> 1;
+            samples[(i << 1) + 1] = ((int32_t)buf0[(i << 1) + 1] + (int32_t)buf1[(i << 1) + 1]) >> 1;
+#else
 #ifdef SQUARE_FLOAT_OUTPUT
             samples[i << 1] = (int32_t)(buf[i << 1] * 32768.0f) >> 1;
             samples[(i << 1) + 1] = (int32_t)(buf[(i << 1) + 1] * 32768.0f) >> 1;
 #else
             samples[i << 1] = buf[i << 1] >> 1;
             samples[(i << 1) + 1] = buf[(i << 1) + 1] >> 1;
-#endif
+#endif //SQUARE_FLOAT_OUTPUT
+#endif // MAME_CMS
         }
         // uint32_t cms_audio_elapsed = time_us_32() - cms_audio_begin;
         // printf("%u ", cms_audio_elapsed);
