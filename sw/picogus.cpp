@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include "pico/stdlib.h"
 #include "pico/multicore.h"
+#include "hardware/adc.h"
 #include "hardware/pio.h"
 #include "hardware/irq.h"
 #include "hardware/regs/vreg_and_chip_reset.h"
@@ -8,6 +9,8 @@
 #include "hardware/clocks.h"
 
 #include "pico_reflash.h"
+
+enum board_type { PICO_BASED, PICOGUS_2 } BOARD_TYPE;
 
 #ifdef PSRAM
 #include "psram_spi.h"
@@ -23,6 +26,11 @@ psram_spi_inst_t* async_spi_inst;
 #define UART_RX_PIN (-1)
 #define UART_ID     uart0
 #define BAUD_RATE   115200
+
+uint LED_PIN;
+
+#include "M62429/M62429.h"
+M62429* m62429;
 
 #ifdef SOUND_OPL
 #include "opl.h"
@@ -60,7 +68,6 @@ tandy_buffer_t tandy_buffer = { {0}, 0, 0 };
 #endif
 
 #ifdef SOUND_CMS
-#include "square/square.h"
 static uint16_t basePort = 0x220u;
 void play_cms(void);
 static uint8_t cms_detect = 0xFF;
@@ -88,8 +95,6 @@ static bool control_active = false;
 static uint8_t sel_reg = 0;
 static uint16_t cur_data = 0;
 static uint32_t cur_read = 0;
-
-constexpr uint LED_PIN = 1 << PICO_DEFAULT_LED_PIN;
 
 static uint iow_sm;
 static uint ior_sm;
@@ -263,6 +268,7 @@ __force_inline void handle_iow(void) {
             // Fast write - return early as we've already written 0x0u to the PIO
             return;
         }
+        gpio_xor_mask(LED_PIN);
         // __dsb();
         // printf("GUS IOW: port: %x value: %x\n", port, value);
         // puts("IOW");
@@ -281,6 +287,7 @@ __force_inline void handle_iow(void) {
         pio_sm_put(pio0, iow_sm, IO_WAIT);
         OPL_Pico_PortWrite(OPL_DATA_PORT, iow_read & 0xFF);
         // __dsb();
+        gpio_xor_mask(LED_PIN);
         break;
     }
 #endif // SOUND_OPL
@@ -521,8 +528,45 @@ int main()
         puts("I was reset due the debug port");
     }
 
-    gpio_init(PICO_DEFAULT_LED_PIN);
-    gpio_set_dir(PICO_DEFAULT_LED_PIN, GPIO_OUT);
+    // Determine board type. GPIO 29 is grounded on PicoGUS v2.0, and on a Pico, it's VSYS/3 (~1.666V)
+    adc_init();
+    // Make sure GPIO is high-impedance, no pullups etc
+    adc_gpio_init(29);
+    // Select ADC input 3 (GPIO29)
+    adc_select_input(3);
+ 
+    // 12-bit conversion, assume max value == ADC_VREF == 3.3 V
+    const float conversion_factor = 3.3f / (1 << 12);
+    uint16_t result;
+    adc_read();
+    result = adc_read();
+    printf("Raw value: 0x%03x, voltage: %f V\n", result, result * conversion_factor);
+
+    if (result > 0x100) {
+        puts("Running on Pico-based board (PicoGUS v1.1+, PicoGUS Femto");
+        // On Pico-based board (PicoGUS v1.1+, PicoGUS Femto)
+        LED_PIN = 1 << PICO_DEFAULT_LED_PIN;
+        gpio_init(PICO_DEFAULT_LED_PIN);
+        gpio_set_dir(PICO_DEFAULT_LED_PIN, GPIO_OUT);
+        BOARD_TYPE = PICO_BASED;
+    } else {
+        // On chipdown board (PicoGUS v2.0)
+        puts("Running on PicoGUS v2.0");
+        LED_PIN = 1 << 23;
+        gpio_init(23);
+        gpio_set_dir(23, GPIO_OUT);
+        BOARD_TYPE = PICOGUS_2;
+
+        // Create new interface to M62429 digital volume control
+        m62429 = new M62429();
+        // Data pin = GPIO24, data pin = GPIO25
+        m62429->begin(24, 25);
+#ifdef SOUND_MPU
+        m62429->setVolume(M62429_BOTH, 255);
+#else // SOUND_MPU
+        m62429->setVolume(M62429_BOTH, 0);
+#endif // SOUND_MPU
+    }
 
     gpio_init(IRQ_PIN);
     gpio_set_dir(IRQ_PIN, GPIO_OUT);
@@ -541,7 +585,8 @@ int main()
 #ifdef PSRAM_CORE0
 #ifdef PSRAM
     puts("Initing PSRAM...");
-    psram_spi = psram_spi_init_clkdiv(pio1, -1, 1.6);
+    // Try different PSRAM strategies
+    psram_spi = psram_spi_init_clkdiv(pio1, -1, 2.0 /* clkdiv */, BOARD_TYPE == PICOGUS_2 ? false : true /* fudge */);
 #if TEST_PSRAM
     test_psram(&psram_spi);
 #endif // TEST_PSRAM
@@ -588,7 +633,7 @@ int main()
     pwm_init(2, &pwm_c, true);
     pwm_init(3, &pwm_c, true);
     multicore_launch_core1(&play_usb);
-#endif // SOUND_CMS
+#endif // USB_JOYSTICK
 
     for(int i=AD0_PIN; i<(AD0_PIN + 10); ++i) {
         gpio_disable_pulls(i);

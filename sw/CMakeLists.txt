@@ -37,6 +37,7 @@ add_compile_options(-flto=jobserver)
 
 # Add executable. Default name is the project name, version 0.1
 add_executable(picogus picogus.cpp)
+target_sources(picogus PRIVATE M62429/M62429.cpp)
 pico_set_program_version(picogus ${CMAKE_PROJECT_VERSION})
 
 add_compile_definitions(
@@ -54,6 +55,8 @@ add_compile_definitions(
 
 target_sources(picogus PRIVATE pico_reflash.c)
 
+target_compile_definitions(picogus PRIVATE PICO_FLASH_SPI_CLKDIV=4)
+
 if(PROJECT_TYPE STREQUAL "GUS")
     # target_compile_options(picogus PRIVATE -save-temps -fverbose-asm)
     if(NOT GUS_DEFAULT_PORT)
@@ -66,7 +69,7 @@ if(PROJECT_TYPE STREQUAL "GUS")
         SOUND_GUS=1
         GUS_DEFAULT_PORT=${GUS_DEFAULT_PORT}
         PSRAM=1
-        #TEST_PSRAM=1
+        TEST_PSRAM=1
         PSRAM_ASYNC=1
         #PSRAM_ASYNC_DMA_IRQ=1
         PSRAM_SPINLOCK=1
@@ -110,7 +113,7 @@ if(PROJECT_TYPE STREQUAL "OPL")
         EMU8950_ASM=1
     )
     add_subdirectory(opl)
-    pico_enable_stdio_uart(picogus 0)
+    pico_enable_stdio_uart(picogus 1)
     pico_enable_stdio_usb(picogus 0)
     pico_enable_stdio_semihosting(picogus 0)
 endif()
@@ -200,6 +203,7 @@ target_link_libraries(
     hardware_pio
     hardware_pll
     hardware_flash
+    hardware_adc
 )
 
 if(ASYNC_UART)
