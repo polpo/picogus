@@ -16,7 +16,7 @@ include(pico_sdk_import.cmake)
 include(pico_extras_import.cmake)
 
 project(picogus
-    VERSION "0.7.0"
+    VERSION "0.7.99"
     LANGUAGES C CXX ASM
 )
 
@@ -69,7 +69,7 @@ if(PROJECT_TYPE STREQUAL "GUS")
         SOUND_GUS=1
         GUS_DEFAULT_PORT=${GUS_DEFAULT_PORT}
         PSRAM=1
-        TEST_PSRAM=1
+        # TEST_PSRAM=1
         PSRAM_ASYNC=1
         #PSRAM_ASYNC_DMA_IRQ=1
         PSRAM_SPINLOCK=1

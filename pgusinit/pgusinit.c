@@ -4,22 +4,24 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#include <stdbool.h>
 #include <i86.h>
 
 #define CONTROL_PORT 0x1D0
 #define DATA_PORT_LOW  0x1D1
 #define DATA_PORT_HIGH 0x1D2
-#define PICOGUS_PROTOCOL_VER 1
+#define PICOGUS_PROTOCOL_VER 2
 
 typedef enum {
     PICO_FIRMWARE_IDLE = 0,
     PICO_FIRMWARE_WRITING = 1,
+    PICO_FIRMWARE_DONE = 0xFE,
     PICO_FIRMWARE_ERROR = 0xFF
 } pico_firmware_status_t;
 
 
 void banner(void) {
-    printf("PicoGUSinit v1.2.1\n");
+    printf("PicoGUSinit v1.3.0\n");
     printf("(c) 2023 Ian Scott - licensed under the GNU GPL v2\n\n");
 }
 
@@ -61,7 +63,7 @@ void err_pigus(void) {
 
 
 void err_protocol(uint8_t expected, uint8_t got) {
-    fprintf(stderr, "ERROR: PicoGUS card using protocol %u, needs %u\n", expected, got); 
+    fprintf(stderr, "ERROR: PicoGUS card using protocol %u, needs %u\n", got, expected); 
     fprintf(stderr, "Please run the latest PicoGUS firmware and pgusinit.exe versions together!\n");
 }
 
@@ -125,6 +127,15 @@ void print_firmware_string(void) {
     printf("Firmware version: %s\n", firmware_string);
 }
 
+bool wait_for_read(uint8_t value) {
+    for (uint32_t i = 0; i < 1000000; ++i) {
+        if (inp(DATA_PORT_HIGH) == value) {
+            return true;
+        }
+    }
+    return false;
+}
+
 int write_firmware(const char* fw_filename) {
     union {
         uint8_t buf[512];
@@ -184,10 +195,17 @@ int write_firmware(const char* fw_filename) {
             // Write firmware byte
             outp(DATA_PORT_HIGH, uf2_buf.buf[b]);
             if (i < (numBlocks - 1) || b < 511) { // If it's not the very last byte
-                if (inp(DATA_PORT_HIGH) != PICO_FIRMWARE_WRITING) {
+                if (!wait_for_read(PICO_FIRMWARE_WRITING)) {
                     fprintf(stderr, "\nERROR: Card is not in firmware writing mode?\n");
                     return 15;
                 }
+            } else {
+                if (!wait_for_read(PICO_FIRMWARE_DONE)) {
+                    fprintf(stderr, "\nERROR: Card has written last firmware byte but is not done\n");
+                    return 15;
+                }
+                outp(CONTROL_PORT, 0xCC); // Knock on the door...
+                outp(CONTROL_PORT, 0xFF); // Select firmware programming mode, which will reboot the card in DONE
             }
         }
         fprintf(stderr, ".");
@@ -197,8 +215,8 @@ int write_firmware(const char* fw_filename) {
 
     // Wait for card to reboot
     printf("\nProgramming complete. Waiting for the card to reboot...\n");
-    sleep(2);
-    if (inp(DATA_PORT_HIGH) != 0xDD) {
+    /* sleep(2); */
+    if (!wait_for_read(0xDD)) {
         fprintf(stderr, "ERROR: card is not alive after programming firmware\n");
         return 99;
     }

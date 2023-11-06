@@ -10,7 +10,7 @@
 
 #include "pico_reflash.h"
 
-enum board_type { PICO_BASED, PICOGUS_2 } BOARD_TYPE;
+enum board_type { PICO_BASED = 0, PICOGUS_2 = 1 } BOARD_TYPE;
 
 #ifdef PSRAM
 #include "psram_spi.h"
@@ -90,7 +90,7 @@ uint8_t joystate_bin;
 #define CONTROL_PORT 0x1D0
 #define DATA_PORT_LOW  0x1D1
 #define DATA_PORT_HIGH 0x1D2
-#define PICOGUS_PROTOCOL_VER 1
+#define PICOGUS_PROTOCOL_VER 2
 static bool control_active = false;
 static uint8_t sel_reg = 0;
 static uint16_t cur_data = 0;
@@ -124,8 +124,14 @@ __force_inline void select_picogus(uint8_t value) {
     case 0x11: // DMA interval
         break;
 #endif
+#ifdef SOUND_MPU
+    case 0x20: // Wavetable mixer volume
+        break;
+#endif
+    case 0xF0: // Hardware version
+        break;
     case 0xFF: // Firmware write mode
-        pico_firmware_stop(PICO_FIRMWARE_IDLE);
+        pico_firmware_start();
         break;
     default:
         control_active = false;
@@ -159,6 +165,11 @@ __force_inline void write_picogus_high(uint8_t value) {
         GUS_SetDMAInterval(value);
         break;
 #endif
+#ifdef SOUND_MPU
+    case 0x20: // Wavetable mixer volume
+        m62429->setVolume(M62429_BOTH, value);
+        break;
+#endif
     case 0xff: // Firmware write
         pico_firmware_write(value);
         break;
@@ -185,7 +196,7 @@ __force_inline uint8_t read_picogus_high(void) {
     case 0x00:  // PicoGUS magic string
         return 0xdd;
         break;
-    case 0x01:  // PicoGUS magic string
+    case 0x01:  // PicoGUS protocol version
         return PICOGUS_PROTOCOL_VER;
         break;
     case 0x02: // Firmware string
@@ -217,6 +228,13 @@ __force_inline uint8_t read_picogus_high(void) {
         return 0xff;
 #endif
         break;
+#ifdef SOUND_MPU
+    case 0x20: // Wavetable mixer volume
+        return m62429->getVolume(0);
+        break;
+#endif
+    case 0xF0: // Hardware version
+        return BOARD_TYPE;
     case 0xff:
         // Get status of firmware write
         return pico_firmware_getStatus();
