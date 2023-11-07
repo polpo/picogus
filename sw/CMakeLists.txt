@@ -32,8 +32,13 @@ endif()
 
 # Initialise the Raspberry Pi Pico SDK
 pico_sdk_init()
-# Delete this line if you do not have a modified Pico-SDK. It prevents building.
-add_compile_options(-flto=jobserver)
+
+if(DEFINED USE_LTO)
+    # Pico SDK must be patched to allow for LTO so it is not enabled by default.
+    # To patch to Pico SDK, run:
+    # sed -i 's/WRAPPER_FUNC(x) __wrap_/WRAPPER_FUNC(x) __attribute__((used)) __wrap_/' "$PICO_SDK_PATH"/src/rp2_common/pico_platform/include/pico/platform.h
+    add_compile_options(-flto=jobserver)
+endif()
 
 # Add executable. Default name is the project name, version 0.1
 add_executable(picogus picogus.cpp)
