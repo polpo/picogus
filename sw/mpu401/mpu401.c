@@ -50,11 +50,10 @@ typedef int8_t Bit8s;
 
 /*typedef void (*PIC_EventHandler)(Bitu val);*/ /* SOFTMPU */
 
-/* autodetect when Gateway runs
+// autodetect when Gateway runs by watching for it setting this message on the MT-32's LCD
 static const char* gateway_msg = "\xf0\x41\x10\x16\x12\x20\x00\x00       Gateway";
 static uint8_t gateway_pos = 0;
 static uint8_t gateway_len = 22;
-*/
 
 #include "../pico_pic.h"
 /* SOFTMPU: Stubbed functions */
@@ -97,17 +96,10 @@ typedef enum MpuDataType MpuDataType; /* SOFTMPU */
 #define MSG_MPU_CLOCK           0xfd
 #define MSG_MPU_ACK             0xfe
 
-/* HardMPU: MPU config bits */
-#define CONFIG_SYSEXDELAY       (mpu.config & 0x80)
-#define CONFIG_FAKEALLNOTESOFF  (mpu.config & 0x40)
-#define CONFIG_VERSIONFIX       (mpu.config & 0x20)
-#define CONFIG_MIDIPORT         (mpu.config & 0x10)
-
 static bool config_versionfix = false;
 
 static struct {
     bool intelligent;
-    Bit8u config;
     MpuMode mode;
     Bit8u queue[MPU401_QUEUE];
     Bit8u queue_pos,queue_used;
@@ -279,6 +271,7 @@ __force_inline void MPU401_WriteCommand(Bit8u val, bool crit) { /* SOFTMPU */
             goto write_command_return;
         case 0xac:      /* Request version */
             if (config_versionfix) {
+                // Hack for Gateway
                 QueueByte(MPU401_VERSION);
                 QueueByte(MSG_MPU_ACK);
             } else {
@@ -289,10 +282,6 @@ __force_inline void MPU401_WriteCommand(Bit8u val, bool crit) { /* SOFTMPU */
         case 0xad:      /* Request revision */
             QueueByte(MSG_MPU_ACK);
             QueueByte(MPU401_REVISION);
-            goto write_command_return;
-        case 0xae:      /* HardMPU: Request config */
-            QueueByte(MSG_MPU_ACK);
-            QueueByte(mpu.config);
             goto write_command_return;
         case 0xaf:      /* Request tempo */
             QueueByte(MSG_MPU_ACK);
@@ -318,9 +307,6 @@ __force_inline void MPU401_WriteCommand(Bit8u val, bool crit) { /* SOFTMPU */
             mpu.state.amask=mpu.state.tmask;
             mpu.state.req_mask=0;
             mpu.state.irq_pending=true;
-            break;
-        case 0xfe:      /* HardMPU: Reset with config byte */
-            mpu.state.command_byte=val;
             break;
         case 0xff:      /* Reset MPU-401 */
             /*LOG(LOG_MISC,LOG_NORMAL)("MPU-401:Reset %X",val);*/ /* SOFTMPU */
@@ -392,12 +378,12 @@ __force_inline void MPU401_WriteData(Bit8u val, bool crit) { /* SOFTMPU */
     static Bit8u length,cnt,posd; /* SOFTMPU */
     if (mpu.mode==M_UART) {
         MIDI_RawOutByte(val);
-        /* autodetect when Gateway runs
+        // autodetect when Gateway runs
         if (val == gateway_msg[gateway_pos]) {
             printf("v: %x (%c)\n", val, val);
             ++gateway_pos;
             if (gateway_pos == gateway_len) {
-                printf("Gateway hack enabled!");
+                // printf("Gateway hack enabled!");
                 gpio_xor_mask(LED_PIN);
                 config_versionfix = true;
                 gateway_pos = 0;
@@ -405,7 +391,6 @@ __force_inline void MPU401_WriteData(Bit8u val, bool crit) { /* SOFTMPU */
         } else {
             gateway_pos = 0;
         }
-        */
         goto write_return;
     }
     switch (mpu.state.command_byte) {       /* 0xe# command data */
@@ -448,12 +433,6 @@ __force_inline void MPU401_WriteData(Bit8u val, bool crit) { /* SOFTMPU */
         //case 0xe2:    /* Set graduation for relative tempo */
         //case 0xe4:    /* Set metronome */
         //case 0xe6:    /* Set metronome measure length */
-        case 0xfe: /* Config byte */
-            mpu.state.command_byte=0;
-            mpu.config=val;
-            MPU401_Init();
-            QueueByte(MSG_MPU_ACK);
-            goto write_return;
         default:
             mpu.state.command_byte=0;
             goto write_return;
@@ -765,15 +744,17 @@ __force_inline static void MPU401_Reset(void) {
 
 
 /* HardMPU: Initialisation */
-__force_inline void MPU401_Init()
+void MPU401_Init(bool delaysysex, bool fakeallnotesoff)
 {
     /* Initalise PIC code */
     /* PIC_Init(); */
     critical_section_init(&mpu_crit);
 
     /* Initialise MIDI handler */
-    MIDI_Init(CONFIG_SYSEXDELAY,CONFIG_FAKEALLNOTESOFF);
+    MIDI_Init(delaysysex, fakeallnotesoff);
     if (!MIDI_Available()) return;
+
+    config_versionfix = false;
 
     mpu.queue_used=0;
     mpu.queue_pos=0;

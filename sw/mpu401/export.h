@@ -36,7 +36,7 @@ typedef uint32_t Bitu;
 typedef enum EventID {MPU_EVENT,RESET_DONE,EOI_HANDLER,NUM_EVENTS} EventID;
 
 /* Interface functions */
-void MPU401_Init();
+void MPU401_Init(bool delaysysex, bool fakeallnotesoff);
 void MPU401_WriteCommand(Bit8u val, bool crit);
 Bit8u MPU401_ReadData(void);
 Bit8u MPU401_ReadStatus(void);

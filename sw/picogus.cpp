@@ -171,6 +171,9 @@ __force_inline void write_picogus_high(uint8_t value) {
             m62429->setVolume(M62429_BOTH, value);
         }
         break;
+    case 0x21: // MIDI emulation flags
+        MPU401_Init(value & 0x1 /* delaysysex */, value & 0x2 /* fakeallnotesoff */);
+        break;
 #endif
     case 0xff: // Firmware write
         pico_firmware_write(value);
@@ -604,10 +607,14 @@ int main()
     uart_init(UART_ID, 31250);
     uart_set_translate_crlf(UART_ID, false);
     uart_set_format(UART_ID, 8, 1, UART_PARITY_NONE);
-    gpio_set_drive_strength(UART_TX_PIN, GPIO_DRIVE_STRENGTH_12MA);
+    if (BOARD_TYPE == PICO_BASED) {
+        // Original hardware drives MIDI directly from RP2040. Newer HW uses an open drain inverter
+        // PicoGUS v1.2 also uses an open drain but we can't detect that particular board
+        gpio_set_drive_strength(UART_TX_PIN, GPIO_DRIVE_STRENGTH_12MA);
+    }
     gpio_set_function(UART_TX_PIN, GPIO_FUNC_UART);
-    busy_wait_ms(1000);
-    MPU401_Init();
+    busy_wait_ms(100);
+    MPU401_Init(false, false);
 #endif // SOUND_MPU
 
 #ifdef PSRAM_CORE0

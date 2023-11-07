@@ -265,6 +265,8 @@ int main(int argc, char* argv[]) {
     uint8_t wt_volume = 100;
     char fw_filename[256] = {0};
     card_mode_t mode;
+    uint8_t mpu_delaysysex = 0;
+    uint8_t mpu_fakeallnotesoff = 0;
 
     banner();
     // Get magic value from port on PicoGUS that is not on real GUS
@@ -325,6 +327,10 @@ int main(int argc, char* argv[]) {
                 usage(argv[0], mode);
                 return 4;
             }
+        } else if (stricmp(argv[i], "/s") == 0) {
+            mpu_delaysysex = 1;
+        } else if (stricmp(argv[i], "/n") == 0) {
+            mpu_fakeallnotesoff = 1;
         } else if (stricmp(argv[i], "/f") == 0) {
             if (i + 1 >= argc) {
                 usage(argv[0], mode);
@@ -401,9 +407,14 @@ int main(int argc, char* argv[]) {
         printf("Running in AdLib/OPL2 mode on port %x\n", port);
         break;
     case MPU_MODE:
-        outp(CONTROL_PORT, 0x20); // Select wavetable volume register
-        outp(DATA_PORT_HIGH, wt_volume); // Write port
-        printf("Wavetable volume set to %u\n", wt_volume);
+        if (board_type == PICOGUS_2) {
+            outp(CONTROL_PORT, 0x20); // Select wavetable volume register
+            outp(DATA_PORT_HIGH, wt_volume); // Write volume
+            printf("Wavetable volume set to %u\n", wt_volume);
+        }
+        printf("MPU-401 sysex delay: %s, fake all notes off: %s\n", mpu_delaysysex ? "on" : "off", mpu_fakeallnotesoff ? "on" : "off");
+        outp(CONTROL_PORT, 0x21); // Select MPU settings register
+        outp(DATA_PORT_HIGH, mpu_delaysysex | (mpu_fakeallnotesoff << 1)); // Write sysex delay and fake all notes off settings
         printf("Running in MPU-401 mode on port %x\n", port);
         break;
     case TANDY_MODE:
