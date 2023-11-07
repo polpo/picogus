@@ -37,7 +37,6 @@ add_compile_options(-flto=jobserver)
 
 # Add executable. Default name is the project name, version 0.1
 add_executable(picogus picogus.cpp)
-target_sources(picogus PRIVATE M62429/M62429.cpp)
 pico_set_program_version(picogus ${CMAKE_PROJECT_VERSION})
 
 add_compile_definitions(
@@ -51,6 +50,7 @@ add_compile_definitions(
         # USE_IRQ=1
         USE_ALARM=1
         PICO_STDIO_USB_CONNECT_WAIT_TIMEOUT_MS=5000000
+        M62429_PIO=1
 )
 
 target_sources(picogus PRIVATE pico_reflash.c)
@@ -191,6 +191,8 @@ if(PROJECT_TYPE STREQUAL "JOY")
     target_link_libraries(picogus tinyusb_host tinyusb_board hardware_pwm)
 endif()
 
+target_sources(picogus PRIVATE M62429/M62429.cpp)
+pico_generate_pio_header(picogus ${CMAKE_CURRENT_LIST_DIR}/M62429/M62429.pio)
 
 pico_generate_pio_header(picogus ${CMAKE_CURRENT_LIST_DIR}/isa_io.pio)
 pico_generate_pio_header(picogus ${CMAKE_CURRENT_LIST_DIR}/isa_dma.pio)

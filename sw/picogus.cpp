@@ -167,7 +167,9 @@ __force_inline void write_picogus_high(uint8_t value) {
 #endif
 #ifdef SOUND_MPU
     case 0x20: // Wavetable mixer volume
-        m62429->setVolume(M62429_BOTH, value);
+        if (BOARD_TYPE == PICOGUS_2) {
+            m62429->setVolume(M62429_BOTH, value);
+        }
         break;
 #endif
     case 0xff: // Firmware write
@@ -230,7 +232,11 @@ __force_inline uint8_t read_picogus_high(void) {
         break;
 #ifdef SOUND_MPU
     case 0x20: // Wavetable mixer volume
-        return m62429->getVolume(0);
+        if (BOARD_TYPE == PICOGUS_2) {
+            return m62429->getVolume(0);
+        } else {
+            return 0;
+        }
         break;
 #endif
     case 0xF0: // Hardware version
@@ -561,7 +567,7 @@ int main()
     printf("Raw value: 0x%03x, voltage: %f V\n", result, result * conversion_factor);
 
     if (result > 0x100) {
-        puts("Running on Pico-based board (PicoGUS v1.1+, PicoGUS Femto");
+        puts("Running on Pico-based board (PicoGUS v1.1+, PicoGUS Femto)");
         // On Pico-based board (PicoGUS v1.1+, PicoGUS Femto)
         LED_PIN = 1 << PICO_DEFAULT_LED_PIN;
         gpio_init(PICO_DEFAULT_LED_PIN);
@@ -578,9 +584,13 @@ int main()
         // Create new interface to M62429 digital volume control
         m62429 = new M62429();
         // Data pin = GPIO24, data pin = GPIO25
+#ifdef M62429_PIO
+        m62429->begin(24, 25, pio1, -1);
+#else
         m62429->begin(24, 25);
+#endif
 #ifdef SOUND_MPU
-        m62429->setVolume(M62429_BOTH, 255);
+        m62429->setVolume(M62429_BOTH, 100);
 #else // SOUND_MPU
         m62429->setVolume(M62429_BOTH, 0);
 #endif // SOUND_MPU

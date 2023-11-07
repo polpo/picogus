@@ -1,0 +1,42 @@
+.define public M62429_DATA_PIN 6
+.define public M62429_CLK_PIN 21
+
+; budget: 12 instructions
+.program m62429
+.side_set 1                             ; sideset bit is clk
+.wrap_target
+more:
+    out pins, 1         side 0
+    jmp !osre more      side 1 
+    set pins, 0         side 0          ; M62429 needs data to be 0 before latch
+    set pins, 1         side 1          ; latch bit d10 on rising edge
+.wrap
+
+% c-sdk {
+static inline void m62429_program_init(PIO pio, uint sm, uint offset, uint data_pin, uint clk_pin) {
+    pio_sm_config c = m62429_program_get_default_config(offset);
+
+    // Autopull 10 bits
+    sm_config_set_out_shift(&c, true /*shift_right */, true /* autopull */, 10);
+
+    // Config data pin
+    sm_config_set_set_pins(&c, data_pin, 1);
+    pio_gpio_init(pio, data_pin);
+    sm_config_set_out_pins(&c, data_pin, 1);
+    sm_config_set_set_pins(&c, data_pin, 1);
+    pio_sm_set_consecutive_pindirs(pio, sm, data_pin, 1, true);
+
+    // Config clk pin
+    sm_config_set_sideset_pins(&c, clk_pin);
+    pio_gpio_init(pio, clk_pin);
+    pio_sm_set_consecutive_pindirs(pio, sm, clk_pin, 1, true);
+
+    // Load our configuration, and jump to the start of the program
+    // clkdiv of 1000.0 = 200kHz at system clock of 400Mhz
+    sm_config_set_clkdiv(&c, 1000.0);
+    pio_sm_init(pio, sm, offset, &c);
+    // Set the state machine running
+    pio_sm_set_enabled(pio, sm, true);
+}
+%}
+
