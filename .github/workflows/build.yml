@@ -1,7 +1,7 @@
-name: Full Build
+name: Build
 on: [push, pull_request]
 jobs:
-    build:
+    build-firmware:
       runs-on: ubuntu-latest
       env: 
         BUILD_TYPE: "Release"
@@ -94,6 +94,24 @@ jobs:
           cmake --build . --config $BUILD_TYPE --parallel $(nproc)
           cp picogus.uf2 $OUTPUT_DIR/pg-joy.uf2
 
+      # will generate PicoGUS Firmwares.zip as downloadable artifact with all .uf2 files
+      - name: Upload All Firmwares
+        uses: actions/upload-artifact@v3
+        with:
+          name: PicoGUS Firmwares
+          path: ${{env.OUTPUT_DIR}}
+
+    build-pgusinit:
+      runs-on: ubuntu-latest
+      env: 
+        BUILD_TYPE: "Release"
+        OUTPUT_DIR: ${{github.workspace}}/binaries
+      steps:
+      - name: Checkout repo with submodules
+        uses: actions/checkout@v4
+        with:
+            submodules: recursive
+
       - name: Install OpenWatcom 2.0
         uses: open-watcom/setup-watcom@v0
         with:
@@ -105,9 +123,9 @@ jobs:
           make -f Makefile-cross INCLUDE="$WATCOM"/h
           cp pgusinit.exe $OUTPUT_DIR
 
-      # will generate PicoGUS Firmwares.zip as downloadable artifact with all .uf2 files
-      - name: Upload All Firmwares
+      # will generate pgusinit.zip as downloadable artifact with pgusinit.exe
+      - name: Upload pgusinit
         uses: actions/upload-artifact@v3
         with:
-          name: PicoGUS Firmwares
+          name: pgusinit
           path: ${{env.OUTPUT_DIR}}
