@@ -12,6 +12,14 @@
 
 enum board_type { PICO_BASED = 0, PICOGUS_2 = 1 } BOARD_TYPE;
 
+typedef enum {
+    GUS_MODE = 0,
+    ADLIB_MODE = 1,
+    MPU_MODE = 2,
+    TANDY_MODE = 3,
+    CMS_MODE = 4
+} card_mode_t;
+
 #ifdef PSRAM
 #include "psram_spi.h"
 psram_spi_inst_t psram_spi;
@@ -213,15 +221,15 @@ __force_inline uint8_t read_picogus_high(void) {
         break;
     case 0x03: // Mode (GUS, OPL, MPU, etc...)
 #if defined(SOUND_GUS)
-        return 0;
+        return GUS_MODE;
 #elif defined(SOUND_OPL)
-        return 1;
+        return ADLIB_MODE;
 #elif defined(SOUND_MPU)
-        return 2;
+        return MPU_MODE;
 #elif defined(SOUND_TANDY)
-        return 3;
+        return TANDY_MODE;
 #elif defined(SOUND_CMS)
-        return 4;
+        return CMS_MODE;
 #else
         return 0xff;
 #endif
