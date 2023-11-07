@@ -1,0 +1,10 @@
+.DS_Store
+*~
+*.swp
+*.swo
+*.zip
+*.obj
+*.o
+build/
+*.kicad_prl
+fp-info-cache
