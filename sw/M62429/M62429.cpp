@@ -74,9 +74,7 @@ int M62429::setVolume(uint8_t channel, uint8_t volume)
   if (_muted)      return M62429_MUTED;
 
   // loudness to DB - volume is given on a scale from 0 - 100, 0 being silent and 100 full volume
-  uint16_t attn = std::max(0, (int)std::round(87.0 + (33.22 * std::log10((float)volume / 100.0))));
-  // printf("setting attn to %u\n", attn);
-  _setAttn(channel, attn);
+  _setAttn(channel, std::max(0l, std::lround(87.0 + (33.22 * std::log10((float)std::min<uint8_t>(volume, 100u) / 100.0)))));
 
   //  update cached values
   if (channel == 0)      _vol[0] = volume;
@@ -91,12 +89,12 @@ int M62429::incr(uint8_t channel)
   if (channel > 2) return M62429_CHANNEL_ERROR;
   if (_muted) return M62429_MUTED;
 
-  if ( ((channel == 0) || (channel == 2))  && (_vol[0] < 255))
+  if ( ((channel == 0) || (channel == 2))  && (_vol[0] < 100))
   {
     _vol[0]++;
     setVolume(0, _vol[0]);
   }
-  if ( ((channel == 1) || (channel == 2)) && (_vol[1] < 255))
+  if ( ((channel == 1) || (channel == 2)) && (_vol[1] < 100))
   {
     _vol[1]++;
     setVolume(1, _vol[1]);
