@@ -614,10 +614,29 @@ int main()
 #ifdef PSRAM
     puts("Initing PSRAM...");
     // Try different PSRAM strategies
-    psram_spi = psram_spi_init_clkdiv(pio1, -1, 2.0 /* clkdiv */, BOARD_TYPE == PICOGUS_2 ? false : true /* fudge */);
+    if (BOARD_TYPE == PICOGUS_2) {
+        psram_spi = psram_spi_init_clkdiv(pio1, -1, 2.0 /* clkdiv */, false /* fudge */);
 #if TEST_PSRAM
-    test_psram(&psram_spi);
+        if (!test_psram(&psram_spi, 101)) {
+            psram_spi_uninit(psram_spi, false /* fudge */);
+            psram_spi = psram_spi_init_clkdiv(pio1, -1, 2.0 /* clkdiv */, true /* fudge */);
+            if (!test_psram(&psram_spi, 101)) { 
+                err_blink();
+            }
+        }
 #endif // TEST_PSRAM
+    } else {
+        psram_spi = psram_spi_init_clkdiv(pio1, -1, 2.0 /* clkdiv */, true /* fudge */);
+#if TEST_PSRAM
+        if (!test_psram(&psram_spi, 101)) {
+            psram_spi_uninit(psram_spi, true /* fudge */);
+            psram_spi = psram_spi_init_clkdiv(pio1, -1, 2.0 /* clkdiv */, false /* fudge */);
+            if (!test_psram(&psram_spi, 101)) { 
+                err_blink();
+            }
+        }
+#endif // TEST_PSRAM
+    }
 #endif // PSRAM
 #endif // PSRAM_CORE0
 
