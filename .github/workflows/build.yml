@@ -120,6 +120,7 @@ jobs:
       - name: Build pgusinit
         working-directory: ${{github.workspace}}/pgusinit
         run: |
+          mkdir -p $OUTPUT_DIR
           make -f Makefile-cross INCLUDE="$WATCOM"/h
           cp pgusinit.exe $OUTPUT_DIR
 
