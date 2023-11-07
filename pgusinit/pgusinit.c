@@ -56,6 +56,7 @@ void usage(char *argv0, card_mode_t mode) {
         fprintf(stderr, "AdLib, MPU-401, Tandy, CMS modes only:\n");
         fprintf(stderr, "    /p x - set the (hex) base port address of the emulated card. Defaults:\n");
         fprintf(stderr, "           AdLib: 388; MPU-401: 330; Tandy: 2C0; CMS: 220\n");
+        //              "................................................................................\n"
     }
     if (mode == MPU_MODE) {
         fprintf(stderr, "MPU-401 mode only:\n");
@@ -63,6 +64,7 @@ void usage(char *argv0, card_mode_t mode) {
         fprintf(stderr, "           (for PicoGUS v2.0 boards only)\n");
         fprintf(stderr, "    /s   - delay SYSEX (for rev.0 Roland MT-32)\n");
         fprintf(stderr, "    /n   - fake all notes off (for Roland RA-50)\n");
+        //              "................................................................................\n"
     }
     if (mode == GUS_MODE) {
         fprintf(stderr, "GUS mode only:\n");
@@ -224,7 +226,14 @@ int write_firmware(const char* fw_filename, uint8_t protocol) {
             // Write firmware byte
             outp(DATA_PORT_HIGH, uf2_buf.buf[b]);
             if (b == 512 && protocol == 1) {
-              delay(25);
+                // Protocol 1 abuses IOCHRDY to pause during flash erase/write. Some chipsets give
+                // up waiting on IOCHRDY and release the ISA bus after a certain amount of time before
+                // the flash operation is finished. This is an extra delay to work around this issue.
+                if (i == 0) { // first block takes longer due to flash erase
+                    delay(250);
+                } else {
+                    delay(25);
+                }
             }
             if (i < (numBlocks - 1) || b < 511) { // If it's not the very last byte
                 if (!wait_for_read(PICO_FIRMWARE_WRITING)) {
@@ -247,7 +256,6 @@ int write_firmware(const char* fw_filename, uint8_t protocol) {
 
     // Wait for card to reboot
     printf("\nProgramming complete. Waiting for the card to reboot...\n");
-    /* sleep(2); */
     if (!wait_for_read(0xDD)) {
         fprintf(stderr, "ERROR: card is not alive after programming firmware\n");
         return 99;
