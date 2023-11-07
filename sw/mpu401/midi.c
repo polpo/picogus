@@ -112,7 +112,7 @@ static struct {
         Bitu used;
         /* Bit8u usedbufs; */
         Bitu delay;
-        bool extra_delay = false;
+        bool extra_delay;
         Bit32u start;
         // bool delay;
         Bit8u status;
