@@ -42,9 +42,8 @@ jobs:
       - name: Create Build Environment
         run: cmake -E make_directory ${{github.workspace}}/build
 
-      - name: Patch CMake (disable LTO)
-        # in-place delete line
-        run: sed -i 's/add_compile_options(-flto=jobserver)//g' ${{github.workspace}}/sw/CMakeLists.txt
+      - name: Patch Pico SDK to allow LTO
+        run: sed -i 's/WRAPPER_FUNC(x) __wrap_/WRAPPER_FUNC(x) __attribute__((used)) __wrap_/' ${{env.PICO_SDK_PATH}}/src/rp2_common/pico_platform/include/pico/platform.h
 
       - name: Build GUS Firmware
         shell: bash
