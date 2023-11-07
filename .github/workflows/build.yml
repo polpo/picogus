@@ -128,4 +128,4 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: pgusinit
-          path: ${{env.OUTPUT_DIR}}
+          path: ${{env.OUTPUT_DIR}}/pgusinit.exe
