@@ -54,7 +54,7 @@ void usage(char *argv0, card_mode_t mode) {
     fprintf(stderr, "    /f fw.uf2 - Program the PicoGUS with the firmware file fw.uf2.\n");
     if (mode != GUS_MODE) {
         fprintf(stderr, "AdLib, MPU-401, Tandy, CMS modes only:\n");
-        fprintf(stderr, "    /p x - set the (hex) base address of the emulated card. Defaults:\n");
+        fprintf(stderr, "    /p x - set the (hex) base port address of the emulated card. Defaults:\n");
         fprintf(stderr, "           AdLib: 388; MPU-401: 330; Tandy: 2C0; CMS: 220\n");
     }
     if (mode == MPU_MODE) {
@@ -323,7 +323,7 @@ int main(int argc, char* argv[]) {
                 return 255;
             }
             e = sscanf(argv[++i], "%hu", &wt_volume);
-            if (e != 1 || dma_interval > 100) {
+            if (e != 1 || wt_volume > 100) {
                 usage(argv[0], mode);
                 return 4;
             }
