@@ -112,6 +112,7 @@ static struct {
         Bitu used;
         /* Bit8u usedbufs; */
         Bitu delay;
+        bool extra_delay = false;
         Bit32u start;
         // bool delay;
         Bit8u status;
@@ -300,6 +301,9 @@ void send_midi_byte() {
                     // PicoGUS: 1.25 * 1000.0 / 3125.0 = 0.4
                     /* midi.sysex.delay = ((midi.sysex.usedbufs*SYSEX_SIZE)+midi.sysex.used) * 0.4f + 2; */
                     midi.sysex.delay = midi.sysex.used * 0.4f + 2;
+                    if (midi.sysex.extra_delay && midi.sysex.delay < 40) {
+                        midi.sysex.delay = 40;
+                    }
                 }
                 midi.sysex.start = time_us_32();  // PicoGUS
             }
@@ -340,6 +344,7 @@ void MIDI_Init(bool delaysysex,bool fakeallnotesoff){
     midi.sysex.status=0x00;
     midi.sysex.delay = 0;
     midi.sysex.start = delaysysex ? time_us_32() : 0; // PicoGUS
+    midi.sysex.extra_delay = delaysysex;
     /* midi.sysex.start = time_us_32(); // PicoGUS */
     midi.cmd_pos=0;
     midi.cmd_len=0;
