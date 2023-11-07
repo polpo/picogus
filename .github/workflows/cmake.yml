@@ -52,7 +52,7 @@ jobs:
           mkdir -p $OUTPUT_DIR
           cmake $GITHUB_WORKSPACE/sw -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DPROJECT_TYPE="GUS" -DUSE_LTO=
           cmake --build . --config $BUILD_TYPE --parallel $(nproc)
-          cp picogus.uf2 $OUTPUT_DIR/picogus-gus.uf2
+          cp picogus.uf2 $OUTPUT_DIR/pg-gus.uf2
 
       - name: Build OPL / AdLib Firmware
         working-directory: ${{github.workspace}}/build
@@ -60,7 +60,7 @@ jobs:
         run: |
           cmake $GITHUB_WORKSPACE/sw -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DPROJECT_TYPE="OPL" -DUSE_LTO=
           cmake --build . --config $BUILD_TYPE --parallel $(nproc)
-          cp picogus.uf2 $OUTPUT_DIR/picogus-opl.uf2
+          cp picogus.uf2 $OUTPUT_DIR/pg-adlib.uf2
 
       - name: Build MPU401 Firmware
         working-directory: ${{github.workspace}}/build
@@ -68,7 +68,7 @@ jobs:
         run: |
           cmake $GITHUB_WORKSPACE/sw -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DPROJECT_TYPE="MPU" -DUSE_LTO=
           cmake --build . --config $BUILD_TYPE --parallel $(nproc)
-          cp picogus.uf2 $OUTPUT_DIR/picogus-mpu401.uf2
+          cp picogus.uf2 $OUTPUT_DIR/pg-mpu.uf2
 
       - name: Build Tandy Firmware
         working-directory: ${{github.workspace}}/build
@@ -76,7 +76,7 @@ jobs:
         run: |
           cmake $GITHUB_WORKSPACE/sw -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DPROJECT_TYPE="TANDY" -DUSE_LTO=
           cmake --build . --config $BUILD_TYPE --parallel $(nproc)
-          cp picogus.uf2 $OUTPUT_DIR/picogus-tandy.uf2
+          cp picogus.uf2 $OUTPUT_DIR/pg-tandy.uf2
 
       - name: Build CMS Firmware
         working-directory: ${{github.workspace}}/build
@@ -84,7 +84,7 @@ jobs:
         run: |
           cmake $GITHUB_WORKSPACE/sw -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DPROJECT_TYPE="CMS" -DUSE_LTO=
           cmake --build . --config $BUILD_TYPE --parallel $(nproc)
-          cp picogus.uf2 $OUTPUT_DIR/picogus-cms.uf2
+          cp picogus.uf2 $OUTPUT_DIR/pg-cms.uf2
 
       - name: Build Joy Firmware
         working-directory: ${{github.workspace}}/build
@@ -92,7 +92,7 @@ jobs:
         run: |
           cmake $GITHUB_WORKSPACE/sw -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DPROJECT_TYPE="JOY" -DUSE_LTO=
           cmake --build . --config $BUILD_TYPE --parallel $(nproc)
-          cp picogus.uf2 $OUTPUT_DIR/picogus-joy.uf2
+          cp picogus.uf2 $OUTPUT_DIR/pg-joy.uf2
 
       - name: Install OpenWatcom 2.0
         uses: open-watcom/setup-watcom@v0
