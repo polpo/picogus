@@ -19,41 +19,70 @@ typedef enum {
     PICO_FIRMWARE_ERROR = 0xFF
 } pico_firmware_status_t;
 
+typedef enum { PICO_BASED = 0, PICOGUS_2 = 1 } board_type_t;
+
+typedef enum {
+    GUS_MODE = 0,
+    ADLIB_MODE = 1,
+    MPU_MODE = 2,
+    TANDY_MODE = 3,
+    CMS_MODE = 4
+} card_mode_t;
 
 void banner(void) {
-    printf("PicoGUSinit v1.3.0\n");
-    printf("(c) 2023 Ian Scott - licensed under the GNU GPL v2\n\n");
+    printf("PicoGUSinit v1.3.0 (c) 2023 Ian Scott - licensed under the GNU GPL v2\n\n");
 }
 
+const char* usage_by_card[] = {
+    "[/a n] [/d n]",            // GUS_MODE
+    "[/p x]",                   // ADLIB_MODE
+    "[/p x] [/v x] [/s] [/n]",  // MPU_MODE
+    "[/p x]",                   // TANDY_MODE
+    "[/p x]",                   // CMS_MODE
+};
 
-void usage(char *argv0) {
+void usage(char *argv0, card_mode_t mode) {
     // Max line length @ 80 chars:
     //              "................................................................................\n"
     fprintf(stderr, "Usage:\n");
-    fprintf(stderr, "  %s [/?] | [/p x] [/a n] [/d n] | [/f fw.uf2]\n", argv0);
-    fprintf(stderr, "\n");
+    fprintf(stderr, "  %s [/?] | [/f fw.uf2]", argv0);
+    if (mode <= CMS_MODE) {
+        fprintf(stderr, " | %s", usage_by_card[mode]);
+    }
+    fprintf(stderr, "\n\n");
     fprintf(stderr, "    /?   - show this message\n");
     fprintf(stderr, "    /f fw.uf2 - Program the PicoGUS with the firmware file fw.uf2.\n");
-    fprintf(stderr, "AdLib, MPU-401, Tandy, CMS modes only:\n");
-    fprintf(stderr, "    /p x - set the (hex) base address of the emulated card. Defaults:\n");
-    fprintf(stderr, "           AdLib: 388; MPU-401: 330; Tandy: 2C0; CMS: 220\n");
-    fprintf(stderr, "GUS mode only:\n");
-    fprintf(stderr, "    /a n - set audio buffer to n samples. Default: 4, Min: 1, Max: 256\n");
-    fprintf(stderr, "           (tweaking this can help programs that hang or have audio glitches)\n");
-    fprintf(stderr, "    /d n - force DMA interval to n æs. Default: 0, Min: 0, Max: 255\n");
-    fprintf(stderr, "           Specifying 0 restores the GUS default behavior.\n");
-    fprintf(stderr, "           (if games with streaming audio like Doom stutter, increase this)\n");
-    fprintf(stderr, "The ULTRASND environment variable must be set in the following format:\n");
-    fprintf(stderr, "\tset ULTRASND=xxx,y,n,z,n\n");
-    fprintf(stderr, "Where xxx = port, y = DMA, z = IRQ. n is ignored.\n");
-    fprintf(stderr, "Port is set on the card according to ULTRASND; DMA and IRQ configued via jumper.");
-    //              "................................................................................\n"
+    if (mode != GUS_MODE) {
+        fprintf(stderr, "AdLib, MPU-401, Tandy, CMS modes only:\n");
+        fprintf(stderr, "    /p x - set the (hex) base address of the emulated card. Defaults:\n");
+        fprintf(stderr, "           AdLib: 388; MPU-401: 330; Tandy: 2C0; CMS: 220\n");
+    }
+    if (mode == MPU_MODE) {
+        fprintf(stderr, "MPU-401 mode only:\n");
+        fprintf(stderr, "    /v x - set the volume of the wavetable header. Scale 0-100, Default: 100\n");
+        fprintf(stderr, "           (for PicoGUS v2.0 boards only)\n");
+        fprintf(stderr, "    /s   - delay SYSEX (for rev.0 Roland MT-32)\n");
+        fprintf(stderr, "    /n   - fake all notes off (for Roland RA-50)\n");
+    }
+    if (mode == GUS_MODE) {
+        fprintf(stderr, "GUS mode only:\n");
+        fprintf(stderr, "    /a n - set audio buffer to n samples. Default: 4, Min: 1, Max: 256\n");
+        fprintf(stderr, "           (tweaking this can help programs that hang or have audio glitches)\n");
+        fprintf(stderr, "    /d n - force DMA interval to n us. Default: 0, Min: 0, Max: 255\n");
+        fprintf(stderr, "           Specifying 0 restores the GUS default behavior.\n");
+        fprintf(stderr, "           (if games with streaming audio like Doom stutter, increase this)\n");
+        fprintf(stderr, "The ULTRASND environment variable must be set in the following format:\n");
+        fprintf(stderr, "\tset ULTRASND=xxx,y,n,z,n\n");
+        fprintf(stderr, "Where xxx = port, y = DMA, z = IRQ. n is ignored.\n");
+        fprintf(stderr, "Port is set on the card according to ULTRASND; DMA and IRQ configued via jumper.");
+        //              "................................................................................\n"
+    }
 }
 
 
 void err_ultrasnd(char *argv0) {
     fprintf(stderr, "ERROR: no ULTRASND variable set or is malformed!\n");
-    usage(argv0);
+    usage(argv0, GUS_MODE);
 }
 
 
@@ -136,7 +165,7 @@ bool wait_for_read(uint8_t value) {
     return false;
 }
 
-int write_firmware(const char* fw_filename) {
+int write_firmware(const char* fw_filename, uint8_t protocol) {
     union {
         uint8_t buf[512];
         struct UF2_Block {
@@ -194,12 +223,15 @@ int write_firmware(const char* fw_filename) {
         for (uint16_t b = 0; b < 512; ++b) {
             // Write firmware byte
             outp(DATA_PORT_HIGH, uf2_buf.buf[b]);
+            if (b == 512 && protocol == 1) {
+              delay(25);
+            }
             if (i < (numBlocks - 1) || b < 511) { // If it's not the very last byte
                 if (!wait_for_read(PICO_FIRMWARE_WRITING)) {
                     fprintf(stderr, "\nERROR: Card is not in firmware writing mode?\n");
                     return 15;
                 }
-            } else {
+            } else if (protocol == 2) {
                 if (!wait_for_read(PICO_FIRMWARE_DONE)) {
                     fprintf(stderr, "\nERROR: Card has written last firmware byte but is not done\n");
                     return 15;
@@ -230,58 +262,11 @@ int main(int argc, char* argv[]) {
     unsigned short buffer_size = 0;
     unsigned short dma_interval = 0;
     uint16_t port_override = 0;
+    uint8_t wt_volume = 100;
     char fw_filename[256] = {0};
+    card_mode_t mode;
 
     banner();
-    int i = 1;
-    while (i < argc) {
-        if (stricmp(argv[i], "/?") == 0) {
-            usage(argv[0]);
-            return 0;
-        } else if (stricmp(argv[i], "/a") == 0) {
-            if (i + 1 >= argc) {
-                usage(argv[0]);
-                return 255;
-            }
-            e = sscanf(argv[++i], "%hu", &buffer_size);
-            if (e != 1 || buffer_size < 1 || buffer_size > 256) {
-                usage(argv[0]);
-                return 3;
-            }
-        } else if (stricmp(argv[i], "/d") == 0) {
-            if (i + 1 >= argc) {
-                usage(argv[0]);
-                return 255;
-            }
-            e = sscanf(argv[++i], "%hu", &dma_interval);
-            if (e != 1 || dma_interval > 255) {
-                usage(argv[0]);
-                return 4;
-            }
-        } else if (stricmp(argv[i], "/p") == 0) {
-            if (i + 1 >= argc) {
-                usage(argv[0]);
-                return 255;
-            }
-            e = sscanf(argv[++i], "%hx", &port_override);
-            if (e != 1 || port_override > 0x3ffu) {
-                usage(argv[0]);
-                return 4;
-            }
-        } else if (stricmp(argv[i], "/f") == 0) {
-            if (i + 1 >= argc) {
-                usage(argv[0]);
-                return 255;
-            }
-            e = sscanf(argv[++i], "%255s", fw_filename);
-            if (e != 1) {
-                usage(argv[0]);
-                return 5;
-            }
-        }
-        ++i;
-    }
-
     // Get magic value from port on PicoGUS that is not on real GUS
     outp(CONTROL_PORT, 0xCC); // Knock on the door...
     outp(CONTROL_PORT, 0x00); // Select magic string register
@@ -291,24 +276,97 @@ int main(int argc, char* argv[]) {
     };
     printf("PicoGUS detected: ");
     print_firmware_string();
-    printf("\n");
+
+    outp(CONTROL_PORT, 0x03); // Select mode register
+    mode = inp(DATA_PORT_HIGH);
+
+    int i = 1;
+    while (i < argc) {
+        if (stricmp(argv[i], "/?") == 0) {
+            usage(argv[0], mode);
+            return 0;
+        } else if (stricmp(argv[i], "/a") == 0) {
+            if (i + 1 >= argc) {
+                usage(argv[0], mode);
+                return 255;
+            }
+            e = sscanf(argv[++i], "%hu", &buffer_size);
+            if (e != 1 || buffer_size < 1 || buffer_size > 256) {
+                usage(argv[0], mode);
+                return 3;
+            }
+        } else if (stricmp(argv[i], "/d") == 0) {
+            if (i + 1 >= argc) {
+                usage(argv[0], mode);
+                return 255;
+            }
+            e = sscanf(argv[++i], "%hu", &dma_interval);
+            if (e != 1 || dma_interval > 255) {
+                usage(argv[0], mode);
+                return 4;
+            }
+        } else if (stricmp(argv[i], "/p") == 0) {
+            if (i + 1 >= argc) {
+                usage(argv[0], mode);
+                return 255;
+            }
+            e = sscanf(argv[++i], "%hx", &port_override);
+            if (e != 1 || port_override > 0x3ffu) {
+                usage(argv[0], mode);
+                return 4;
+            }
+        } else if (stricmp(argv[i], "/v") == 0) {
+            if (i + 1 >= argc) {
+                usage(argv[0], mode);
+                return 255;
+            }
+            e = sscanf(argv[++i], "%hu", &wt_volume);
+            if (e != 1 || dma_interval > 100) {
+                usage(argv[0], mode);
+                return 4;
+            }
+        } else if (stricmp(argv[i], "/f") == 0) {
+            if (i + 1 >= argc) {
+                usage(argv[0], mode);
+                return 255;
+            }
+            e = sscanf(argv[++i], "%255s", fw_filename);
+            if (e != 1) {
+                usage(argv[0], mode);
+                return 5;
+            }
+        }
+        ++i;
+    }
 
     outp(CONTROL_PORT, 0x01); // Select protocol version register
     uint8_t protocol_got = inp(DATA_PORT_HIGH);
     if (PICOGUS_PROTOCOL_VER != protocol_got) {
-        err_protocol(PICOGUS_PROTOCOL_VER, protocol_got);
-        return 97;
+        if (fw_filename[0] && protocol_got == 1) {
+          printf("Older fw protocol version 1 detected, upgrading firmware in compatibility mode\n");
+        } else {
+          err_protocol(PICOGUS_PROTOCOL_VER, protocol_got);
+          return 97;
+        }
     }
 
     if (fw_filename[0]) {
-        return write_firmware(fw_filename);
+        return write_firmware(fw_filename, protocol_got);
     }
 
-    outp(CONTROL_PORT, 0x03); // Select mode register
-    uint8_t mode = inp(DATA_PORT_HIGH);
+    outp(CONTROL_PORT, 0xf0); // Select hardware type register
+    board_type_t board_type = inp(DATA_PORT_HIGH);
+    if (board_type == PICO_BASED) {
+        printf("Hardware: Pico-based board (PicoGUS v1.x, PicoGUS Femto)\n");
+    } else if (board_type == PICOGUS_2) {
+        printf("Hardware: PicoGUS v2.0\n");
+    } else {
+        printf("Hardware: Unknown\n");
+    }
+    printf("\n");
 
     uint16_t port;
-    if (mode != 0) {
+    if (mode != GUS_MODE) {
         if (port_override) {
             outp(CONTROL_PORT, 0x04); // Select port register
             outpw(DATA_PORT_LOW, port_override); // Write port
@@ -319,7 +377,7 @@ int main(int argc, char* argv[]) {
     }
 
     switch(mode) {
-    case 0:
+    case GUS_MODE:
         init_gus(argv[0]);
         if (!buffer_size) {
             buffer_size = 4;
@@ -333,22 +391,25 @@ int main(int argc, char* argv[]) {
         if (dma_interval == 0) {
             printf("DMA interval set to default behavior\n");
         } else {
-            printf("DMA interval forced to %u æs\n", dma_interval);
+            printf("DMA interval forced to %u us\n", dma_interval);
         }
         outp(CONTROL_PORT, 0x04); // Select port register
         port = inpw(DATA_PORT_LOW); // Get port
         printf("Running in GUS mode on port %x\n", port);
         break;
-    case 1:
+    case ADLIB_MODE:
         printf("Running in AdLib/OPL2 mode on port %x\n", port);
         break;
-    case 2:
+    case MPU_MODE:
+        outp(CONTROL_PORT, 0x20); // Select wavetable volume register
+        outp(DATA_PORT_HIGH, wt_volume); // Write port
+        printf("Wavetable volume set to %u\n", wt_volume);
         printf("Running in MPU-401 mode on port %x\n", port);
         break;
-    case 3:
+    case TANDY_MODE:
         printf("Running in Tandy 3-voice mode on port %x\n", port);
         break;
-    case 4:
+    case CMS_MODE:
         printf("Running in CMS/Game Blaster mode on port %x\n", port);
         break;
     default:
