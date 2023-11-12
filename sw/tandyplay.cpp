@@ -23,6 +23,8 @@
 #include "cmd_buffers.h"
 extern tandy_buffer_t tandy_buffer;
 
+#include "tusb.h"
+
 #include <string.h>
 
 #if PICO_ON_DEVICE
@@ -69,6 +71,9 @@ struct audio_buffer_pool *init_audio() {
 
 void play_tandy() {
     puts("starting core 1 tandy");
+    // Init TinyUSB for joystick support
+    tuh_init(BOARD_TUH_RHPORT);
+
     tandysound_t tandysound;
     struct audio_buffer_pool *ap = init_audio();
 #ifdef SQUARE_FLOAT_OUTPUT
@@ -102,5 +107,7 @@ void play_tandy() {
         buffer->sample_count = SAMPLES_PER_BUFFER;
 
         give_audio_buffer(ap, buffer);
+        // Service TinyUSB events
+        tuh_task();
     }
 }

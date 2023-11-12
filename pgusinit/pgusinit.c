@@ -30,7 +30,7 @@ typedef enum {
 } card_mode_t;
 
 void banner(void) {
-    printf("PicoGUSinit v1.3.0 (c) 2023 Ian Scott - licensed under the GNU GPL v2\n\n");
+    printf("PicoGUSinit v1.3.0-beta0 (c) 2023 Ian Scott - licensed under the GNU GPL v2\n\n");
 }
 
 const char* usage_by_card[] = {
@@ -47,11 +47,12 @@ void usage(char *argv0, card_mode_t mode) {
     fprintf(stderr, "Usage:\n");
     fprintf(stderr, "  %s [/?] | [/f fw.uf2]", argv0);
     if (mode <= CMS_MODE) {
-        fprintf(stderr, " | %s", usage_by_card[mode]);
+        fprintf(stderr, " | [/j] %s", usage_by_card[mode]);
     }
     fprintf(stderr, "\n\n");
-    fprintf(stderr, "    /?   - show this message\n");
-    fprintf(stderr, "    /f fw.uf2 - Program the PicoGUS with the firmware file fw.uf2.\n");
+    fprintf(stderr, "    /?        - show this message\n");
+    fprintf(stderr, "    /f fw.uf2 - program the PicoGUS with the firmware file fw.uf2\n");
+    fprintf(stderr, "    /j        - enable USB joystick support\n");
     if (mode != GUS_MODE) {
         fprintf(stderr, "AdLib, MPU-401, Tandy, CMS modes only:\n");
         fprintf(stderr, "    /p x - set the (hex) base port address of the emulated card. Defaults:\n");
@@ -209,6 +210,8 @@ int write_firmware(const char* fw_filename, uint8_t protocol) {
             // Put card into programming mode
             outp(CONTROL_PORT, 0xCC); // Knock on the door...
             outp(CONTROL_PORT, 0xFF); // Select firmware programming mode
+            // Wait a bit for 2nd core on Pico to restart
+            delay(100);
             if (inp(DATA_PORT_HIGH) != PICO_FIRMWARE_IDLE) {
                 fprintf(stderr, "ERROR: Card is not in programming mode?\n");
                 return 13;
@@ -275,6 +278,7 @@ int main(int argc, char* argv[]) {
     card_mode_t mode;
     uint8_t mpu_delaysysex = 0;
     uint8_t mpu_fakeallnotesoff = 0;
+    uint8_t enable_joystick = 0;
 
     banner();
     // Get magic value from port on PicoGUS that is not on real GUS
@@ -295,6 +299,8 @@ int main(int argc, char* argv[]) {
         if (stricmp(argv[i], "/?") == 0) {
             usage(argv[0], mode);
             return 0;
+        } else if (stricmp(argv[i], "/j") == 0) {
+            enable_joystick = 1;
         } else if (stricmp(argv[i], "/a") == 0) {
             if (i + 1 >= argc) {
                 usage(argv[0], mode);
@@ -389,6 +395,10 @@ int main(int argc, char* argv[]) {
         outp(CONTROL_PORT, 0x04); // Select port register
         port = inpw(DATA_PORT_LOW); // Get port
     }
+
+    outp(CONTROL_PORT, 0x0f); // Select joystick enable register
+    outp(DATA_PORT_HIGH, enable_joystick);
+    printf("USB joystick support %s\n", enable_joystick ? "enabled" : "disabled");
 
     switch(mode) {
     case GUS_MODE:

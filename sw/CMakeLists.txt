@@ -25,6 +25,10 @@ set(CMAKE_BUILD_TYPE "Release")
 set(PICO_COPY_TO_RAM 1)
 #set(SKIP_PICO_MALLOC 1)
 
+# Tell the Pico SDK to use our local tinyusb instead of the one included in the SDK
+# This is needed to support tusb_xinput
+set(PICO_TINYUSB_PATH ${CMAKE_CURRENT_LIST_DIR}/tinyusb)
+
 if(NOT PROJECT_TYPE)
     set(PROJECT_TYPE "GUS")
     message("PROJECT_TYPE not set, defaulting to ${PROJECT_TYPE}")
@@ -33,7 +37,7 @@ endif()
 # Initialise the Raspberry Pi Pico SDK
 pico_sdk_init()
 
-if(DEFINED USE_LTO)
+if(USE_LTO)
     # Pico SDK must be patched to allow for LTO so it is not enabled by default.
     # To patch to Pico SDK, run:
     # sed -i 's/WRAPPER_FUNC(x) __wrap_/WRAPPER_FUNC(x) __attribute__((used)) __wrap_/' "$PICO_SDK_PATH"/src/rp2_common/pico_platform/include/pico/platform.h
@@ -103,11 +107,18 @@ if(PROJECT_TYPE STREQUAL "GUS")
     endif()
     pico_enable_stdio_usb(picogus 0)
     pico_enable_stdio_semihosting(picogus 0)
+    # Joystick stuff
+    target_sources(picogus PRIVATE joy_hid/joy_hid.c)
+    target_link_libraries(picogus tinyusb_host tinyusb_board hardware_pwm)
+    target_include_directories(picogus PUBLIC ${CMAKE_CURRENT_LIST_DIR}/joy_hid)
+    target_compile_definitions(picogus PRIVATE USB_JOYSTICK=1)
+
 endif()
 
 if(PROJECT_TYPE STREQUAL "OPL")
     pico_set_program_name(picogus "picogus-adlib")
     target_sources(picogus PRIVATE adlibplay.cpp)
+
     target_link_libraries(
         picogus
         opl
@@ -167,7 +178,7 @@ if(PROJECT_TYPE STREQUAL "CMS")
         pico_pic.c
         square/square.cpp
     )
-    target_sources(picogus PRIVATE cmsplay.cpp)
+
     pico_enable_stdio_uart(picogus 1)
     pico_enable_stdio_usb(picogus 0)
     pico_enable_stdio_semihosting(picogus 0)
@@ -175,25 +186,28 @@ endif()
 
 if(PROJECT_TYPE STREQUAL "JOY")
     pico_set_program_name(picogus "picogus-joy")
+    set(USB_JOYSTICK=1)
     target_compile_definitions(picogus PRIVATE
-        USB_JOYSTICK=1
+        USB_JOYSTICK_ONLY=1
     )
-
+ 
     target_sources(picogus PRIVATE
-        joy_hid/joy_hid.c
         usbplay.cpp
     )
-    pico_enable_stdio_uart(picogus 1)
-    pico_enable_stdio_usb(picogus 0)
-    pico_enable_stdio_semihosting(picogus 0)
+     pico_enable_stdio_uart(picogus 1)
+     pico_enable_stdio_usb(picogus 0)
+     pico_enable_stdio_semihosting(picogus 0)
+endif()
 
-    # Make sure TinyUSB can find tusb_config.h
-    target_include_directories(picogus PUBLIC
-            ${CMAKE_CURRENT_LIST_DIR}/joy_hid)
-
-    # In addition to pico_stdlib required for common PicoSDK functionality, add dependency on tinyusb_host
-    # for TinyUSB device support and tinyusb_board for the additional board support library used by the example
-    target_link_libraries(picogus tinyusb_host tinyusb_board hardware_pwm)
+if(USB_JOYSTICK)
+    # Joystick stuff
+    target_sources(picogus PRIVATE joy_hid/joy_hid.c)
+    target_link_libraries(picogus hardware_pwm)
+    target_include_directories(picogus PUBLIC ${CMAKE_CURRENT_LIST_DIR}/joy_hid)
+    target_link_libraries(picogus tinyusb_host)
+    add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/tusb_xinput)
+    target_link_libraries(picogus xinput_host_app_driver)
+    target_compile_definitions(picogus PRIVATE USB_JOYSTICK=1)
 endif()
 
 target_sources(picogus PRIVATE M62429/M62429.cpp)

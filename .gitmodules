@@ -1,3 +1,9 @@
 [submodule "sw/rp2040-psram"]
 	path = sw/rp2040-psram
 	url = https://github.com/polpo/rp2040-psram.git
+[submodule "sw/tinyusb"]
+	path = sw/tinyusb
+	url = https://github.com/hathach/tinyusb
+[submodule "sw/tusb_xinput"]
+	path = sw/tusb_xinput
+	url = https://github.com/RobertDaleSmith/tusb_xinput

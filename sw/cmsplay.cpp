@@ -19,6 +19,8 @@
 
 #include "pico/audio_i2s.h"
 
+#include "tusb.h"
+
 #ifdef MAME_CMS
 #include "saa1099/saa1099.h"
 saa1099_device *saa0, *saa1;
@@ -72,6 +74,9 @@ struct audio_buffer_pool *init_audio() {
 
 void play_cms() {
     puts("starting core 1 CMS");
+
+    // Init TinyUSB for joystick support
+    tuh_init(BOARD_TUH_RHPORT);
 #ifdef MAME_CMS
     puts("Creating SAA1099 1");
     saa0 = new saa1099_device(7159090);
@@ -155,5 +160,7 @@ void play_cms() {
         buffer->sample_count = buffer->max_sample_count;
 
         give_audio_buffer(ap, buffer);
+        // Service TinyUSB events
+        tuh_task();
     }
 }

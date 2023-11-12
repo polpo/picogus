@@ -33,6 +33,9 @@
 //--------------------------------------------------------------------+
 // Board Specific Configuration
 //--------------------------------------------------------------------+
+#define CFG_TUSB_MCU OPT_MCU_RP2040
+
+#define CFG_TUH_XINPUT 1
 
 #if CFG_TUSB_MCU == OPT_MCU_RP2040
 // change to 1 if using pico-pio-usb as host controller for raspberry rp2040

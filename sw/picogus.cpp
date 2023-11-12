@@ -85,8 +85,10 @@ cms_buffer_t cms_buffer = { {0}, 0, 0 };
 #endif
 
 #ifdef USB_JOYSTICK
-static uint16_t basePort = 0x201u;
+static uint16_t joyPort = 0xffffu;
+#ifdef USB_JOYSTICK_ONLY
 void play_usb(void);
+#endif
 #include "joy_hid/joy.h"
 extern "C" joystate_struct_t joystate_struct;
 uint8_t joystate_bin;
@@ -127,6 +129,8 @@ __force_inline void select_picogus(uint8_t value) {
     case 0x04: // Base port
         basePort_tmp = 0;
         break;
+    case 0x0f: // enable joystick
+        break;
 #ifdef SOUND_GUS
     case 0x10: // Audio buffer size
     case 0x11: // DMA interval
@@ -158,12 +162,16 @@ __force_inline void write_picogus_low(uint8_t value) {
 __force_inline void write_picogus_high(uint8_t value) {
     switch (sel_reg) {
     case 0x04: // Base port
+#if defined(SOUND_GUS) || defined(SOUND_OPL) || defined(SOUND_MPU) || defined(SOUND_TANDY) || defined(SOUND_CMS)
         basePort = (value << 8) | basePort_tmp;
+#endif
 #ifdef SOUND_GUS
         gus_port_test = basePort >> 4 | 0x10;
         // GUS_SetPort(basePort);
 #endif
         break;
+    case 0x0f: // enable joystick
+        joyPort = value ? 0x201u : 0xffff;
 #ifdef SOUND_GUS
     case 0x10: // Audio buffer size
         // Value is sent by pgusinit as the size - 1, so we need to add 1 back to it
@@ -241,6 +249,8 @@ __force_inline uint8_t read_picogus_high(void) {
         return 0xff;
 #endif
         break;
+    case 0x0f: // enable joystick
+        return joyPort == 0x201u;
 #ifdef SOUND_MPU
     case 0x20: // Wavetable mixer volume
         if (BOARD_TYPE == PICOGUS_2) {
@@ -372,14 +382,22 @@ __force_inline void handle_iow(void) {
     }
 #endif // SOUND_CMS
 #ifdef USB_JOYSTICK
-    if (port == basePort) {
+    if (port == joyPort) {
         pio_sm_put(pio0, iow_sm, IO_END);
         // Set times in # of cycles (affected by clkdiv) for each PWM slice to count up and wrap back to 0
         // TODO better calibrate this
-        pwm_set_wrap(0, 2000 + (joystate_struct.joy1_x << 6));
-        pwm_set_wrap(1, 2000 + (joystate_struct.joy1_y << 6));
-        pwm_set_wrap(2, 2000 + (joystate_struct.joy2_x << 6));
-        pwm_set_wrap(3, 2000 + (joystate_struct.joy2_y << 6));
+        // GUS w/ gravis gamestick -
+        //   sbdiag: 322/267 16/18 572/520 
+        //   gravutil 34/29 2/2 61/56
+        //   checkit 556/451 23/25 984/902
+        // Noname w/ gravis gamestick
+        //   sbdiag: 256/214 7/6 495/435
+        //   gravutil 28/23 1/1 53/47
+        //   checkit 355/284 6/5 675/585
+        pwm_set_wrap(0, 2000 + ((uint16_t)joystate_struct.joy1_x << 6));
+        pwm_set_wrap(1, 2000 + ((uint16_t)joystate_struct.joy1_y << 6));
+        pwm_set_wrap(2, 2000 + ((uint16_t)joystate_struct.joy2_x << 6));
+        pwm_set_wrap(3, 2000 + ((uint16_t)joystate_struct.joy2_y << 6));
         // Convince PWM to run as one-shot by immediately setting wrap to 0. This will take effect once the wrap
         // times set above hit, so after wrapping the counter value will stay at 0 instead of counting again
         pwm_set_wrap(0, 0);
@@ -470,7 +488,7 @@ __force_inline void handle_ior(void) {
     }
 #endif // SOUND_CMS
 #ifdef USB_JOYSTICK
-    if (port == basePort) {
+    if (port == joyPort) {
         pio_sm_put(pio0, ior_sm, IO_WAIT);
         uint8_t value =
             // Proportional bits: 1 if counter is still counting, 0 otherwise
@@ -694,7 +712,9 @@ int main()
     pwm_init(1, &pwm_c, true);
     pwm_init(2, &pwm_c, true);
     pwm_init(3, &pwm_c, true);
+#ifdef USB_JOYSTICK_ONLY
     multicore_launch_core1(&play_usb);
+#endif // USB_JOYSTICK_ONLY
 #endif // USB_JOYSTICK
 
     for(int i=AD0_PIN; i<(AD0_PIN + 10); ++i) {

@@ -1,6 +1,5 @@
 #include <stdio.h>
 
-#include "bsp/board.h"
 #include "tusb.h"
 
 // #include <string.h>

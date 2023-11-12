@@ -25,6 +25,7 @@
 
 /* #include "bsp/board_api.h" */
 #include "tusb.h"
+#include "xinput_host.h"
 
 #include "joy.h"
 joystate_struct_t joystate_struct;
@@ -107,44 +108,29 @@ typedef struct TU_ATTR_PACKED
 
 } sony_ds4_report_t;
 
-typedef struct TU_ATTR_PACKED {
-  // First 16 bits set what data is pertinent in this structure (1 = set; 0 = not set)
-  uint8_t set_rumble : 1;
-  uint8_t set_led : 1;
-  uint8_t set_led_blink : 1;
-  uint8_t set_ext_write : 1;
-  uint8_t set_left_volume : 1;
-  uint8_t set_right_volume : 1;
-  uint8_t set_mic_volume : 1;
-  uint8_t set_speaker_volume : 1;
-  uint8_t set_flags2;
+typedef struct TU_ATTR_PACKED
+{
+  uint8_t x_axis, y_axis, z_axis, rz_axis; // joystick
 
-  uint8_t reserved;
+  struct {
+    uint8_t dpad     : 4; // (hat format, 0x08 is released, 0=N, 1=NE, 2=E, 3=SE, 4=S, 5=SW, 6=W, 7=NW)
+    uint8_t a   : 1; // west
+    uint8_t b    : 1; // south
+    uint8_t x   : 1; // east
+    uint8_t y : 1; // north
+  };
 
-  uint8_t motor_right;
-  uint8_t motor_left;
-
-  uint8_t lightbar_red;
-  uint8_t lightbar_green;
-  uint8_t lightbar_blue;
-  uint8_t lightbar_blink_on;
-  uint8_t lightbar_blink_off;
-
-  uint8_t ext_data[8];
-
-  uint8_t volume_left;
-  uint8_t volume_right;
-  uint8_t volume_mic;
-  uint8_t volume_speaker;
-
-  uint8_t other[9];
-} sony_ds4_output_report_t;
-
-static bool ds4_mounted = false;
-static uint8_t ds4_dev_addr = 0;
-static uint8_t ds4_instance = 0;
-static uint8_t motor_left = 0;
-static uint8_t motor_right = 0;
+  struct {
+    uint8_t l1     : 1;
+    uint8_t r1     : 1;
+    uint8_t l2     : 1;
+    uint8_t r2     : 1;
+    uint8_t start  : 1;
+    uint8_t back : 1;
+    uint8_t l3     : 1;
+    uint8_t r3     : 1;
+  };
+} generic_report_t;
 
 // check if device is Sony DualShock 4
 static inline bool is_sony_ds4(uint8_t dev_addr)
@@ -159,31 +145,34 @@ static inline bool is_sony_ds4(uint8_t dev_addr)
          );
 }
 
-//--------------------------------------------------------------------+
-// MACRO TYPEDEF CONSTANT ENUM DECLARATION
-//--------------------------------------------------------------------+
-
-void hid_app_task(void)
+static inline bool is_generic(uint8_t dev_addr)
 {
-    /*
-  if (ds4_mounted)
-  {
-    const uint32_t interval_ms = 200;
-    static uint32_t start_ms = 0;
+  uint16_t vid, pid;
+  tuh_vid_pid_get(dev_addr, &vid, &pid);
 
-    uint32_t current_time_ms = board_millis();
-    if ( current_time_ms - start_ms >= interval_ms)
-    {
-      start_ms = current_time_ms;
+  return ( (vid == 0x2e24 && pid == 0x16fa ) // Hyperkin thing
+         );
+}
 
-      sony_ds4_output_report_t output_report = {0};
-      output_report.set_rumble = 1;
-      output_report.motor_left = motor_left;
-      output_report.motor_right = motor_right;
-      tuh_hid_send_report(ds4_dev_addr, ds4_instance, 5, &output_report, sizeof(output_report));
-    }
-  }
-  */
+
+static inline bool is_xbox(uint8_t dev_addr)
+{
+  uint16_t vid, pid;
+  tuh_vid_pid_get(dev_addr, &vid, &pid);
+
+  return ( (vid == 0x2563 && pid == 0x0575 )    // Clone Xbox 360 controller
+           || (vid == 0x045E && (pid == 0x028E || pid == 0x028f || pid == 0x0291))  // Official Xbox 360 wired controller
+           || (vid == 0x046d && (pid == 0xc21d || pid == 0xc21e || pid == 0xc21f || pid == 0xc216))  // Official Xbox 360 wired controller
+         );
+}
+
+static inline bool is_ps_classic(uint8_t dev_addr)
+{
+  uint16_t vid, pid;
+  tuh_vid_pid_get(dev_addr, &vid, &pid);
+
+  return ( (vid == 0x054c && pid == 0x0cda)     // PS Classic USB controller
+         );
 }
 
 //--------------------------------------------------------------------+
@@ -206,18 +195,11 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const* desc_re
   printf("VID = %04x, PID = %04x\r\n", vid, pid);
 
   // Sony DualShock 4 [CUH-ZCT2x]
-  if ( is_sony_ds4(dev_addr) )
+  if ( is_sony_ds4(dev_addr) | is_xbox(dev_addr) | is_generic(dev_addr) )
   {
-    if (!ds4_mounted)
-    {
-      ds4_dev_addr = dev_addr;
-      ds4_instance = instance;
-      motor_left = 0;
-      motor_right = 0;
-      ds4_mounted = true;
-    }
     // request to receive report
     // tuh_hid_report_received_cb() will be invoked when report is available
+    printf("requesting report from it\n");
     if ( !tuh_hid_receive_report(dev_addr, instance) )
     {
       printf("Error: cannot request to receive report\r\n");
@@ -229,10 +211,6 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const* desc_re
 void tuh_hid_umount_cb(uint8_t dev_addr, uint8_t instance)
 {
   printf("HID device address = %d, instance = %d is unmounted\r\n", dev_addr, instance);
-  if (ds4_mounted && ds4_dev_addr == dev_addr && ds4_instance == instance)
-  {
-    ds4_mounted = false;
-  }
 }
 
 // check if different than 2
@@ -256,25 +234,9 @@ bool diff_report(sony_ds4_report_t const* rpt1, sony_ds4_report_t const* rpt2)
   return result;
 }
 
-void process_sony_ds4(uint8_t const* report, uint16_t len)
-{
-  const char* dpad_str[] = { "N", "NE", "E", "SE", "S", "SW", "W", "NW", "none" };
-
-  // previous report used to compare for changes
-  static sony_ds4_report_t prev_report = { 0 };
-
-  uint8_t const report_id = report[0];
-  report++;
-  len--;
-
-  // all buttons state is stored in ID 1
-  if (report_id == 1)
-  {
-    sony_ds4_report_t ds4_report;
-    memcpy(&ds4_report, report, sizeof(ds4_report));
-
-    joystate_struct.button_mask = (!ds4_report.cross << 4) | (!ds4_report.circle << 5) | (!ds4_report.square << 6) | (!ds4_report.triangle << 7);
-    switch (ds4_report.dpad) {
+void update_joystate(uint8_t dpad, uint8_t x, uint8_t y, uint8_t z, uint8_t rz, uint8_t b1, uint8_t b2, uint8_t b3, uint8_t b4) {
+    joystate_struct.button_mask = (!b1 << 4) | (!b2 << 5) | (!b3 << 6) | (!b4 << 7);
+    switch (dpad) {
     case 0: // N
         joystate_struct.joy1_x = 127;
         joystate_struct.joy1_y = 0;
@@ -308,61 +270,109 @@ void process_sony_ds4(uint8_t const* report, uint16_t len)
         joystate_struct.joy1_y = 0;
         break;
     case 8: // None - use analog stick instead
-        joystate_struct.joy1_x = ds4_report.x;
-        joystate_struct.joy1_y = ds4_report.y;
+        joystate_struct.joy1_x = x;
+        joystate_struct.joy1_y = y;
         break;
     }
-    joystate_struct.joy2_x = ds4_report.z;
-    joystate_struct.joy2_y = ds4_report.rz;
+    joystate_struct.joy2_x = z;
+    joystate_struct.joy2_y = rz;
+}
 
+inline void process_generic(uint8_t const* report, uint16_t len)
+{
+  uint8_t const report_id = report[0];
+  report++;
+  len--;
+
+  // all buttons state is stored in ID 1
+  if (report_id == 1)
+  {
+    generic_report_t generic_report;
+    memcpy(&generic_report, report, sizeof(generic_report));
+
+    update_joystate(generic_report.dpad, generic_report.x_axis, generic_report.y_axis, generic_report.z_axis, generic_report.rz_axis,
+                    generic_report.a, generic_report.b, generic_report.x, generic_report.y);
     return;
-    
-    // counter is +1, assign to make it easier to compare 2 report
-    prev_report.counter = ds4_report.counter;
 
-    // only print if changes since it is polled ~ 5ms
-    // Since count+1 after each report and  x, y, z, rz fluctuate within 1 or 2
-    // We need more than memcmp to check if report is different enough
-    if ( diff_report(&prev_report, &ds4_report) )
-    {
-      printf("(x, y, z, rz) = (%u, %u, %u, %u)\r\n", ds4_report.x, ds4_report.y, ds4_report.z, ds4_report.rz);
-      printf("DPad = %s ", dpad_str[ds4_report.dpad]);
+    const char* dpad_str[] = { "N", "NE", "E", "SE", "S", "SW", "W", "NW", "none" };
 
-      if (ds4_report.square   ) printf("Square ");
-      if (ds4_report.cross    ) printf("Cross ");
-      if (ds4_report.circle   ) printf("Circle ");
-      if (ds4_report.triangle ) printf("Triangle ");
+    printf("(x, y, z, rz) = (%u, %u, %u, %u)\r\n", generic_report.x_axis, generic_report.y_axis, generic_report.z_axis, generic_report.rz_axis);
+    printf("DPad = %s ", dpad_str[generic_report.dpad]);
 
-      if (ds4_report.l1       ) printf("L1 ");
-      if (ds4_report.r1       ) printf("R1 ");
-      if (ds4_report.l2       ) printf("L2 ");
-      if (ds4_report.r2       ) printf("R2 ");
+    if (generic_report.a   ) printf("A ");
+    if (generic_report.b    ) printf("B ");
+    if (generic_report.x   ) printf("X ");
+    if (generic_report.y ) printf("Y ");
 
-      if (ds4_report.share    ) printf("Share ");
-      if (ds4_report.option   ) printf("Option ");
-      if (ds4_report.l3       ) printf("L3 ");
-      if (ds4_report.r3       ) printf("R3 ");
+    if (generic_report.l1       ) printf("L1 ");
+    if (generic_report.r1       ) printf("R1 ");
+    if (generic_report.l2       ) printf("L2 ");
+    if (generic_report.r2       ) printf("R2 ");
 
-      if (ds4_report.ps       ) printf("PS ");
-      if (ds4_report.tpad     ) printf("TPad ");
+    if (generic_report.start    ) printf("Share ");
+    if (generic_report.back   ) printf("Option ");
+    if (generic_report.l3       ) printf("L3 ");
+    if (generic_report.r3       ) printf("R3 ");
 
-      printf("\r\n");
-    }
+    printf("\r\n");
+  }
+}
 
-    // The left and right triggers control the intensity of the left and right rumble motors
-    motor_left = ds4_report.l2_trigger;
-    motor_right = ds4_report.r2_trigger;
+inline void process_sony_ds4(uint8_t const* report, uint16_t len)
+{
+  uint8_t const report_id = report[0];
+  report++;
+  len--;
 
-    prev_report = ds4_report;
+  // all buttons state is stored in ID 1
+  if (report_id == 1)
+  {
+    sony_ds4_report_t ds4_report;
+    memcpy(&ds4_report, report, sizeof(ds4_report));
+
+    update_joystate(ds4_report.dpad, ds4_report.x, ds4_report.y, ds4_report.z, ds4_report.rz,
+                    ds4_report.cross, ds4_report.circle, ds4_report.square, ds4_report.triangle);
+    return;
+
+    const char* dpad_str[] = { "N", "NE", "E", "SE", "S", "SW", "W", "NW", "none" };
+
+    printf("(x, y, z, rz) = (%u, %u, %u, %u)\r\n", ds4_report.x, ds4_report.y, ds4_report.z, ds4_report.rz);
+    printf("DPad = %s ", dpad_str[ds4_report.dpad]);
+
+    if (ds4_report.square   ) printf("Square ");
+    if (ds4_report.cross    ) printf("Cross ");
+    if (ds4_report.circle   ) printf("Circle ");
+    if (ds4_report.triangle ) printf("Triangle ");
+
+    if (ds4_report.l1       ) printf("L1 ");
+    if (ds4_report.r1       ) printf("R1 ");
+    if (ds4_report.l2       ) printf("L2 ");
+    if (ds4_report.r2       ) printf("R2 ");
+
+    if (ds4_report.share    ) printf("Share ");
+    if (ds4_report.option   ) printf("Option ");
+    if (ds4_report.l3       ) printf("L3 ");
+    if (ds4_report.r3       ) printf("R3 ");
+
+    if (ds4_report.ps       ) printf("PS ");
+    if (ds4_report.tpad     ) printf("TPad ");
+
+    printf("\r\n");
   }
 }
 
 // Invoked when received report from device via interrupt endpoint
 void tuh_hid_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len)
 {
+  /* putchar('.'); */
   if ( is_sony_ds4(dev_addr) )
   {
     process_sony_ds4(report, len);
+    /* process_generic(report, len); */
+  } else if ( is_generic(dev_addr) )
+  {
+    process_generic(report, len);
+    /* process_generic(report, len); */
   }
 
   // continue to request to receive report
@@ -370,4 +380,69 @@ void tuh_hid_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t cons
   {
     printf("Error: cannot request to receive report\r\n");
   }
+}
+
+inline void update_joystate_xinput(uint16_t wButtons, int16_t sThumbLX, int16_t sThumbLY, int16_t sThumbRX, int16_t sThumbRY, uint8_t bLeftTrigger, uint8_t bRightTrigger) {
+  uint8_t dpad = wButtons & 0xf;
+  if (!dpad) {
+      joystate_struct.joy1_x = ((int32_t)sThumbLX + 32768) >> 8;
+      joystate_struct.joy1_y = ((-(int32_t)sThumbLY) + 32767) >> 8;
+  } else {
+      joystate_struct.joy1_x = (dpad & XINPUT_GAMEPAD_DPAD_RIGHT) ? 255 : ((dpad & XINPUT_GAMEPAD_DPAD_LEFT) ? 0 : 127);
+      joystate_struct.joy1_y = (dpad & XINPUT_GAMEPAD_DPAD_DOWN) ? 255 : ((dpad & XINPUT_GAMEPAD_DPAD_UP) ? 0 : 127);
+  }
+  if (bLeftTrigger) {
+      joystate_struct.joy1_y = 127u + (bLeftTrigger >> 1);
+  } else if (bRightTrigger) {
+      joystate_struct.joy1_y = 127u - (bRightTrigger >> 1);
+  }
+  joystate_struct.joy2_x = ((int32_t)sThumbRX + 32768) >> 8;
+  joystate_struct.joy2_y = ((-(int32_t)sThumbRY) + 32767) >> 8;
+  joystate_struct.button_mask = (~(wButtons >> 12)) << 4;
+  /* printf("%04x %04x\n", wButtons, joystate_struct.button_mask); */
+}
+
+void tuh_xinput_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t const *report, uint16_t len)
+{
+    xinputh_interface_t *xid_itf = (xinputh_interface_t *)report;
+    xinput_gamepad_t *p = &xid_itf->pad;
+    /* const char* type_str; */
+    /* switch (xid_itf->type) */
+    /* { */
+    /*     case 1: type_str = "Xbox One";          break; */
+    /*     case 2: type_str = "Xbox 360 Wireless"; break; */
+    /*     case 3: type_str = "Xbox 360 Wired";    break; */
+    /*     case 4: type_str = "Xbox OG";           break; */
+    /*     default: type_str = "Unknown"; */
+    /* } */
+
+    if (xid_itf->connected && xid_itf->new_pad_data)
+    {
+        /* printf("[%02x, %02x], Type: %s, Buttons %04x, LT: %02x RT: %02x, LX: %d, LY: %d, RX: %d, RY: %d\n", */
+        /*      dev_addr, instance, type_str, p->wButtons, p->bLeftTrigger, p->bRightTrigger, p->sThumbLX, p->sThumbLY, p->sThumbRX, p->sThumbRY); */
+
+        update_joystate_xinput(p->wButtons, p->sThumbLX, p->sThumbLY, p->sThumbRX, p->sThumbRY, p->bLeftTrigger, p->bRightTrigger);
+    }
+    tuh_xinput_receive_report(dev_addr, instance);
+}
+
+void tuh_xinput_mount_cb(uint8_t dev_addr, uint8_t instance, const xinputh_interface_t *xinput_itf)
+{
+    printf("XINPUT MOUNTED %02x %d\n", dev_addr, instance);
+    // If this is a Xbox 360 Wireless controller we need to wait for a connection packet
+    // on the in pipe before setting LEDs etc. So just start getting data until a controller is connected.
+    if (xinput_itf->type == XBOX360_WIRELESS && xinput_itf->connected == false)
+    {
+        tuh_xinput_receive_report(dev_addr, instance);
+        return;
+    }
+    tuh_xinput_set_led(dev_addr, instance, 0, true);
+    tuh_xinput_set_led(dev_addr, instance, 1, true);
+    tuh_xinput_set_rumble(dev_addr, instance, 0, 0, true);
+    tuh_xinput_receive_report(dev_addr, instance);
+}
+
+void tuh_xinput_umount_cb(uint8_t dev_addr, uint8_t instance)
+{
+    printf("XINPUT UNMOUNTED %02x %d\n", dev_addr, instance);
 }
