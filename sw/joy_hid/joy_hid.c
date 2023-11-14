@@ -436,6 +436,39 @@ void tuh_xinput_mount_cb(uint8_t dev_addr, uint8_t instance, const xinputh_inter
         tuh_xinput_receive_report(dev_addr, instance);
         return;
     }
+    else if (xinput_itf->type == XBOX360_WIRED)
+    {
+        /*
+         * Some third-party Xbox 360-style controllers
+         * require this message to finish initialization.
+         *
+         * Idea taken from Linux drivers/input/joystick/xpad.c
+         */
+        uint8_t dummy[20];
+        tusb_control_request_t const request =
+        {
+            .bmRequestType_bit =
+            {
+                .recipient = TUSB_REQ_RCPT_INTERFACE,
+                .type      = TUSB_REQ_TYPE_VENDOR,
+                .direction = TUSB_DIR_IN
+            },
+            .bRequest = tu_htole16(0x01),
+            .wValue   = tu_htole16(0x100),
+            .wIndex   = tu_htole16(0x00),
+            .wLength  = 20
+        };
+        tuh_xfer_t xfer =
+        {
+            .daddr       = dev_addr,
+            .ep_addr     = 0,
+            .setup       = &request,
+            .buffer      = dummy,
+            .complete_cb = NULL,
+            .user_data   = 0
+        };
+        tuh_control_xfer(&xfer);
+    }
     tuh_xinput_set_led(dev_addr, instance, 0, true);
     tuh_xinput_set_led(dev_addr, instance, 1, true);
     tuh_xinput_set_rumble(dev_addr, instance, 0, 0, true);
