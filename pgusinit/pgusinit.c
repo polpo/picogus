@@ -212,7 +212,7 @@ int write_firmware(const char* fw_filename, uint8_t protocol) {
             outp(CONTROL_PORT, 0xFF); // Select firmware programming mode
             // Wait a bit for 2nd core on Pico to restart
             delay(100);
-            if (inp(DATA_PORT_HIGH) != PICO_FIRMWARE_IDLE) {
+            if (!wait_for_read(PICO_FIRMWARE_IDLE)) {
                 fprintf(stderr, "ERROR: Card is not in programming mode?\n");
                 return 13;
             }
@@ -233,7 +233,7 @@ int write_firmware(const char* fw_filename, uint8_t protocol) {
                 // up waiting on IOCHRDY and release the ISA bus after a certain amount of time before
                 // the flash operation is finished. This is an extra delay to work around this issue.
                 if (i == 0) { // first block takes longer due to flash erase
-                    delay(250);
+                    delay(500);
                 } else {
                     delay(25);
                 }

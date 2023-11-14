@@ -291,7 +291,6 @@ __force_inline void handle_iow(void) {
     // printf("IOW: %x %x\n", port, iow_read & 0xFF);
 #ifdef SOUND_GUS
     if ((port >> 4 | 0x10) == gus_port_test) {
-        bool fast_write = false;
         port -= basePort;
         switch (port) {
         case 0x8:
@@ -301,27 +300,18 @@ __force_inline void handle_iow(void) {
         case 0x104:
             // Fast write, don't set iochrdy by writing 0
             pio_sm_put(pio0, iow_sm, IO_END);
-            fast_write = true;
+            write_gus(port, iow_read & 0xFF);
+            // Fast write - return early as we've already written 0x0u to the PIO
+            return;
             break;
         default:
             // gpio_xor_mask(LED_PIN);
             // Slow write, set iochrdy by writing non-0
             pio_sm_put(pio0, iow_sm, IO_WAIT);
+            write_gus(port, iow_read & 0xFF);
+            gpio_xor_mask(LED_PIN);
             break;
         }
-        // uint32_t write_begin = time_us_32();
-        // __dsb();
-        write_gus(port, iow_read & 0xFF);
-        // uint32_t write_elapsed = time_us_32() - write_begin;
-        // if (write_elapsed > 1) {
-        //     printf("long write to port %x, (sel reg %x), took %d us\n", port, gus->selected_register, write_elapsed);
-        // }
-        if (fast_write) {
-            // Fast write - return early as we've already written 0x0u to the PIO
-            return;
-        }
-        gpio_xor_mask(LED_PIN);
-        // __dsb();
         // printf("GUS IOW: port: %x value: %x\n", port, value);
         // puts("IOW");
     } else // if follows down below
