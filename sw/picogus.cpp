@@ -547,25 +547,12 @@ void err_blink(void) {
 #include "pico_pic.h"
 #endif
 
+constexpr uint32_t rp2_clock = 400000;
+constexpr float psram_clkdiv = (float)rp2_clock / 200000.0;
+constexpr float pwm_clkdiv = (float)rp2_clock / 22727.27;
+
 int main()
 {
-    // Overclock!
-    vreg_set_voltage(VREG_VOLTAGE_1_30);
-    // set_sys_clock_khz(266000, true);
-    // set_sys_clock_khz(280000, true);
-    // set_sys_clock_khz(420000, true);
-    set_sys_clock_khz(400000, true);
-
-    // Set clk_peri to use the XOSC
-    // clock_configure(clk_peri,
-    //                 0,
-    //                 CLOCKS_CLK_PERI_CTRL_AUXSRC_VALUE_XOSC_CLKSRC,
-    //                 12 * MHZ,
-    //                 12 * MHZ);
-    // clock_configure(clk_peri, 0, CLOCKS_CLK_PERI_CTRL_AUXSRC_VALUE_CLK_SYS,
-    //         12 * MHZ, 12 * MHZ);
-
-    // stdio_init_all();
 #ifdef ASYNC_UART
     stdio_async_uart_init_full(UART_ID, BAUD_RATE, UART_TX_PIN, UART_RX_PIN);
 #else
@@ -583,17 +570,13 @@ int main()
 
     // Determine board type. GPIO 29 is grounded on PicoGUS v2.0, and on a Pico, it's VSYS/3 (~1.666V)
     adc_init();
-    // Make sure GPIO is high-impedance, no pullups etc
     adc_gpio_init(29);
     // Select ADC input 3 (GPIO29)
     adc_select_input(3);
- 
-    // 12-bit conversion, assume max value == ADC_VREF == 3.3 V
-    const float conversion_factor = 3.3f / (1 << 12);
-    uint16_t result;
-    adc_read();
-    result = adc_read();
-    printf("Raw value: 0x%03x, voltage: %f V\n", result, result * conversion_factor);
+    // Read several times to let ADC stabilize
+    adc_read(); adc_read(); adc_read(); adc_read(); adc_read();
+    uint16_t result = adc_read();
+    printf("ADC value: 0x%03x... ", result);
 
     if (result > 0x100) {
         puts("Running on Pico-based board (PicoGUS v1.1+, PicoGUS Femto)");
@@ -609,7 +592,34 @@ int main()
         gpio_init(23);
         gpio_set_dir(23, GPIO_OUT);
         BOARD_TYPE = PICOGUS_2;
+    }
+    gpio_set_mask(LED_PIN);
+    printf("Waiting for board to stabilize... ");
+    busy_wait_ms(500);
+    // Overclock!
+    printf("Overclocking... ");
+    vreg_set_voltage(VREG_VOLTAGE_1_30);
+    // vreg_set_voltage(VREG_VOLTAGE_1_15);
+    busy_wait_ms(500);
+    set_sys_clock_khz(rp2_clock, true);
+    gpio_xor_mask(LED_PIN);
+#ifdef ASYNC_UART
+    uart_init(UART_ID, 0);
+#else
+    stdio_init_all();
+#endif
+    puts("Done. Continuing!");
 
+    // Set clk_peri to use the XOSC
+    // clock_configure(clk_peri,
+    //                 0,
+    //                 CLOCKS_CLK_PERI_CTRL_AUXSRC_VALUE_XOSC_CLKSRC,
+    //                 12 * MHZ,
+    //                 12 * MHZ);
+    // clock_configure(clk_peri, 0, CLOCKS_CLK_PERI_CTRL_AUXSRC_VALUE_CLK_SYS,
+    //         12 * MHZ, 12 * MHZ);
+
+    if (BOARD_TYPE = PICOGUS_2) {
         // Create new interface to M62429 digital volume control
         m62429 = new M62429();
         // Data pin = GPIO24, data pin = GPIO25
@@ -648,23 +658,27 @@ int main()
     puts("Initing PSRAM...");
     // Try different PSRAM strategies
     if (BOARD_TYPE == PICOGUS_2) {
-        psram_spi = psram_spi_init_clkdiv(pio1, -1, 2.0 /* clkdiv */, false /* fudge */);
+        psram_spi = psram_spi_init_clkdiv(pio1, -1, psram_clkdiv /* clkdiv */, false /* fudge */);
 #if TEST_PSRAM
-        if (!test_psram(&psram_spi, 101)) {
+        // Only bother to test every 97th address
+        if (test_psram(&psram_spi, 97) == 1) {
+            printf("Default PSRAM strategy of no fudge not working, switching to fudge\n");
             psram_spi_uninit(psram_spi, false /* fudge */);
-            psram_spi = psram_spi_init_clkdiv(pio1, -1, 2.0 /* clkdiv */, true /* fudge */);
-            if (!test_psram(&psram_spi, 101)) { 
+            psram_spi = psram_spi_init_clkdiv(pio1, -1, psram_clkdiv /* clkdiv */, true /* fudge */);
+            if (test_psram(&psram_spi, 97) == 1) { 
+                printf("Error: No PSRAM strategies found to work!\n");
                 err_blink();
             }
         }
 #endif // TEST_PSRAM
     } else {
-        psram_spi = psram_spi_init_clkdiv(pio1, -1, 2.0 /* clkdiv */, true /* fudge */);
+        psram_spi = psram_spi_init_clkdiv(pio1, -1, psram_clkdiv /* clkdiv */, true /* fudge */);
 #if TEST_PSRAM
-        if (!test_psram(&psram_spi, 101)) {
+        if (test_psram(&psram_spi, 97) == 1) {
             psram_spi_uninit(psram_spi, true /* fudge */);
-            psram_spi = psram_spi_init_clkdiv(pio1, -1, 2.0 /* clkdiv */, false /* fudge */);
-            if (!test_psram(&psram_spi, 101)) { 
+            psram_spi = psram_spi_init_clkdiv(pio1, -1, psram_clkdiv /* clkdiv */, false /* fudge */);
+            if (test_psram(&psram_spi, 97) == 1) { 
+                printf("Error: No PSRAM strategies found to work!\n");
                 err_blink();
             }
         }
@@ -705,7 +719,7 @@ int main()
     puts("Config joystick PWM");
     pwm_config pwm_c = pwm_get_default_config();
     // TODO better calibrate this
-    pwm_config_set_clkdiv(&pwm_c, 17.6);
+    pwm_config_set_clkdiv(&pwm_c, pwm_clkdiv);
     // Start the PWM off constantly looping at 0
     pwm_config_set_wrap(&pwm_c, 0);
     pwm_init(0, &pwm_c, true);
