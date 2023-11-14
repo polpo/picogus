@@ -183,6 +183,7 @@ if(PROJECT_TYPE STREQUAL "CMS")
         square/square.cpp
     )
 
+    target_sources(picogus PRIVATE cmsplay.cpp)
     pico_enable_stdio_uart(picogus 1)
     pico_enable_stdio_usb(picogus 0)
     pico_enable_stdio_semihosting(picogus 0)
