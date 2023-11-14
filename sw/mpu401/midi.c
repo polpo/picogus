@@ -159,7 +159,7 @@ __force_inline static void PlayMsg(Bit8u* msg, Bitu len)
 }
 
 __force_inline static void send_midi_byte_now(Bit8u byte) {
-    wait_for_uart();
+    /* wait_for_uart(); */
     output_to_uart(byte);
 }
 
@@ -338,7 +338,9 @@ void MIDI_Init(bool delaysysex,bool fakeallnotesoff){
     // MIDI_sysex_delaytime = 0; /* SOFTMPU */
     // midi.sysex.delay = delaysysex;
     
-    critical_section_init(&midi_crit);
+    if (!critical_section_is_initialized(&midi_crit)) {
+        critical_section_init(&midi_crit);
+    }
 
     midi.status=0x00;
     midi.sysex.status=0x00;
@@ -348,7 +350,7 @@ void MIDI_Init(bool delaysysex,bool fakeallnotesoff){
     /* midi.sysex.start = time_us_32(); // PicoGUS */
     midi.cmd_pos=0;
     midi.cmd_len=0;
-    midi.fakeallnotesoff=fakeallnotesoff>0;
+    midi.fakeallnotesoff = fakeallnotesoff;
     midi.available=true;
 
     midi_out_buff.head = midi_out_buff.tail = 0;

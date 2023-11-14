@@ -380,11 +380,10 @@ __force_inline void MPU401_WriteData(Bit8u val, bool crit) { /* SOFTMPU */
         MIDI_RawOutByte(val);
         // autodetect when Gateway runs
         if (val == gateway_msg[gateway_pos]) {
-            printf("v: %x (%c)\n", val, val);
+            // printf("v: %x (%c)\n", val, val);
             ++gateway_pos;
             if (gateway_pos == gateway_len) {
                 // printf("Gateway hack enabled!");
-                gpio_xor_mask(LED_PIN);
                 config_versionfix = true;
                 gateway_pos = 0;
             }
@@ -748,7 +747,9 @@ void MPU401_Init(bool delaysysex, bool fakeallnotesoff)
 {
     /* Initalise PIC code */
     /* PIC_Init(); */
-    critical_section_init(&mpu_crit);
+    if (!critical_section_is_initialized(&mpu_crit)) {
+        critical_section_init(&mpu_crit);
+    }
 
     /* Initialise MIDI handler */
     MIDI_Init(delaysysex, fakeallnotesoff);

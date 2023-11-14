@@ -138,6 +138,7 @@ __force_inline void select_picogus(uint8_t value) {
 #endif
 #ifdef SOUND_MPU
     case 0x20: // Wavetable mixer volume
+    case 0x21: // MPU init
         break;
 #endif
     case 0xF0: // Hardware version
@@ -342,6 +343,7 @@ __force_inline void handle_iow(void) {
         pio_sm_put(pio0, iow_sm, IO_WAIT);
         // printf("MPU IOW: port: %x value: %x\n", port, iow_read & 0xFF);
         MPU401_WriteData(iow_read & 0xFF, true);
+        gpio_xor_mask(LED_PIN);
         break;
     case 1:
         pio_sm_put(pio0, iow_sm, IO_WAIT);
@@ -798,9 +800,6 @@ int main()
 #endif
 #ifndef USE_ALARM
         PIC_HandleEvents();
-#endif
-#ifdef SOUND_MPU
-        // send_midi_byte();				// see if we need to send a byte	
 #endif
 #ifdef POLLING_DMA
         process_dma();
