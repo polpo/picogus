@@ -58,7 +58,7 @@ add_compile_definitions(
         PICO_AUDIO_I2S_PIO=1
         # USE_IRQ=1
         USE_ALARM=1
-        PICO_STDIO_USB_CONNECT_WAIT_TIMEOUT_MS=5000000
+        PICO_STDIO_USB_CONNECT_WAIT_TIMEOUT_MS=250
         M62429_PIO=1
 )
 
@@ -145,9 +145,13 @@ if(PROJECT_TYPE STREQUAL "MPU")
         mpu401/midi.c
     )
     target_sources(picogus PRIVATE mpuplay.cpp)
-    # Use USB stdio because UART is used by MIDI
+    # Use USB stdio because UART is used by MIDI, but only if USB joysick is disabled
     pico_enable_stdio_uart(picogus 0)
-    pico_enable_stdio_usb(picogus 0)
+    if(USB_JOYSTICK)
+        pico_enable_stdio_usb(picogus 0)
+    else()
+        pico_enable_stdio_usb(picogus 1)
+    endif()
     pico_enable_stdio_semihosting(picogus 0)
 endif()
 

@@ -172,7 +172,9 @@ __force_inline void write_picogus_high(uint8_t value) {
 #endif
         break;
     case 0x0f: // enable joystick
+#ifdef USB_JOYSTICK
         joyPort = value ? 0x201u : 0xffff;
+#endif
 #ifdef SOUND_GUS
     case 0x10: // Audio buffer size
         // Value is sent by pgusinit as the size - 1, so we need to add 1 back to it
@@ -251,7 +253,11 @@ __force_inline uint8_t read_picogus_high(void) {
 #endif
         break;
     case 0x0f: // enable joystick
+#ifdef USB_JOYSTICK
         return joyPort == 0x201u;
+#else
+        return 0;
+#endif
 #ifdef SOUND_MPU
     case 0x20: // Wavetable mixer volume
         if (BOARD_TYPE == PICOGUS_2) {

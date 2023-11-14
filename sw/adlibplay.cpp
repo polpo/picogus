@@ -20,7 +20,9 @@
 
 #include "opl.h"
 
+#ifdef USB_JOYSTICK
 #include "tusb.h"
+#endif
 
 #if PICO_ON_DEVICE
 #include "pico/binary_info.h"
@@ -71,8 +73,10 @@ void play_adlib() {
     puts("starting core 1");
     uint32_t start, end;
 
+#ifdef USB_JOYSTICK
     // Init TinyUSB for joystick support
     tuh_init(BOARD_TUH_RHPORT);
+#endif
 
     struct audio_buffer_pool *ap = init_audio();
     for (;;) {
@@ -80,7 +84,9 @@ void play_adlib() {
         OPL_Pico_Mix_callback(buffer);
         // putchar((unsigned char)buffer->buffer->bytes[1]);
         give_audio_buffer(ap, buffer);
+#ifdef USB_JOYSTICK
         // Service TinyUSB events
         tuh_task();
+#endif
     }
 }

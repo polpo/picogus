@@ -23,7 +23,9 @@
 #include "cmd_buffers.h"
 extern tandy_buffer_t tandy_buffer;
 
+#ifdef USB_JOYSTICK
 #include "tusb.h"
+#endif
 
 #include <string.h>
 
@@ -71,8 +73,10 @@ struct audio_buffer_pool *init_audio() {
 
 void play_tandy() {
     puts("starting core 1 tandy");
+#ifdef USB_JOYSTICK
     // Init TinyUSB for joystick support
     tuh_init(BOARD_TUH_RHPORT);
+#endif
 
     tandysound_t tandysound;
     struct audio_buffer_pool *ap = init_audio();
@@ -107,7 +111,9 @@ void play_tandy() {
         buffer->sample_count = SAMPLES_PER_BUFFER;
 
         give_audio_buffer(ap, buffer);
+#ifdef USB_JOYSTICK
         // Service TinyUSB events
         tuh_task();
+#endif
     }
 }
