@@ -567,6 +567,10 @@ int main()
     }
 
     // Determine board type. GPIO 29 is grounded on PicoGUS v2.0, and on a Pico, it's VSYS/3 (~1.666V)
+    // GPIO 25 must be high to read GPIO 29 on the Pico W
+    gpio_init(25);
+    gpio_set_dir(25, GPIO_OUT);
+    gpio_put(25, 1);
     adc_init();
     adc_gpio_init(29);
     // Select ADC input 3 (GPIO29)
@@ -575,6 +579,8 @@ int main()
     adc_read(); adc_read(); adc_read(); adc_read(); adc_read();
     uint16_t result = adc_read();
     printf("ADC value: 0x%03x... ", result);
+    gpio_put(25, 0);
+    gpio_deinit(25);
 
     if (result > 0x100) {
         puts("Running on Pico-based board (PicoGUS v1.1+, PicoGUS Femto)");
@@ -617,7 +623,7 @@ int main()
     // clock_configure(clk_peri, 0, CLOCKS_CLK_PERI_CTRL_AUXSRC_VALUE_CLK_SYS,
     //         12 * MHZ, 12 * MHZ);
 
-    if (BOARD_TYPE = PICOGUS_2) {
+    if (BOARD_TYPE == PICOGUS_2) {
         // Create new interface to M62429 digital volume control
         m62429 = new M62429();
         // Data pin = GPIO24, data pin = GPIO25
