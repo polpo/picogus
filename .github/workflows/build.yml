@@ -22,7 +22,7 @@ jobs:
         with:
           release: '12.3.Rel1'
 
-      # Since we reference stable versions of Pico-SDK and pico-extras, we can cache their (HUGE!) downloads.
+      # Since we reference stable versions of Pico-SDK and pico-extras, we can cache their downloads.
       # If this were to reference changing branches (like "master"), this caching step must be removed!!!
       - name: Cache Pico-SDK and Extras 
         id: cache-sdk
@@ -32,12 +32,19 @@ jobs:
           key: ${{ env.PICOSDK_VER }}-${{ env.PICOEXTRA_VER }}          
 
       # If we did not find stuff in the cache, download it fresh.
+      # Use method recommended by Pico SDK docs: not a full recursive clone
       - name: Clone Pico-SDK
         if: steps.cache-sdk.outputs.cache-hit != 'true'
-        run: git clone -b "$PICOSDK_VER" --recursive https://github.com/raspberrypi/pico-sdk.git $PICO_SDK_PATH
+        run: |
+          git clone -b "$PICOSDK_VER" --depth 1 https://github.com/raspberrypi/pico-sdk.git $PICO_SDK_PATH
+          cd $PICO_SDK_PATH
+          git submodule update --init --depth 1
       - name: Clone Pico-Extras
         if: steps.cache-sdk.outputs.cache-hit != 'true'
-        run: git clone -b "$PICOEXTRA_VER" --recursive https://github.com/raspberrypi/pico-extras.git $PICO_EXTRAS_PATH
+        run: |
+          git clone -b "$PICOEXTRA_VER" --depth 1 https://github.com/raspberrypi/pico-extras.git $PICO_EXTRAS_PATH
+          cd $PICO_EXTRAS_PATH
+          git submodule update --init --depth 1
 
       - name: Create Build Environment
         run: cmake -E make_directory ${{github.workspace}}/build
