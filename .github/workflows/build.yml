@@ -86,6 +86,14 @@ jobs:
           cmake --build . --config $BUILD_TYPE --parallel $(nproc)
           cp picogus.uf2 $OUTPUT_DIR/pg-cms.uf2
 
+      - name: Build Joystick Only Firmware
+        working-directory: ${{github.workspace}}/build
+        shell: bash
+        run: |
+          cmake $GITHUB_WORKSPACE/sw -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DPROJECT_TYPE="JOY" -DUSE_LTO=1
+          cmake --build . --config $BUILD_TYPE --parallel $(nproc)
+          cp picogus.uf2 $OUTPUT_DIR/pg-joyex.uf2
+
       # will generate PicoGUS Firmwares.zip as downloadable artifact with all .uf2 files
       - name: Upload All Firmwares
         uses: actions/upload-artifact@v3

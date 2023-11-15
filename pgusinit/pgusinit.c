@@ -26,7 +26,8 @@ typedef enum {
     ADLIB_MODE = 1,
     MPU_MODE = 2,
     TANDY_MODE = 3,
-    CMS_MODE = 4
+    CMS_MODE = 4,
+    JOYSTICK_ONLY_MODE = 0x0f
 } card_mode_t;
 
 void banner(void) {
@@ -39,6 +40,8 @@ const char* usage_by_card[] = {
     "[/p x] [/v x] [/s] [/n]",  // MPU_MODE
     "[/p x]",                   // TANDY_MODE
     "[/p x]",                   // CMS_MODE
+    "", "", "", "", "", "", "", "", "", "", // future expansion
+    "",                         // JOYSTICK_ONLY_MODE
 };
 
 void usage(char *argv0, card_mode_t mode) {
@@ -53,7 +56,7 @@ void usage(char *argv0, card_mode_t mode) {
     fprintf(stderr, "    /?        - show this message\n");
     fprintf(stderr, "    /f fw.uf2 - program the PicoGUS with the firmware file fw.uf2\n");
     fprintf(stderr, "    /j        - enable USB joystick support\n");
-    if (mode != GUS_MODE) {
+    if (mode > GUS_MODE && mode < JOYSTICK_ONLY_MODE) {
         fprintf(stderr, "AdLib, MPU-401, Tandy, CMS modes only:\n");
         fprintf(stderr, "    /p x - set the (hex) base port address of the emulated card. Defaults:\n");
         fprintf(stderr, "           AdLib: 388; MPU-401: 330; Tandy: 2C0; CMS: 220\n");
@@ -377,7 +380,7 @@ int main(int argc, char* argv[]) {
     outp(CONTROL_PORT, 0xf0); // Select hardware type register
     board_type_t board_type = inp(DATA_PORT_HIGH);
     if (board_type == PICO_BASED) {
-        printf("Hardware: Pico-based board (PicoGUS v1.x, PicoGUS Femto)\n");
+        printf("Hardware: PicoGUS v1.x or PicoGUS Femto\n");
     } else if (board_type == PICOGUS_2) {
         printf("Hardware: PicoGUS v2.0\n");
     } else {
@@ -441,6 +444,8 @@ int main(int argc, char* argv[]) {
     case CMS_MODE:
         printf("Running in CMS/Game Blaster mode on port %x\n", port);
         break;
+    case JOYSTICK_ONLY_MODE:
+        printf("Running in Joystick exclusive mode on port 201\n");
     default:
         printf("Running in unknown mode on port %x (maybe upgrade pgusinit?)\n", port);
         break;

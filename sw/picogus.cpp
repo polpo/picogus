@@ -17,7 +17,8 @@ typedef enum {
     ADLIB_MODE = 1,
     MPU_MODE = 2,
     TANDY_MODE = 3,
-    CMS_MODE = 4
+    CMS_MODE = 4,
+    JOYSTICK_ONLY_MODE = 0x0f
 } card_mode_t;
 
 #ifdef PSRAM
@@ -241,6 +242,8 @@ __force_inline uint8_t read_picogus_high(void) {
         return TANDY_MODE;
 #elif defined(SOUND_CMS)
         return CMS_MODE;
+#elif defined(USB_JOYSTICK_ONLY)
+        return JOYSTICK_ONLY_MODE;
 #else
         return 0xff;
 #endif

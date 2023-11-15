@@ -107,12 +107,6 @@ if(PROJECT_TYPE STREQUAL "GUS")
     endif()
     pico_enable_stdio_usb(picogus 0)
     pico_enable_stdio_semihosting(picogus 0)
-    # Joystick stuff
-    target_sources(picogus PRIVATE joy_hid/joy_hid.c)
-    target_link_libraries(picogus tinyusb_host tinyusb_board hardware_pwm)
-    target_include_directories(picogus PUBLIC ${CMAKE_CURRENT_LIST_DIR}/joy_hid)
-    target_compile_definitions(picogus PRIVATE USB_JOYSTICK=1)
-
 endif()
 
 if(PROJECT_TYPE STREQUAL "OPL")
@@ -191,7 +185,7 @@ endif()
 
 if(PROJECT_TYPE STREQUAL "JOY")
     pico_set_program_name(picogus "picogus-joy")
-    set(USB_JOYSTICK=1)
+    set(USB_JOYSTICK 1)
     target_compile_definitions(picogus PRIVATE
         USB_JOYSTICK_ONLY=1
     )
