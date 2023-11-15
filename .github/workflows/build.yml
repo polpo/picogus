@@ -130,3 +130,45 @@ jobs:
         with:
           name: pgusinit
           path: ${{env.OUTPUT_DIR}}/pgusinit.exe
+
+    create-release:
+      if: github.ref_type == 'tag' && startsWith(github.ref_name, 'v')
+      runs-on: ubuntu-latest
+      needs: [build-firmware, build-pgusinit]
+      env: 
+        STAGING_DIR: ${{github.workspace}}/release-staging-dir
+      steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+      - name: Copy README
+        run: |
+          mkdir -p $STAGING_DIR
+          cp pgusinit/README.md $STAGING_DIR/README.md
+      - name: Get Tags
+        id: tag
+        uses: ildug/get-tag-action@v1
+      - name: Generate release body
+        run: |
+          awk '/^# v${{ steps.tag.outputs.version }}/{a=1;next}/^# /{a=0}a' sw/CHANGELOG.md > release-body.md
+      - name: Download firmware artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: PicoGUS Firmwares
+          path: ${{env.STAGING_DIR}}
+      - name: Download pgusinit artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: pgusinit
+          path: ${{env.STAGING_DIR}}
+      - name: Install zip
+        uses: montudor/action-zip@v1
+      - name: Zip release
+        run: |
+          zip -9 -r ../picogus-v${{ steps.tag.outputs.version }}.zip .
+        working-directory: ${{env.STAGING_DIR}}
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        with:
+          body_path: release-body.md
+          files: picogus-v${{ steps.tag.outputs.version }}.zip
+          draft: true
