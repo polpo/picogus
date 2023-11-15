@@ -31,7 +31,7 @@ typedef enum {
 } card_mode_t;
 
 void banner(void) {
-    printf("PicoGUSinit v1.3.0-beta0 (c) 2023 Ian Scott - licensed under the GNU GPL v2\n\n");
+    printf("PicoGUSinit v2.0.0 (c) 2023 Ian Scott - licensed under the GNU GPL v2\n\n");
 }
 
 const char* usage_by_card[] = {

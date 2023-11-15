@@ -1,13 +1,20 @@
-# PicoGUSinit
+# PicoGUSinit v2.0.0
 
-PicoGUSinit (PGUSINIT.EXE) detects and initializes a PicoGUS card. In GUS
-emulation mode, it should be used instead of ULTRINIT.
+PicoGUSinit (also called pgusinit, after the program's .exe file) detects and
+initializes a PicoGUS card. In GUS emulation mode, it should be used instead of
+ULTRINIT.
 
 For more info on PicoGUS, see https://github.com/polpo/picogus.
 
 The board must be loaded with firmware before using it for the first time. See
 https://github.com/polpo/picogus/wiki/Building-your-PicoGUS#programming-the-pico
 for programming instructions.
+
+pgusinit must be run with firmware it is compatible with. If run with an
+incompatible firmware, pgusinit will complain. One exception to this is that
+pgusinit can be used to upgrade an older version of firmware to a more recent
+version. For example, firmware v0.7.0, which is normally incompatibile with
+pgusinit v2.0.0, can be upgraded to firmware v1.0.0 with pgusinit v2.0.0.
 
 ## Using
 
@@ -16,9 +23,11 @@ settings. Options may be given for other settings:
 
 ### Global options
 
-* `/?` - shows help for PicoGUSinit.
+* `/?` - shows help for PicoGUSinit. Detects the current card mode and only
+  shows options valid for that mode.
 * `/f firmware.uf2` - uploads firmware in the file named firmware.uf2 to the
   PicoGUS.
+* `/j` - enables game port joystick emulation mode (disabled by default).
 
 Firmware files that come with the releases:
 
@@ -27,6 +36,8 @@ Firmware files that come with the releases:
 * `pg-mpu.uf2` - MPU-401 with intelligent mode emulation
 * `pg-tandy.uf2` - Tandy 3-Voice emulation
 * `pg-cms.uf2` - CMS/Game Blaster emulation
+* `pg-joyex.uf2` - Joystick exclusive mode (doesn't emulate any sound cards,
+  just the game port)
 
 ### GUS emulation mode
 
@@ -52,6 +63,13 @@ options to be set: https://github.com/polpo/picogus/wiki/Compatibility-list
 
 * `/p x` - sets the base port of the emulated card to x. Defaults to 388 for
   AdLib, 330 for MPU-401, 2C0 for Tandy, and 220 for CMS.
+
+### MPU-401 emulation mode
+
+* `/v x` - Sets wavetable header volume to x percent (PicoGUS 2.0 boards only).
+* `/s` - enable sysex delay to prevent buffer overflows on older MPU-401
+  revisions.
+* `/n` - Fake all-notes-off for the Roland RA-50.
 
 ## Compiling
 
