@@ -23,6 +23,8 @@
 #include "cmd_buffers.h"
 extern tandy_buffer_t tandy_buffer;
 
+extern uint LED_PIN;
+
 #ifdef USB_JOYSTICK
 #include "tusb.h"
 #endif
@@ -86,7 +88,12 @@ void play_tandy() {
     int32_t buf[SAMPLES_PER_BUFFER * 2];
 #endif
     for (;;) {
+        bool notfirst = false;
         while (tandy_buffer.tail != tandy_buffer.head) {
+            if (!notfirst) {
+                gpio_xor_mask(LED_PIN);
+                notfirst = true;
+            }
             tandysound.write_register(0, tandy_buffer.cmds[tandy_buffer.tail]);
             ++tandy_buffer.tail;
         }

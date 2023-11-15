@@ -32,6 +32,8 @@ saa1099_device *saa0, *saa1;
 #include "cmd_buffers.h"
 extern cms_buffer_t cms_buffer;
 
+extern uint LED_PIN;
+
 #if PICO_ON_DEVICE
 #include "pico/binary_info.h"
 bi_decl(bi_3pins_with_names(PICO_AUDIO_I2S_DATA_PIN, "I2S DIN", PICO_AUDIO_I2S_CLOCK_PIN_BASE, "I2S BCK", PICO_AUDIO_I2S_CLOCK_PIN_BASE+1, "I2S LRCK"));
@@ -101,7 +103,12 @@ void play_cms() {
     struct audio_buffer_pool *ap = init_audio();
     for (;;) {
         // putchar('.');
+        bool notfirst = false;
         while (cms_buffer.tail != cms_buffer.head) {
+            if (!notfirst) {
+                gpio_xor_mask(LED_PIN);
+                notfirst = true;
+            }
             auto cmd = cms_buffer.cmds[cms_buffer.tail];
 #ifdef MAME_CMS
             // printf("%x ", cmd.addr & 0x3);
