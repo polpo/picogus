@@ -602,12 +602,12 @@ int main()
     }
     gpio_set_mask(LED_PIN);
     printf("Waiting for board to stabilize... ");
-    busy_wait_ms(500);
+    busy_wait_ms(250);
     // Overclock!
     printf("Overclocking... ");
     vreg_set_voltage(VREG_VOLTAGE_1_30);
     // vreg_set_voltage(VREG_VOLTAGE_1_15);
-    busy_wait_ms(500);
+    busy_wait_ms(250);
     set_sys_clock_khz(rp2_clock, true);
     gpio_xor_mask(LED_PIN);
 #ifdef ASYNC_UART

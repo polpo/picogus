@@ -20,6 +20,9 @@ project(picogus
     LANGUAGES C CXX ASM
 )
 
+set(PICO_BOARD_HEADER_DIRS ${CMAKE_CURRENT_LIST_DIR})
+set(PICO_BOARD picogus2)
+
 # set(PICO_DEOPTIMIZED_DEBUG "1")
 set(CMAKE_BUILD_TYPE "Release")
 set(PICO_COPY_TO_RAM 1)
