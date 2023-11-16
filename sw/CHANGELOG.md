@@ -1,3 +1,10 @@
+# v1.0.1
+
+As always immediately after I do a big release, a significant bugfix comes soon after! Don't forget to look at the notes for firmware v1.0.0.
+
+### General:
+* Increase stability upon startup on PicoGUS 2.0 boards.
+
 # v1.0.0
 
 The PicoGUS 2.0 hardware brings v1.0.0 of the PicoGUS firmware! This firmware runs on _all_ released revisions of the PicoGUS hardware: 1.1, 1.1.1, 1.2, and 2.0.
