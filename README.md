@@ -11,16 +11,22 @@ ISA sound card emulation on the Raspberry Pi Pico's RP2040 microcontroller. Pico
 * [MPU-401 (with intelligent mode)](https://en.wikipedia.org/wiki/MPU-401) - outputs MIDI data on 3.5mm MIDI TRS connector
 * [Tandy 3-voice](http://www.vgmpf.com/Wiki/index.php?title=Tandy_3_Voice)
 * [CMS/Game Blaster](http://nerdlypleasures.blogspot.com/2012/10/all-you-ever-wanted-to-know-about.html)
+* [Game port joystick](https://en.wikipedia.org/wiki/Game_port)
 
-Current status: Beta! See the [main wiki page](https://github.com/polpo/picogus/wiki) for current status and the [compatibility list](https://github.com/polpo/picogus/wiki/Compatibility-list) for support status of various DOS programs and other system compatibility notes. This project has a heavy demoscene focus due to the GUS's history so that's what I've concentrated on, but GUS support in games is quickly improving.
+Current status: perpetual beta! See the [main wiki page](https://github.com/polpo/picogus/wiki) for current status and the [compatibility list](https://github.com/polpo/picogus/wiki/Compatibility-list) for support status of various DOS programs and other system compatibility notes. This project has a heavy demoscene focus due to the GUS's history so that's what I've concentrated on, but GUS support in games is very good to excellent.
 
-Want to make your own beta PicoGUS? See the [build guide](https://github.com/polpo/picogus/wiki/Building-your-PicoGUS). **Important caveat**: due to the specs of the Pico, assumptions made by programs written to use the GUS, the imprecise nature of emulation, and the varying specs of retro DOS PC hardware, some things will likely never be perfect. **This is still a work in progress.**
+Want to make your own PicoGUS? See the [build guide](https://github.com/polpo/picogus/wiki/Building-your-PicoGUS). Note that the more DIY friendly v1.1.1 hardware has some documented issues with reset – a forthcoming v1.2 revision will fix these issues. **Important caveat**: due to the specs of the Pico, assumptions made by programs written to use the GUS, the imprecise nature of emulation, and the varying specs of retro DOS PC hardware, some things will likely never be perfect. **This is still a work in progress.**
 
 Have a PicoGUS and want to use it? See the [configuring and using your PicoGUS guide](https://github.com/polpo/picogus/wiki/Configuring-and-using-your-PicoGUS).
 
 Want to support PicoGUS? I have a limited number of machines to test PicoGUS in and donating either money or motherboards would be greatly appreciated and help increase the compatibility of PicoGUS.
 
 You can donate via [PayPal](https://paypal.me/ianpolpo) or Ko-Fi: [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/U7U6IZTCB)
+
+![PicoGUS 2.0 PCB](https://github.com/polpo/picogus/assets/1544908/821f109e-6e85-4230-8ad6-4359dd04f539)
+
+PicoGUS 2.0 boards are [available for sale on Tindie](https://www.tindie.com/products/polpo/picogus-sound-card-emulator-for-isa-retro-pcs/).
+<a href="https://www.tindie.com/products/polpo/picogus-sound-card-emulator-for-isa-retro-pcs/?ref=offsite_badges&utm_source=sellers_polpo&utm_medium=badges&utm_campaign=badge_medium"><img src="https://d2ss6ovg47m0r5.cloudfront.net/badges/tindie-mediums.png" alt="I sell on Tindie" width="150" height="78"></a>
 
 ![PicoGUS v1.1 beta PCB](https://user-images.githubusercontent.com/1544908/215666529-fc694b8f-aec3-4679-87df-b53d0c406c99.jpg)
 
