@@ -1,0 +1,26 @@
+Mfr. #,Manufacturer,Qty,Mouser #,Digi-Key #,LCSC #,Customer #,Footprint,Description,Notes
+CL31A476MPHNNNE,Samsung Electro-Mechanics ,2,187-CL31A476MPHNNNE,1276-3063-1-ND,C96123,"C1,C2",0805,47 µF ±20% 10V Ceramic Capacitor X5R 1206 (3216 Metric),Subst any 47uF electrolytic cap w/ 2mm lead spacing
+CL21B105KBFNNNE,Samsung Electro-Mechanics ,1,187-CL21B105KBFNNNE,1276-1029-1-ND,C28323,C10,0805,1 µF ±10% 50V Ceramic Capacitor X7R 0805 (2012 Metric),Subst any X7R 1uF 0805 ceramic cap
+CL21B104KCFNNNE,Samsung Electro-Mechanics ,12,187-CL21B104KCFNNNE,399-C0805C104M5RAC7800CT-ND,C28233,"C3,C4,C5,C6,C7,C8,C9,C11,C12,C13,C14,C18",0805,0.1 µF ±10% 100V Ceramic Capacitor X7R 0805 (2012 Metric),Subst any X7R 0.1uF 0805 ceramic cap
+CL21A106KAYNNNE,Samsung Electro-Mechanics ,1,187-CL21A106KAYNNNE,1276-2891-1-ND,C15850,C15,0805,10 µF ±10% 25V Ceramic Capacitor X5R 0805 (2012 Metric),
+CL21A225KBQNNNE,Samsung Electro-Mechanics ,2,187-CL21A225KBQNNNE,1276-6702-1-ND,C377773,"C16,C17",0805,2.2 µF ±10% 50V Ceramic Capacitor X5R 0805 (2012 Metric),
+CL21C222JBFNNNE,Samsung Electro-Mechanics ,2,187-CL21C222JBFNNNE,1276-2993-1-ND,C28260,"C19,C20",0805,"2200 pF ±5% 50V Ceramic Capacitor C0G, NP0 0805 (2012 Metric)",
+B5819W-TP,Micro Commercial Components,1,833-B5819W-TP,B5819W-TPMSCT-ND,C8598,D1,SOD-123, 40V 600mV@1A 1A SOD-123 Schottky Barrier Diodes (SBD),Subst any 1A 20V Schottky SOD123 diode
+10129381-918001BLF,FCI / Amphenol,1,649-1012938191801BLF,609-10129381-918001BLF-ND,C2935925,J1,PinHeader_2x09_P2.54mm_Vertical,Headers & Wire Housings HEADER DR VT TH 2X9-10129381-918001BLF,Subst any 2x9 2.54mm pin header
+SJ1-3535NG,CUI Devices,1,490-SJ1-3535NG,CP1-3535NG-ND,C5372857 ,J5,Jack_3.5mm_CUI_SJ1-3535NG_Horizontal,"3.50mm (0.141"", 1/8"", Mini Plug) - Headphone Phone Jack Stereo (3 Conductor, TRS) Connector Solder","Black jack for MIDI - Yellow jacks on AliExpress, search PJ-325"
+PH1-02-UA,Adam Tech,1,649-54102-T0800LF,2057-PH1-02-UA-ND,C2883961,J7,PinHeader_1x02_P2.54mm_Vertical,"Connector Header Through Hole 2 position 0.100"" (2.54mm)",
+SJ1-3535NG-GR,CUI Devices,1,490-SJ1-3535NG-GR,SJ1-3535NG-GR,C692438,J8,Jack_3.5mm_CUI_SJ1-3535NG_Horizontal,"3.50mm (0.141"", 1/8"", Mini Plug) - Headphone Phone Jack Stereo (3 Conductor, TRS) Connector Solder, green",Green jack for line out
+BLM21AG102SN1D,Murata Electronics ,2,81-BLM21AG102SN1,490-1041-1-ND,C85835,"FB1,FB2",0805,1 kOhms @ 100 MHz 1 Ferrite Bead 0805 (2012 Metric) 600mA 280mOhm,Subst any 1kOhm @ 100Mhz 0805 ferrite bead
+CR0805-JW-102ELF,Bourns,1,652-CR0805JW-102ELF,CR0805-JW-102ELFCT-ND,C17513,R1,0805,"1 kOhms ±5% 0.125W, 1/8W Chip Resistor 0805 (2012 Metric) Moisture Resistant Thick Film",Subst any 1kOhm 0.125w 0805 resistor
+CR0805-JW-153ELF,Bourns,3,652-CR0805JW-153ELF,118-CR0805-JW-153ELFCT-ND,C17475,"R2,R5,R6",0805,"15 kOhms ±5% 0.125W, 1/8W Chip Resistor 0805 (2012 Metric) Moisture Resistant Thick Film",Subst any 15kOhm 0.125w 0805 resistor
+RK73B2ATTD221J,KOA Speer,2,660-RK73B2ATTD221J,2019-RK73B2ATTD221JCT-ND,C5120092,"R3,R4",0805,"220 Ohms ±5% 0.25W, 1/4W Chip Resistor 0805 (2012 Metric) Automotive AEC-Q200 Thick Film",Subst any 220Ohm 0.25w 0805 resistor
+CR0805-JW-471ELF,Bourns,2,652-CR0805JW-471ELF,118-CR0805-JW-471ELFCT-ND,C17710,"R7,R8",0805,"470 Ohms ±5% 0.125W, 1/8W Chip Resistor 0805 (2012 Metric) Moisture Resistant Thick Film",Subst any 470Ohm 0.125w 0805 resistor
+SC0915 ,Raspberry Pi,1,358-SC0915,2648-SC0915CT-ND,C2905423,U1,,Single Board Computers Raspberry Pi Pico,Pico W and Pico H also work
+"74LVC244APW,118",Nexperia,1,771-74LVC244APW-T,1727-2875-1-ND,C6079,U2,TSSOP-20,"Buffer, Non-Inverting 2 Element 4 Bit per Element 3-State Output 20-TSSOP",
+SN74CB3T3257,Texas Instruments,2,595-SN74CB3T3257PWR,296-17850-1-ND,C544573,"U3,U4",TSSOP-14,"Encoders, Decoders, Multiplexers & Demultiplexers 4-Bit 1-OF-2 FET Mltplx/Demultplxr",
+74AHC14S14-13,Diodes Incorporated,1,621-74AHC14S14-13,31-74AHC14S14-13CT-ND,C6942,U5,SOIC-14,Inverter IC 6 Channel Schmitt Trigger 14-TSSOP,Subst any 74LVC14
+74LVC00AS14-13,Diodes Incorporated,1,621-74LVC00AS14-13,31-74LVC00AS14-13CT-ND,C526338,U6,SOIC-14,NAND Gate IC 4 Channel 14-SO,Subst any 74LVC00
+SN74LVC1G00DBVR,Texas Instruments,1,595-SN74LVC1G00DBVR,74LVC1G00W5-7DICT-ND,C7826,U7,SOT-23-5,Logic Gates 2-Input,Subst any 74LVC1G00
+APS6404L-3SQR-SN,AP Memory Technology,1,878-APS6404L-3SQR-SN,1528-4677-ND,C139966,U8,SOIC-8,"DRAM IoT RAM 64Mb QSPI (x1,x4) SDR 133/84MHz, RBX, 3V, Ind. Temp., SOP8","Subst Adafruit 4677, Vilsion Tech VTI7064MSME, ISSI IS66WVS1M8BLL-104NLI, IPUS IPS6404, Lyontek LY68L6400SLIT, Espressif ESP-PSRAM64H"
+PCM5100APWR,Texas Instruments,1,595-PCM5100APWR,296-36705-1-ND,C131154,U9,TSSOP-20,"DAC, Audio 16 b, 24 b, 32 b 384k PCM 20-TSSOP",
+SN74LVC2G06DBVR,Texas Instruments,1,595-SN74LVC2G06DBVR,296-13492-1-ND,C402162,U10,SOT-23-6,Buffers & Line Drivers Single Invert w/OD,Subst any 74LVC1G06

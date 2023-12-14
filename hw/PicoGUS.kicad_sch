@@ -5,7 +5,9 @@
   (paper "A4")
 
   (title_block
-    (title "PicoGUS v1.1")
+    (title "PicoGUS")
+    (date "2023-12-13")
+    (rev "v1.2")
   )
 
   (lib_symbols
@@ -8079,7 +8081,7 @@
   (symbol (lib_id "Device:FerriteBead") (at 232.41 70.485 90) (unit 1)
     (in_bom yes) (on_board yes) (dnp no)
     (uuid c442a37d-4372-4a9e-8644-b38a419114c0)
-    (property "Reference" "L1" (at 234.95 64.135 90)
+    (property "Reference" "FB1" (at 234.95 64.135 90)
       (effects (font (size 1.27 1.27)))
     )
     (property "Value" "1KOhm @ 100MHz" (at 236.22 66.675 90)
@@ -8099,7 +8101,7 @@
     (instances
       (project "PicoGUS"
         (path "/8fb4b197-630e-4faa-9892-8ecaeb71c13b"
-          (reference "L1") (unit 1)
+          (reference "FB1") (unit 1)
         )
       )
     )
@@ -8108,7 +8110,7 @@
   (symbol (lib_id "Device:FerriteBead") (at 240.03 60.325 90) (unit 1)
     (in_bom yes) (on_board yes) (dnp no)
     (uuid c498c05c-c6ef-46ed-a369-a724edc50e94)
-    (property "Reference" "L2" (at 240.03 53.975 90)
+    (property "Reference" "FB2" (at 240.03 53.975 90)
       (effects (font (size 1.27 1.27)))
     )
     (property "Value" "1KOhm @ 100MHz" (at 241.3 56.515 90)
@@ -8128,7 +8130,7 @@
     (instances
       (project "PicoGUS"
         (path "/8fb4b197-630e-4faa-9892-8ecaeb71c13b"
-          (reference "L2") (unit 1)
+          (reference "FB2") (unit 1)
         )
       )
     )
