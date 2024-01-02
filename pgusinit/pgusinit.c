@@ -301,7 +301,7 @@ int main(int argc, char* argv[]) {
     outp(CONTROL_PORT, 0xCC); // Knock on the door...
     outp(CONTROL_PORT, 0x00); // Select magic string register
     if (inp(DATA_PORT_HIGH) != 0xDD) {
-        err_pigus(); // Nobody is home
+        err_pigus();
         return 99;
     };
     printf("PicoGUS detected: ");
