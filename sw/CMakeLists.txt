@@ -132,7 +132,7 @@ if(PROJECT_TYPE STREQUAL "OPL")
 endif()
 
 if(PROJECT_TYPE STREQUAL "MPU")
-    pico_set_program_name(picogus "picogus-mpu401")
+    pico_set_program_name(picogus "picompu-mpu401")
     target_compile_definitions(picogus PRIVATE
         SOUND_MPU=1
     )
