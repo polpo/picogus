@@ -7,10 +7,11 @@
 #include <stdbool.h>
 #include <i86.h>
 
-#define CONTROL_PORT 0x1D0
-#define DATA_PORT_LOW  0x1D1
-#define DATA_PORT_HIGH 0x1D2
 #define PICOGUS_PROTOCOL_VER 2
+
+unsigned short CONTROL_PORT=0x1D0; // Change to a variable with GUS defaults
+unsigned short DATA_PORT_LOW=0x1D1;
+unsigned short DATA_PORT_HIGH=0x1D2;
 
 typedef enum {
     PICO_FIRMWARE_IDLE = 0,
@@ -288,8 +289,16 @@ int main(int argc, char* argv[]) {
     outp(CONTROL_PORT, 0xCC); // Knock on the door...
     outp(CONTROL_PORT, 0x00); // Select magic string register
     if (inp(DATA_PORT_HIGH) != 0xDD) {
-        err_pigus();
-        return 99;
+        CONTROL_PORT=0x1D3; // Let's see if there's a MPU
+        DATA_PORT_LOW=0x1D4;
+        DATA_PORT_HIGH=0x1D5;
+        // Get magic value from port on PicoGUS that is running MPU firmware
+        outp(CONTROL_PORT, 0xCC); // Knock on the door...
+        outp(CONTROL_PORT, 0x00); // Select magic string register
+        if (inp(DATA_PORT_HIGH) != 0xDD) {
+            err_pigus(); // Nobody is home
+            return 99;
+        }
     };
     printf("PicoGUS detected: ");
     print_firmware_string();
