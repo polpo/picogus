@@ -57,7 +57,7 @@ void usage(char *argv0, card_mode_t mode) {
     fprintf(stderr, "    /?        - show this message\n");
     fprintf(stderr, "    /f fw.uf2 - program the PicoGUS with the firmware file fw.uf2\n");
     fprintf(stderr, "    /j        - enable USB joystick support\n");
-    fprintf(stderr, "    /m        - enable MPU-401 communication\n");
+    fprintf(stderr, "    /m        - switch to PicoMPU communication\n");
     if (mode > GUS_MODE && mode < JOYSTICK_ONLY_MODE) {
         fprintf(stderr, "AdLib, MPU-401, Tandy, CMS modes only:\n");
         fprintf(stderr, "    /p x - set the (hex) base port address of the emulated card. Defaults:\n");
