@@ -294,7 +294,6 @@ int main(int argc, char* argv[]) {
             CONTROL_PORT=0x1D3; // Change the GUS ports to MPU
             DATA_PORT_LOW=0x1D4;
             DATA_PORT_HIGH=0x1D5;
-        }
         } else if (stricmp(argv[i], "/j") == 0) {
             enable_joystick = 1;
         } else if (stricmp(argv[i], "/a") == 0) {
