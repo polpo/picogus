@@ -57,6 +57,7 @@ void usage(char *argv0, card_mode_t mode) {
     fprintf(stderr, "    /?        - show this message\n");
     fprintf(stderr, "    /f fw.uf2 - program the PicoGUS with the firmware file fw.uf2\n");
     fprintf(stderr, "    /j        - enable USB joystick support\n");
+    fprintf(stderr, "    /m        - enable MPU-401 communication\n");
     if (mode > GUS_MODE && mode < JOYSTICK_ONLY_MODE) {
         fprintf(stderr, "AdLib, MPU-401, Tandy, CMS modes only:\n");
         fprintf(stderr, "    /p x - set the (hex) base port address of the emulated card. Defaults:\n");
@@ -284,33 +285,16 @@ int main(int argc, char* argv[]) {
     uint8_t mpu_fakeallnotesoff = 0;
     uint8_t enable_joystick = 0;
 
-    banner();
-    // Get magic value from port on PicoGUS that is not on real GUS
-    outp(CONTROL_PORT, 0xCC); // Knock on the door...
-    outp(CONTROL_PORT, 0x00); // Select magic string register
-    if (inp(DATA_PORT_HIGH) != 0xDD) {
-        CONTROL_PORT=0x1D3; // Let's see if there's a MPU
-        DATA_PORT_LOW=0x1D4;
-        DATA_PORT_HIGH=0x1D5;
-        // Get magic value from port on PicoGUS that is running MPU firmware
-        outp(CONTROL_PORT, 0xCC); // Knock on the door...
-        outp(CONTROL_PORT, 0x00); // Select magic string register
-        if (inp(DATA_PORT_HIGH) != 0xDD) {
-            err_pigus(); // Nobody is home
-            return 99;
-        }
-    };
-    printf("PicoGUS detected: ");
-    print_firmware_string();
-
-    outp(CONTROL_PORT, 0x03); // Select mode register
-    mode = inp(DATA_PORT_HIGH);
-
     int i = 1;
     while (i < argc) {
         if (stricmp(argv[i], "/?") == 0) {
             usage(argv[0], mode);
             return 0;
+        } else if (stricmp(argv[i], "/m") == 0) {
+            CONTROL_PORT=0x1D3; // Change the GUS ports to MPU
+            DATA_PORT_LOW=0x1D4;
+            DATA_PORT_HIGH=0x1D5;
+        }
         } else if (stricmp(argv[i], "/j") == 0) {
             enable_joystick = 1;
         } else if (stricmp(argv[i], "/a") == 0) {
@@ -370,6 +354,20 @@ int main(int argc, char* argv[]) {
         }
         ++i;
     }
+
+    banner();
+    // Get magic value from port on PicoGUS that is not on real GUS
+    outp(CONTROL_PORT, 0xCC); // Knock on the door...
+    outp(CONTROL_PORT, 0x00); // Select magic string register
+    if (inp(DATA_PORT_HIGH) != 0xDD) {
+        err_pigus(); // Nobody is home
+        return 99;
+    };
+    printf("PicoGUS detected: ");
+    print_firmware_string();
+
+    outp(CONTROL_PORT, 0x03); // Select mode register
+    mode = inp(DATA_PORT_HIGH);
 
     outp(CONTROL_PORT, 0x01); // Select protocol version register
     uint8_t protocol_got = inp(DATA_PORT_HIGH);
