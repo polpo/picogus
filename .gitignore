@@ -8,3 +8,4 @@
 build/
 *.kicad_prl
 fp-info-cache
+.vscode
