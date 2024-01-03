@@ -21,9 +21,13 @@ project(picogus
 )
 
 set(PICO_BOARD_HEADER_DIRS ${CMAKE_CURRENT_LIST_DIR})
-set(PICO_BOARD picogus2)
+set(PICO_BOARD pico_w)
+set(PROJECT_TYPE "OPL")
 
-# set(PICO_DEOPTIMIZED_DEBUG "1")
+
+
+#set(PICO_DEOPTIMIZED_DEBUG "1")
+#set(CMAKE_BUILD_TYPE "Debug")
 set(CMAKE_BUILD_TYPE "Release")
 set(PICO_COPY_TO_RAM 1)
 #set(SKIP_PICO_MALLOC 1)
@@ -114,16 +118,19 @@ endif()
 
 if(PROJECT_TYPE STREQUAL "OPL")
     pico_set_program_name(picogus "picogus-adlib")
-    target_sources(picogus PRIVATE adlibplay.cpp)
-
+    target_sources(picogus PRIVATE adlibplay.cpp sbplay.cpp pico_pic.c isa_dma.c)    
+    
     target_link_libraries(
-        picogus
-        opl
+        picogus        
+        opl        
     )
     target_compile_definitions(picogus PRIVATE
         SOUND_OPL=1
-        USE_EMU8950_OPL=1
+        SOUND_DSP=1
+        USE_ALARM=1
+        USE_EMU8950_OPL=1        
         EMU8950_ASM=1
+        PICOW=1
     )
     add_subdirectory(opl)
     pico_enable_stdio_uart(picogus 1)

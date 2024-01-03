@@ -51,6 +51,14 @@ extern "C" void OPL_Pico_PortWrite(opl_port_t, unsigned int);
 extern "C" unsigned int OPL_Pico_PortRead(opl_port_t);
 #endif
 
+#ifdef SOUND_DSP
+extern void sbdsp_write(uint8_t address, uint8_t value);
+extern uint8_t sbdsp_read(uint8_t address);
+extern void sbdsp_init();
+extern void sbdsp_process();
+static uint16_t DSP_basePort = 0x220u;
+#endif
+
 #ifdef SOUND_GUS
 #include "gus-x.cpp"
 
@@ -60,6 +68,7 @@ static uint16_t basePort = GUS_DEFAULT_PORT;
 static uint16_t gus_port_test = basePort >> 4 | 0x10;
 void play_gus(void);
 #endif
+
 
 #ifdef SOUND_MPU
 #include "mpu401/export.h"
@@ -292,6 +301,14 @@ __force_inline void handle_iow(void) {
     // printf("%x", iow_read);
     uint16_t port = (iow_read >> 8) & 0x3FF;
     // printf("IOW: %x %x\n", port, iow_read & 0xFF);
+#ifdef SOUND_DSP    
+    if( port >= DSP_basePort && port <= (DSP_basePort+0xF)) {            
+            pio_sm_put(pio0, iow_sm, IO_WAIT);                        
+            sbdsp_process();
+            sbdsp_write(port & 0xF,iow_read & 0xFF);       
+            sbdsp_process();                                         
+    } else
+#endif
 #ifdef SOUND_GUS
     if ((port >> 4 | 0x10) == gus_port_test) {
         port -= basePort;
@@ -332,7 +349,9 @@ __force_inline void handle_iow(void) {
         pio_sm_put(pio0, iow_sm, IO_WAIT);
         OPL_Pico_PortWrite(OPL_DATA_PORT, iow_read & 0xFF);
         // __dsb();
+#ifndef PICOW
         gpio_xor_mask(LED_PIN);
+#endif
         break;
     }
 #endif // SOUND_OPL
@@ -437,9 +456,17 @@ __force_inline void handle_iow(void) {
 }
 
 __force_inline void handle_ior(void) {
-    uint16_t port = pio_sm_get(pio0, ior_sm) & 0x3FF;
-    // printf("IOR: %x\n", port);
+    uint8_t x;
+    uint16_t port = pio_sm_get(pio0, ior_sm) & 0x3FF;     
     //
+#ifdef SOUND_DSP  
+    if( port >= DSP_basePort && port <= (DSP_basePort+0xF)) {      
+        pio_sm_put(pio0, ior_sm, IO_WAIT);
+        sbdsp_process();
+        pio_sm_put(pio0, ior_sm, IOR_SET_VALUE | sbdsp_read(port & 0xF));        
+        sbdsp_process();
+    } else
+#endif
 #if defined(SOUND_GUS)
     if ((port >> 4 | 0x10) == gus_port_test) {
         // Tell PIO to wait for data
@@ -548,7 +575,7 @@ void err_blink(void) {
 #include "pico_pic.h"
 #endif
 
-constexpr uint32_t rp2_clock = 400000;
+constexpr uint32_t rp2_clock = 280000;
 constexpr float psram_clkdiv = (float)rp2_clock / 200000.0;
 constexpr float pwm_clkdiv = (float)rp2_clock / 22727.27;
 
@@ -588,9 +615,11 @@ int main()
     if (result > 0x100) {
         puts("Running on Pico-based board (PicoGUS v1.1+, PicoGUS Femto)");
         // On Pico-based board (PicoGUS v1.1+, PicoGUS Femto)
+#ifndef PICOW        
         LED_PIN = 1 << PICO_DEFAULT_LED_PIN;
         gpio_init(PICO_DEFAULT_LED_PIN);
         gpio_set_dir(PICO_DEFAULT_LED_PIN, GPIO_OUT);
+#endif
         BOARD_TYPE = PICO_BASED;
     } else {
         // On chipdown board (PicoGUS v2.0)
@@ -694,6 +723,11 @@ int main()
 #endif // PSRAM
 #endif // PSRAM_CORE0
 
+
+#ifdef SOUND_DSP
+    puts("Initializing SoundBlaster DSP");
+    sbdsp_init();
+#endif
 #ifdef SOUND_OPL
     puts("Creating OPL");
     OPL_Pico_Init(basePort);

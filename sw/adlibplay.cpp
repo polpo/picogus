@@ -24,12 +24,16 @@
 #include "tusb.h"
 #endif
 
+#ifdef USE_ALARM
+#include "pico_pic.h"
+#endif
+
 #if PICO_ON_DEVICE
 #include "pico/binary_info.h"
 bi_decl(bi_3pins_with_names(PICO_AUDIO_I2S_DATA_PIN, "I2S DIN", PICO_AUDIO_I2S_CLOCK_PIN_BASE, "I2S BCK", PICO_AUDIO_I2S_CLOCK_PIN_BASE+1, "I2S LRCK"));
 #endif
 
-#define SAMPLES_PER_BUFFER 64
+#define SAMPLES_PER_BUFFER 256
 
 struct audio_buffer_pool *init_audio() {
 
@@ -69,9 +73,21 @@ struct audio_buffer_pool *init_audio() {
 
 extern "C" void OPL_Pico_Mix_callback(audio_buffer_t *);
 
+#ifdef SOUND_DSP
+extern void sbdsp_process(void);
+extern void sbdsp_mix(audio_buffer_t *buffer);
+extern uint16_t sbdsp_fifo_level();
+#endif
+
+
 void play_adlib() {
     puts("starting core 1");
     uint32_t start, end;
+
+#ifdef USE_ALARM
+    // Init PIC on this core so it handles timers
+    PIC_Init();
+#endif
 
 #ifdef USB_JOYSTICK
     // Init TinyUSB for joystick support
@@ -79,9 +95,10 @@ void play_adlib() {
 #endif
 
     struct audio_buffer_pool *ap = init_audio();
+
     for (;;) {
         struct audio_buffer *buffer = take_audio_buffer(ap, true);
-        OPL_Pico_Mix_callback(buffer);
+        sbdsp_mix(buffer);
         // putchar((unsigned char)buffer->buffer->bytes[1]);
         give_audio_buffer(ap, buffer);
 #ifdef USB_JOYSTICK
