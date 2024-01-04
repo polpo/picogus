@@ -318,6 +318,7 @@ void sbdsp_process(void) {
             sbdsp.current_command=0;  
             sbdsp.autoinit=1;
             sbdsp.dma_sample_count = sbdsp.dma_block_size;
+            sbdsp.dma_sample_count_rx=0;
             sbdsp_dma_enable();            
             break;            
 
@@ -364,6 +365,7 @@ void sbdsp_process(void) {
             sbdsp.current_command=0;  
             sbdsp.autoinit=0;
             sbdsp.dma_sample_count = sbdsp.dma_block_size;
+            sbdsp.dma_sample_count_rx=0;
             sbdsp_dma_enable();            
             break;            
         case DSP_DMA_SINGLE:              
