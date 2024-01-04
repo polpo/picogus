@@ -33,7 +33,13 @@
 bi_decl(bi_3pins_with_names(PICO_AUDIO_I2S_DATA_PIN, "I2S DIN", PICO_AUDIO_I2S_CLOCK_PIN_BASE, "I2S BCK", PICO_AUDIO_I2S_CLOCK_PIN_BASE+1, "I2S LRCK"));
 #endif
 
-#define SAMPLES_PER_BUFFER 256
+
+/*
+Minimum expected sample rate from DSP should be 8000hz?
+Maximum number of DSP to process at once should be 64.
+49716 / 8000 = 6.2145 * 64 = 397
+*/
+#define SAMPLES_PER_BUFFER 512
 
 struct audio_buffer_pool *init_audio() {
 
