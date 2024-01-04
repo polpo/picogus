@@ -68,10 +68,13 @@ typedef struct sbdsp_t {
 
     uint16_t dma_interval;     
     int16_t dma_interval_trim;
-
+    uint8_t dma_transfer_size;
     uint8_t  dma_buffer[DSP_DMA_FIFO_SIZE];
     volatile uint16_t dma_buffer_tail;
     volatile uint16_t dma_buffer_head;
+
+    uint16_t dma_pause_duration;
+    uint8_t dma_pause_duration_low;
 
     uint16_t dma_block_size;
     uint32_t dma_sample_count;
@@ -150,7 +153,13 @@ void sbdsp_dma_enable() {
     if(!sbdsp.dma_enabled) {
         sbdsp_fifo_clear();
         sbdsp.dma_enabled=true;            
-        PIC_AddEvent(DSP_DMA_Event,sbdsp.dma_interval,1);
+        if(sbdsp.dma_pause_duration) {            
+            PIC_AddEvent(DSP_DMA_Event,sbdsp.dma_interval * sbdsp.dma_pause_duration,1);
+            sbdsp.dma_pause_duration=0;
+        }
+        else {
+            PIC_AddEvent(DSP_DMA_Event,sbdsp.dma_interval,1);
+        }
     }
     else {
         //printf("INFO: DMA Already Enabled");        
@@ -171,15 +180,26 @@ uint32_t DSP_DMA_Event(Bitu val) {
 
 void sbdsp_dma_isr(void) {
     const uint32_t dma_data = DMA_Complete_Write(&dma_config);    
+    uint16_t current_interval;
     sbdsp_fifo_rx(dma_data & 0xFF);    
     sbdsp.dma_sample_count_rx++;    
+
+    if(sbdsp.dma_pause_duration) {
+        current_interval = sbdsp.dma_interval * sbdsp.dma_pause_duration;        
+        sbdsp.dma_pause_duration=0;
+    }
+    else {
+        current_interval = sbdsp.dma_interval + sbdsp.dma_interval_trim;
+    }
+
+
     if(sbdsp.dma_sample_count_rx <= sbdsp.dma_sample_count) {        
-        PIC_AddEvent(DSP_DMA_Event,sbdsp.dma_interval+sbdsp.dma_interval_trim,1);
+        PIC_AddEvent(DSP_DMA_Event,current_interval,1);
     }
     else {                  
         if(sbdsp.autoinit) {            
             sbdsp.dma_sample_count_rx=0;            
-            PIC_AddEvent(DSP_DMA_Event,sbdsp.dma_interval+sbdsp.dma_interval_trim,1);         
+            PIC_AddEvent(DSP_DMA_Event,current_interval,1);         
         }
         else {            
             sbdsp_dma_disable();            
@@ -205,7 +225,7 @@ void sbdsp_mix(audio_buffer_t *buffer) {
         while(!sbdsp_fifo_level()) {//TODO: This is not ideal to block here.                        
         }                
         if(1==1) {//sbdsp_fifo_level() >= 16 ) {//TODO: this will be problem at the end.
-            x = sbdsp_fifo_tx(buf,4);            
+            x = sbdsp_fifo_tx(buf,sbdsp.dma_transfer_size);     //4       
             starting_offset = sbdsp.sample_offset >> 16;   
             for(i=0;i<(x*sbdsp.sample_factor);i++) {        
                 y=(sbdsp.sample_offset >> 16) - starting_offset;
@@ -310,7 +330,9 @@ void sbdsp_process(void) {
                     sbdsp.dma_interval = 1000000ul / sbdsp.sample_rate; // redundant.                    
                     sbdsp.sample_step = sbdsp.sample_rate * 65535ul / OUTPUT_SAMPLERATE;                    
                     sbdsp.sample_factor = (OUTPUT_SAMPLERATE / sbdsp.sample_rate)+5; //Estimate
-
+                    
+                    sbdsp.dma_transfer_size = 4;
+                    
                     //sbdsp.i2s_buffer_size = ((OUTPUT_SAMPLERATE * 65535ul) / sbdsp.sample_rate * sbdsp.dma_buffer_size) >> 16;
                     
                     
@@ -422,13 +444,28 @@ void sbdsp_process(void) {
             }
             break;
         
+        case DSP_DMA_PAUSE_DURATION:
+            if(sbdsp.dav_dsp) {                             
+                if(sbdsp.current_command_index==1) {                    
+                    sbdsp.dma_pause_duration_low=sbdsp.inbox;
+                    sbdsp.dav_dsp=0;                    
+                }
+                else if(sbdsp.current_command_index==2) {                    
+                    sbdsp.dma_pause_duration = sbdsp.dma_pause_duration_low + (sbdsp.inbox << 8);
+                    sbdsp.dav_dsp=0;
+                    sbdsp.current_command=0;          
+                    //printf("(0x80) Pause Duration:%u\n\r",sbdsp.dma_pause_duration);                                        
+                }
+                sbdsp.current_command_index++;
+            }
+            break;       
         //case DSP_SINE:
         //case DSP_CHECKSUM:          
         case 0:
             //not in a command
             break;            
         default:
-            //printf("Unknown Command: %x\n",sbdsp.current_command);
+            printf("Unknown Command: %x\n",sbdsp.current_command);
             sbdsp.current_command=0;
             break;
 
