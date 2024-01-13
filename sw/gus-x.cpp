@@ -1567,7 +1567,8 @@ static int32_t __force_inline clamp(int32_t d, int32_t min, int32_t max) {
 }
 #endif // INTERP_CLAMP
 
-extern uint32_t GUS_CallBack(Bitu max_len, int16_t* play_buffer) {
+extern uint32_t __scratch_x("my_sub_section") (GUS_CallBack)(Bitu max_len, int16_t* play_buffer) {
+// extern uint32_t GUS_CallBack(Bitu max_len, int16_t* play_buffer) {
     static int32_t accum[2];
     uint32_t s = 0;
 

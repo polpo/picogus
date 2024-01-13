@@ -548,12 +548,14 @@ void err_blink(void) {
 #include "pico_pic.h"
 #endif
 
-constexpr uint32_t rp2_clock = 400000;
+constexpr uint32_t rp2_clock = 366000;
 constexpr float psram_clkdiv = (float)rp2_clock / 200000.0;
 constexpr float pwm_clkdiv = (float)rp2_clock / 22727.27;
 
+#include "hardware/structs/xip_ctrl.h"
 int main()
 {
+    hw_clear_bits(&xip_ctrl_hw->ctrl, XIP_CTRL_EN_BITS);
 #ifdef ASYNC_UART
     stdio_async_uart_init_full(UART_ID, BAUD_RATE, UART_TX_PIN, UART_RX_PIN);
 #else
@@ -605,10 +607,11 @@ int main()
     busy_wait_ms(250);
     // Overclock!
     printf("Overclocking... ");
-    vreg_set_voltage(VREG_VOLTAGE_1_30);
+    vreg_set_voltage(VREG_VOLTAGE_1_25);
     // vreg_set_voltage(VREG_VOLTAGE_1_15);
     busy_wait_ms(250);
     set_sys_clock_khz(rp2_clock, true);
+    busy_wait_ms(250);
     gpio_xor_mask(LED_PIN);
 #ifdef ASYNC_UART
     uart_init(UART_ID, 0);

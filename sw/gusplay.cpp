@@ -75,6 +75,7 @@ struct audio_buffer_pool *init_audio() {
     return producer_pool;
 }
 
+// void __xip_cache("my_sub_section") (play_gus)(void) {
 void play_gus() {
     puts("starting core 1");
     uint32_t start, end;
