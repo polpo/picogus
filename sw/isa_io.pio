@@ -26,13 +26,14 @@ read_addr:
 .wrap
 
 % c-sdk {
-static inline void iow_program_init(PIO pio, uint sm, uint offset) {
+static inline void iow_program_init(PIO pio, uint sm, uint offset, float clkdiv) {
     pio_sm_config c = iow_program_get_default_config(offset);
 
     // Set up AD0 pins as input
     sm_config_set_in_pins(&c, AD0_PIN);
     // Autopush at 18 bits (10 addr + 8 data)
     sm_config_set_in_shift(&c, false, true, 18);
+    sm_config_set_clkdiv(&c, clkdiv);
 
     // Autopull 32 bits (condition variables from handle_ior)
     sm_config_set_out_shift(&c, true, true /* autopull */, 32);

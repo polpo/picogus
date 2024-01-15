@@ -550,6 +550,7 @@ void err_blink(void) {
 constexpr uint32_t rp2_clock = 366000;
 constexpr float psram_clkdiv = (float)rp2_clock / 200000.0;
 constexpr float pwm_clkdiv = (float)rp2_clock / 22727.27;
+constexpr float iow_clkdiv = (float)rp2_clock / 183000.0;
 
 constexpr uint32_t iow_rxempty = 1u << (PIO_FSTAT_RXEMPTY_LSB + IOW_PIO_SM);
 __force_inline bool iow_has_data() {
@@ -778,7 +779,7 @@ int main()
     pio_sm_claim(pio0, IOR_PIO_SM);
     printf("ior sm: %u\n", IOR_PIO_SM);
 
-    iow_program_init(pio0, IOW_PIO_SM, iow_offset);
+    iow_program_init(pio0, IOW_PIO_SM, iow_offset, iow_clkdiv);
     ior_program_init(pio0, IOR_PIO_SM, ior_offset);
 
 #ifdef USE_IRQ
