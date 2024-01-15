@@ -22,7 +22,7 @@ typedef struct dma_inst {
     bool invertMsb;
 } dma_inst_t;
 
-dma_inst_t DMA_init(PIO pio, irq_handler_t dma_isr);
+dma_inst_t DMA_init(PIO pio, uint sm, irq_handler_t dma_isr);
 
 // __force_inline size_t DMA_Write(dma_inst_t* dma, uint32_t dmaaddr, bool invert_msb, bool is_16bit, uint32_t delay, bool* dma_active) {
 __force_inline extern void DMA_Start_Write(dma_inst_t* dma) {
