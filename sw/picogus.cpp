@@ -302,7 +302,7 @@ __force_inline void handle_iow(void) {
     // printf("IOW: %x %x\n", port, iow_read & 0xFF);
 #ifdef SOUND_DSP    
     if( port >= DSP_basePort && port <= (DSP_basePort+0xF)) {            
-            pio_sm_put(pio0, iow_sm, IO_WAIT);                        
+            pio_sm_put(pio0, IOW_PIO_SM, IO_WAIT);                        
             sbdsp_process();
             sbdsp_write(port & 0xF,iow_read & 0xFF);       
             sbdsp_process();                                         
@@ -459,10 +459,11 @@ __force_inline void handle_ior(void) {
     uint16_t port = pio_sm_get(pio0, IOR_PIO_SM) & 0x3FF;
     //
 #ifdef SOUND_DSP  
-    if( port >= DSP_basePort && port <= (DSP_basePort+0xF)) {      
-        pio_sm_put(pio0, ior_sm, IO_WAIT);
+    // if( port >= DSP_basePort && port <= (DSP_basePort+0xF)) {      
+    if ((port >> 4) == (DSP_basePort >> 4)) {      
+        pio_sm_put(pio0, IOR_PIO_SM, IO_WAIT);
         sbdsp_process();
-        pio_sm_put(pio0, ior_sm, IOR_SET_VALUE | sbdsp_read(port & 0xF));        
+        pio_sm_put(pio0, IOR_PIO_SM, IOR_SET_VALUE | sbdsp_read(port & 0xF));        
         sbdsp_process();
     } else
 #endif

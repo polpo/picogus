@@ -21,8 +21,7 @@ project(picogus
 )
 
 set(PICO_BOARD_HEADER_DIRS ${CMAKE_CURRENT_LIST_DIR})
-set(PICO_BOARD pico_w)
-set(PROJECT_TYPE "OPL")
+set(PICO_BOARD picogus2)
 
 
 
