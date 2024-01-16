@@ -19,6 +19,7 @@ extern "C" void OPL_Pico_Mix_callback(audio_buffer_t *);
 
 irq_handler_t SBDSP_DMA_isr_pt;
 dma_inst_t dma_config;
+#define DMA_PIO_SM 2
 
 #define DSP_VERSION_MAJOR 2
 #define DSP_VERSION_MINOR 1
@@ -264,7 +265,7 @@ void sbdsp_init() {
 
     puts("Initing ISA DMA PIO...");    
     SBDSP_DMA_isr_pt = sbdsp_dma_isr;
-    dma_config = DMA_init(pio0, SBDSP_DMA_isr_pt);         
+    dma_config = DMA_init(pio0, DMA_PIO_SM, SBDSP_DMA_isr_pt);         
 
     opl_buffer = (audio_buffer_t *) malloc(sizeof(audio_buffer_t));
     opl_buffer->buffer = (mem_buffer_t *) malloc(sizeof(mem_buffer_t));        
