@@ -24,6 +24,7 @@ typedef enum {
     TANDY_MODE = 3,
     CMS_MODE = 4,
     SB_MODE = 5,
+    MOUSE_ONLY_MODE = 0x0E,     // clarify later
     JOYSTICK_ONLY_MODE = 0x0f
 } card_mode_t;
 
@@ -112,6 +113,15 @@ uint8_t joystate_bin;
 #include "hardware/pwm.h"
 #endif
 
+#ifdef USB_MOUSE
+static uint16_t mousePort = 0x2F8;      // emulate at COM2
+static uint8_t  mouseSensitivity_low;
+#include "mouse/8250uart.h"
+#include "mouse/sermouse.h"
+extern uart_state_t uart_state;
+void play_usb(void);                    // FIXME!!!!
+#endif
+
 // PicoGUS control and data ports
 // 1D0 chosen as the base port as nothing is listed in Ralf Brown's Port List (http://www.cs.cmu.edu/~ralf/files.html)
 #define CONTROL_PORT 0x1D0
@@ -168,6 +178,13 @@ __force_inline void select_picogus(uint8_t value) {
 #ifdef SOUND_SB
     case 0x30: // Adlib speed sensitive fix
         break;
+#ifdef USB_MOUSE
+    case 0x40:
+    case 0x41:
+    case 0x42:
+    case 0x43:
+        break;
+#endif
 #endif
     case 0xE0: // Select firmware boot mode register
     case 0xE1: // Select save settings register
@@ -190,6 +207,14 @@ __force_inline void write_picogus_low(uint8_t value) {
     case 0x05: // Adlib Base port
         basePort_tmp = value;
         break;
+#ifdef USB_MOUSE
+    case 0x30:  // USB Mouse port (0 - disabled)
+        mousePort = value;
+        break;
+    case 0x33:  // USB Mouse Sensitivity (8.8 fixedpoint)
+        mouseSensitivity_low = value;
+        break;
+#endif
     }
 }
 
@@ -263,6 +288,20 @@ __force_inline void write_picogus_high(uint8_t value) {
         adlib_wait = value;
         break;
 #endif
+#ifdef USB_MOUSE
+    case 0x40:  // USB Mouse port (0 - disabled)
+        uart_state.iobase = value ? ((value << 8) | (mousePort & 0xFF)) : 0xFFFF;
+        break;
+    case 0x41:  // USB Mouse protocol
+        sermouse_set_protocol(value);
+        break;
+    case 0x42:  // USB Mouse Report Rate
+        sermouse_set_report_rate_hz(value);
+        break;
+    case 0x43:  // USB Mouse Sensitivity (8.8 fixedpoint)
+        sermouse_set_sensitivity((value << 8) | (mouseSensitivity_low & 0xFF));
+        break;
+#endif
     // For multifw
     case 0xE0:
         // set firmware num, perm flag and reboot
@@ -289,6 +328,12 @@ __force_inline uint8_t read_picogus_low(void) {
         return basePort & 0xff;
 #else
         return 0xff;
+#endif
+#ifdef USB_MOUSE
+    case 0x30:  // USB Mouse port (0 - disabled)
+        return uart_state.iobase == 0xFFFF ? 0 : (uart_state.iobase & 0xFF);
+    case 0x33:  // USB Mouse Sensitivity (8.8 fixedpoint)
+        return (sermouse_get_sensitivity() & 0xFF);
 #endif
         break;
     case 0x05: // Adlib Base port
@@ -331,6 +376,8 @@ __force_inline uint8_t read_picogus_high(void) {
         return SB_MODE;
 #elif defined(USB_JOYSTICK_ONLY)
         return JOYSTICK_ONLY_MODE;
+#elif defined(USB_MOUSE_ONLY)
+        return MOUSE_ONLY_MODE;
 #else
         return 0xff;
 #endif
@@ -362,6 +409,20 @@ __force_inline uint8_t read_picogus_high(void) {
             return 0;
         }
         break;
+#ifdef USB_MOUSE
+    case 0x40:  // USB Mouse port (0 - disabled)
+        return uart_state.iobase == 0xFFFF ? 0 : (uart_state.iobase >> 8);
+        break;
+    case 0x41:  // USB Mouse protocol
+        return sermouse_get_protocol();
+        break;
+    case 0x42:  // USB Mouse Report Rate
+        return sermouse_get_report_rate_hz();
+        break;
+    case 0x43:  // USB Mouse Sensitivity (8.8 fixedpoint)
+        return (sermouse_get_sensitivity() >> 8);
+        break;
+#endif
     case 0xF0: // Hardware version
         return BOARD_TYPE;
     case 0xff:
@@ -555,7 +616,13 @@ __force_inline void handle_iow(void) {
         pwm_set_wrap(3, 0);
         return;
     } else // if follows down below
-#endif
+#endif // USB_JOYSTICK
+#ifdef USB_MOUSE
+    if ((port & ~7) == uart_state.iobase) {
+        pio_sm_put(pio0, IOW_PIO_SM, IO_WAIT);      // leave some time for UART logic emualtion
+        uartemu_write(port & 7, iow_read & 0xFF);
+    } else // if follows down below
+#endif // USB_MOUSE
     // PicoGUS control
     if (port == CONTROL_PORT) {
         pio_sm_put(pio0, IOW_PIO_SM, IO_WAIT);
@@ -666,7 +733,15 @@ __force_inline void handle_ior(void) {
             joystate_struct.button_mask;
         pio_sm_put(pio0, IOR_PIO_SM, IOR_SET_VALUE | value);
     } else // if follows down below
-#endif
+#endif // USB_JOYSTICK
+#ifdef USB_MOUSE
+    if ((port & ~7) == uart_state.iobase) {
+        pio_sm_put(pio0, IOR_PIO_SM, IO_WAIT);
+        uint8_t value = uartemu_read(port & 7);
+        pio_sm_put(pio0, IOR_PIO_SM, IOR_SET_VALUE | value);
+        return;
+    } else // if follows down below
+#endif // USB_MOUSE
     if (port == CONTROL_PORT) {
         // Tell PIO to wait for data
         pio_sm_put(pio0, IOR_PIO_SM, IO_WAIT);
@@ -924,6 +999,14 @@ int main()
     multicore_launch_core1(&play_usb);
 #endif // USB_JOYSTICK_ONLY
 #endif // USB_JOYSTICK
+
+#ifdef USB_MOUSE
+    puts("Config USB Mouse emulation");
+    uartemu_init(mousePort);
+    sermouse_init();
+    sermouse_attach_uart();
+    multicore_launch_core1(&play_usb);
+#endif // USB_MOUSE
 
     for(int i=AD0_PIN; i<(AD0_PIN + 10); ++i) {
         gpio_disable_pulls(i);

@@ -1,5 +1,5 @@
 #include <conio.h>
-#include <dos.h> 
+#include <dos.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -28,6 +28,7 @@ typedef enum {
     TANDY_MODE = 3,
     CMS_MODE = 4,
     SB_MODE = 5,
+    MOUSE_ONLY_MODE = 0x0e,
     JOYSTICK_ONLY_MODE = 0x0f
 } card_mode_t;
 
@@ -52,7 +53,8 @@ const char* usage_by_card[] = {
     "[/p x]",                   // TANDY_MODE
     "[/p x]",                   // CMS_MODE
     "[/p x] [/o x] [/w]",       // SB_MODE
-    "", "", "", "", "", "", "", "", "", // future expansion
+    "", "", "", "", "", "", "", "",
+    "[/p x] [/m n] [/r n] [/s n]", // MOUSE_ONLY_MODE
     "",                         // JOYSTICK_ONLY_MODE
 };
 
@@ -72,7 +74,7 @@ void usage(char *argv0, card_mode_t mode) {
     fprintf(stderr, "                (for PicoGUS v2.0 boards only)\n");
     fprintf(stderr, "    /m x      - change card mode to x (gus, sb, mpu, tandy, cms, joy)\n");
     fprintf(stderr, "    /s        - save settings to the card to persist on system boot\n");
-    if (mode > GUS_MODE && mode < JOYSTICK_ONLY_MODE) {
+    if (mode > GUS_MODE && mode < MOUSE_ONLY_MODE) {
         fprintf(stderr, "Sound Blaster/AdLib, MPU-401, Tandy, CMS modes only:\n");
         fprintf(stderr, "    /p x - set the (hex) base port address of the emulated card. Defaults:\n");
         fprintf(stderr, "           Sound Blaster: 220; MPU-401: 330; Tandy: 2C0; CMS: 220\n");
@@ -103,7 +105,20 @@ void usage(char *argv0, card_mode_t mode) {
         fprintf(stderr, "Port is set on the card according to ULTRASND; DMA and IRQ configued via jumper.");
         //              "................................................................................\n"
     }
+    if (mode == MOUSE_ONLY_MODE) {
+        fprintf(stderr, "Serial Mouse mode only:\n");
+        fprintf(stderr, "    /m n - set mouse protocol. Default: 2 (IntelliMouse)\n");
+        fprintf(stderr, "           0 - Microsoft Mouse 2-button,      1 - Logitech 3-button\n");
+        fprintf(stderr, "           2 - IntelliMouse 3-button + wheel, 3 - Mouse Systems 3-button\n");
+        fprintf(stderr, "    /r n - set report rate in Hz. Default: 60, Min: 20, Max: 200\n");
+        fprintf(stderr, "           (increase for smoother cursor movement, decrease for lower CPU load)\n");
+        fprintf(stderr, "    /s n - set mouse sensitivity (256 - 100%, 128 - 50%, 512 - 200%)\n");
+    }
 }
+
+const char* mouse_protocol_str[] = {
+    "Microsoft", "Logitech", "IntelliMouse", "Mouse Systems"
+};
 
 
 void err_ultrasnd(char *argv0) {
@@ -113,12 +128,12 @@ void err_ultrasnd(char *argv0) {
 
 
 void err_pigus(void) {
-    fprintf(stderr, "ERROR: no PicoGUS detected!\n"); 
+    fprintf(stderr, "ERROR: no PicoGUS detected!\n");
 }
 
 
 void err_protocol(uint8_t expected, uint8_t got) {
-    fprintf(stderr, "ERROR: PicoGUS card using protocol %u, needs %u\n", got, expected); 
+    fprintf(stderr, "ERROR: PicoGUS card using protocol %u, needs %u\n", got, expected);
     fprintf(stderr, "Please run the latest PicoGUS firmware and pgusinit.exe versions together!\n");
 }
 
@@ -154,7 +169,7 @@ int init_gus(char *argv0) {
     outp(port + 0x107, 0xDD);
     // Read it and see if it's the same
     if (inp(port + 0x107) != 0xDD) {
-        fprintf(stderr, "ERROR: Card not responding to GUS commands on port %x\n", port); 
+        fprintf(stderr, "ERROR: Card not responding to GUS commands on port %x\n", port);
         return 98;
     }
     printf("GUS-like card detected on port %x...\n", port);
@@ -249,8 +264,8 @@ int write_firmware(const char* fw_filename, uint8_t protocol) {
         fprintf(stderr, "ERROR: unable to open firmware file %s\n", fw_filename);
         return 10;
     }
-  
-    uint32_t numBlocks = 1; 
+
+    uint32_t numBlocks = 1;
     for (uint32_t i = 0; i < numBlocks; ++i) {
         if (fread(uf2_buf.buf, 1, 512, fp) != 512) {
             fprintf(stderr, "ERROR: file %s is not a valid UF2 file - too short\n", fw_filename);
@@ -344,6 +359,9 @@ int main(int argc, char* argv[]) {
     int fw_num = 8;
     bool permanent = false;
 
+    uint8_t mouse_protocol = 255, mouse_report_rate = 0;
+    int16_t mouse_sensitivity = 0;
+
     banner();
     // Get magic value from port on PicoGUS that is not on real GUS
     outp(CONTROL_PORT, 0xCC); // Knock on the door...
@@ -434,6 +452,20 @@ int main(int argc, char* argv[]) {
             }
         } else if (stricmp(argv[i], "/x") == 0) {
             mpu_delaysysex = 1;
+        } else if (stricmp(argv[i], "/s") == 0) {
+            if (mode == MPU_MODE) {
+                mpu_delaysysex = 1;
+            } else {
+                if (i + 1 >= argc) {
+                    usage(argv[0], mode);
+                    return 255;
+                }
+                e = sscanf(argv[++i], "%hi", &mouse_sensitivity);
+                if (e != 1) {
+                    usage(argv[0], mode);
+                    return 4;
+                }
+            }
         } else if (stricmp(argv[i], "/n") == 0) {
             mpu_fakeallnotesoff = 1;
         } else if (stricmp(argv[i], "/f") == 0) {
@@ -448,6 +480,26 @@ int main(int argc, char* argv[]) {
             }
         } else if (stricmp(argv[i], "/s") == 0) {
             permanent = true;
+        } else if (stricmp(argv[i], "/m") == 0) {
+            if (i + 1 >= argc) {
+                usage(argv[0], mode);
+                return 255;
+            }
+            e = sscanf(argv[++i], "%hu", &mouse_protocol);
+            if (e != 1 || mouse_protocol > 3) {
+                usage(argv[0], mode);
+                return 4;
+            }
+        } else if (stricmp(argv[i], "/r") == 0) {
+            if (i + 1 >= argc) {
+                usage(argv[0], mode);
+                return 255;
+            }
+            e = sscanf(argv[++i], "%hu", &mouse_report_rate);
+            if (e != 1 || mouse_report_rate < 20 || mouse_report_rate > 200) {
+                usage(argv[0], mode);
+                return 4;
+            }
         }
         ++i;
     }
@@ -495,7 +547,7 @@ int main(int argc, char* argv[]) {
 
     uint16_t port;
     uint16_t opl_port;
-    if (mode != GUS_MODE) {
+    if (mode != GUS_MODE && mode != MOUSE_ONLY_MODE) {
         if (port_override) {
             outp(CONTROL_PORT, 0x04); // Select port register
             outpw(DATA_PORT_LOW, port_override); // Write port
@@ -513,9 +565,11 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    outp(CONTROL_PORT, 0x0f); // Select joystick enable register
-    outp(DATA_PORT_HIGH, enable_joystick);
-    printf("USB joystick support %s\n", enable_joystick ? "enabled" : "disabled (use /j to enable)");
+    if (mode != MOUSE_ONLY_MODE) {
+        outp(CONTROL_PORT, 0x0f); // Select joystick enable register
+        outp(DATA_PORT_HIGH, enable_joystick);
+        printf("USB joystick support %s\n", enable_joystick ? "enabled" : "disabled");
+    }
 
     if (board_type == PICOGUS_2) {
         outp(CONTROL_PORT, 0x20); // Select wavetable volume register
@@ -532,7 +586,7 @@ int main(int argc, char* argv[]) {
         outp(CONTROL_PORT, 0x10); // Select audio buffer register
         outp(DATA_PORT_HIGH, (unsigned char)(buffer_size - 1));
         printf("Audio buffer size set to %u samples\n", buffer_size);
-        
+
         outp(CONTROL_PORT, 0x11); // Select DMA interval register
         outp(DATA_PORT_HIGH, dma_interval);
         if (dma_interval == 0) {
@@ -574,6 +628,36 @@ int main(int argc, char* argv[]) {
         break;
     case JOYSTICK_ONLY_MODE:
         printf("Running in Joystick exclusive mode on port 201\n");
+    case MOUSE_ONLY_MODE:
+        if (port_override) {
+            outp(CONTROL_PORT, 0x40); // Select port register
+            outpw(DATA_PORT_LOW, port_override); // Write port
+        }
+        outp(CONTROL_PORT, 0x40); // Select port register
+        port = inpw(DATA_PORT_LOW); // Get port
+
+        outp(CONTROL_PORT, 0x41);
+        if (mouse_protocol != 255)
+            outp(DATA_PORT_HIGH, mouse_protocol);
+        else
+            mouse_protocol = inp(DATA_PORT_HIGH);
+
+        outp(CONTROL_PORT, 0x42);
+        if (mouse_report_rate)
+            outp(DATA_PORT_HIGH, mouse_report_rate);
+        else
+            mouse_report_rate = inp(DATA_PORT_HIGH);
+
+        outp(CONTROL_PORT, 0x43);
+        if (mouse_sensitivity)
+            outpw(DATA_PORT_LOW, mouse_sensitivity);
+        else
+            mouse_sensitivity = inpw(DATA_PORT_LOW);
+
+        printf("Running in Serial Mouse exclusive mode on port %x\n", port);
+        printf("Mouse report rate: %d Hz, protocol: %s\n", mouse_report_rate, mouse_protocol_str[mouse_protocol]);
+        printf("Mouse sensitivity: %d (%d.%02d)\n", mouse_sensitivity, (mouse_sensitivity >> 8), ((mouse_sensitivity & 0xFF) * 100) >> 8);
+        break;
     default:
         printf("Running in unknown mode on port %x (maybe upgrade pgusinit?)\n", port);
         break;
