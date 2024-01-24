@@ -1,3 +1,13 @@
+# v1.0.2
+
+## New features/fixes
+
+### General:
+* New bus timing, fixes compatibility with IBM PC/AT 5170.
+* Faster IOCHRDY timing to improve compatibility and spend less time on ISA bus.
+* Less aggressive overclock and different startup timing to improve stability on reset.
+* Added support for Xbox 360 wireless adapter dongle.
+
 # v1.0.1
 
 As always immediately after I do a big release, a significant bugfix comes soon after! Don't forget to look at the notes for firmware v1.0.0.
