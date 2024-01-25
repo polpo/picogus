@@ -1,3 +1,27 @@
+/*
+    Serial Mouse emulation module, adapted for PicoGUS
+
+    Copyright (c) 2024 Artem Vasilev - wbcbz7
+
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the "Software"), to deal
+    in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in all
+    copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+    SOFTWARE.
+*/
+
 #include <stdio.h>
 #include "sermouse.h"
 #include "8250uart.h"
@@ -49,18 +73,19 @@ static uint8_t sermouse_id_mousesystems[] = { 0x87, 0, 0, 0, 0 };
 // protocol ID list
 static struct {
     const uint8_t *data;
-    uint32_t       length;
-} sermouse_id[SERMOUSE_PROTOCOL_LAST] = {
-    {sermouse_id_microsoft, sizeof(sermouse_id_microsoft)},
-    {sermouse_id_logitech, sizeof(sermouse_id_logitech)},
-    {sermouse_id_intellimouse, sizeof(sermouse_id_intellimouse)},
-    {sermouse_id_mousesystems, sizeof(sermouse_id_mousesystems)},
+    uint16_t       length;
+    uint16_t       max_bytes_per_packet;
+} mouse_protocol_info[SERMOUSE_PROTOCOL_LAST] = {
+    {sermouse_id_microsoft,     sizeof(sermouse_id_microsoft),    3},
+    {sermouse_id_logitech,      sizeof(sermouse_id_logitech),     4},
+    {sermouse_id_intellimouse,  sizeof(sermouse_id_intellimouse), 4},
+    {sermouse_id_mousesystems,  sizeof(sermouse_id_mousesystems), 5},
 };
 
 // push ID string to the UART buffer
 static void sermouse_send_id() {
-    mouse_state.idbuf.data   = sermouse_id[mouse_state.protocol].data;
-    mouse_state.idbuf.length = sermouse_id[mouse_state.protocol].length;
+    mouse_state.idbuf.data   = mouse_protocol_info[mouse_state.protocol].data;
+    mouse_state.idbuf.length = mouse_protocol_info[mouse_state.protocol].length;
     mouse_state.idbuf.read_cursor = 0;
 
     // add 1ms delay for better detection
@@ -68,10 +93,6 @@ static void sermouse_send_id() {
 }
 
 // --------------------------
-
-static inline uint32_t sermouse_calc_report_interval(uint8_t rate_hz) {
-    return (1000000 / rate_hz);
-}
 
 // inititalization
 uint32_t sermouse_init() {
@@ -82,14 +103,15 @@ uint32_t sermouse_init() {
     mouse_state.current_buf  = 0;
     mouse_state.buttons_prev = 0;
     mouse_state.last_pkt_timestamp_us = time_us_32();
-
-    for (int p = 0; p < 2; p++)
+    mouse_state.report_rate_hz = 0;
+    mouse_state.report_interval_us = 0;
+    mouse_state.rx_interval_us = 0;
 
     // set default internal values
     // TODO: load from persistent storage (like Flash ROM)
     sermouse_set_protocol(SERMOUSE_PROTOCOL_INTELLIMOUSE);
-    sermouse_set_sensitivity(0x100);
     sermouse_set_report_rate_hz(SERMOUSE_REPORTRATE_DEFAULT);
+    sermouse_set_sensitivity(0x100);
 
     // set initialized flag
     mouse_state.initialized = 1;
@@ -133,10 +155,7 @@ void sermouse_process_report(hid_mouse_report_t const * report) {
 // -------------------------
 // protocol handlers
 
-static void sermouse_format_microsoft(struct sermouse_packet_t *pkt, uint8_t buttons, uint8_t buttons_prev) {
-    pkt->databuf.data = pkt->data;
-    pkt->databuf.read_cursor = 0;
-    
+static void sermouse_format_microsoft(struct sermouse_packet_t *pkt, uint8_t buttons, uint8_t buttons_prev) {  
     // 1st byte - 0x40 + L/R buttons + X/Y bits [7:6]
     pkt->data[0] = 0x40 |
         (buttons & MOUSE_BUTTON_LEFT  ? 0x20 : 0) |
@@ -171,9 +190,6 @@ static void sermouse_format_intellimouse(struct sermouse_packet_t *pkt, uint8_t 
 }
 
 static void sermouse_format_mousesystems(struct sermouse_packet_t *pkt, uint8_t buttons, uint8_t buttons_prev) {
-    pkt->databuf.data = pkt->data;
-    pkt->databuf.read_cursor = 0;
-
     // 1st byte - 0x80 + inverted L/M/R buttons
     pkt->data[0] = 0x80 |
         (buttons & MOUSE_BUTTON_LEFT   ? 0 : 4) |
@@ -203,6 +219,10 @@ static void sermouse_send_report() {
 
     // flip packet index for next reports
     mouse_state.current_buf ^= 1;
+
+    // init data buffer
+    pkt->databuf.data = pkt->data;
+    pkt->databuf.read_cursor = 0;
 
     // rescale and clamp X/Y axis values according by sensitivity
     pkt->x = (pkt->x * mouse_state.sensitivity) >> 8;
@@ -237,6 +257,15 @@ static void sermouse_send_report() {
     mouse_state.buttons_prev = mouse_state.buttons;
 }
 
+// recalculate RX interval based on packet interval and maximum packet size in bytes
+static void sermouse_recalc_rx_interval() {
+    if ((mouse_state.report_interval_us > 0) && (mouse_state.max_bytes_per_packet > 0)) {
+        mouse_state.rx_interval_us = mouse_state.report_interval_us / mouse_state.max_bytes_per_packet;
+        // notify UART state
+        uartemu_set_rx_delay(mouse_state.rx_interval_us);
+    }
+}
+
 // -----------------------------
 // setters/getters
 void sermouse_set_protocol(uint8_t protocol) {
@@ -244,6 +273,10 @@ void sermouse_set_protocol(uint8_t protocol) {
         // set new protocol and put mouse on reset
         mouse_state.protocol   = protocol;
         mouse_state.next_state = SERMOUSE_STATE_RESET; 
+        mouse_state.max_bytes_per_packet = mouse_protocol_info[mouse_state.protocol].max_bytes_per_packet;
+
+        // since bytes per packet may differ between protocols, we have to recalculate rx interval
+        sermouse_recalc_rx_interval();
     }
 }
 
@@ -254,10 +287,7 @@ uint8_t sermouse_get_protocol() {
 void sermouse_set_report_rate_hz(uint8_t rate_hz) {
     mouse_state.report_rate_hz     = SERMOUSE_CLAMP(rate_hz, SERMOUSE_REPORTRATE_MIN, SERMOUSE_REPORTRATE_MAX);
     mouse_state.report_interval_us = (1000000 / rate_hz);
-    mouse_state.rx_interval_us     = mouse_state.report_interval_us / 5;
-
-    // notify UART state
-    uartemu_set_rx_delay(mouse_state.rx_interval_us);
+    sermouse_recalc_rx_interval();
 }
 
 uint8_t sermouse_get_report_rate_hz() {
