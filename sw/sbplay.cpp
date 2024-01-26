@@ -231,8 +231,8 @@ void sbdsp_mix(audio_buffer_t *buffer) {
             for(i=0;i<(x*sbdsp.sample_factor);i++) {        
                 y=(sbdsp.sample_offset >> 16) - starting_offset;
                 if(y >= x) break;        
-                samples[(i<<1)+0] = buf[y]-0x80 << 8;              
-                samples[(i<<1)+1] = buf[y]-0x80 << 8;                      
+                samples[(i<<1)+0] = buf[y]-0x80 << 4;              
+                samples[(i<<1)+1] = buf[y]-0x80 << 4;                      
                 sbdsp.sample_offset += sbdsp.sample_step;
             }        
             buffer->sample_count = i;
