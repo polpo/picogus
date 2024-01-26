@@ -477,6 +477,7 @@ void sbdsp_process(void) {
 }
 void sbdsp_reset(uint8_t value) {
     //TODO: COLDBOOT ? WARMBOOT ?    
+    value &= 1; // Some games may write unknown data for bits other than the LSB.
     switch(value) {
         case 1:                        
             sbdsp.autoinit=0;
