@@ -1,9 +1,10 @@
 #include "isa_dma.h"
 
-dma_inst_t DMA_init(PIO pio, irq_handler_t dma_isr) {
+dma_inst_t DMA_init(PIO pio, uint sm, irq_handler_t dma_isr) {
     dma_inst_t dma;
     dma.offset = pio_add_program(pio, &dma_write_program);
-    dma.sm = pio_claim_unused_sm(pio, true);
+    pio_sm_claim(pio, sm);
+    dma.sm = sm;
     dma.pio = pio;
     dma_write_program_init(pio, dma.sm, dma.offset);
 

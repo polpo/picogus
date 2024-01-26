@@ -39,6 +39,8 @@ extern dma_inst_t dma_config;
 #include "gus-x.h"
 #define SAMPLES_PER_BUFFER 1024
 
+#define DMA_PIO_SM 2
+
 struct audio_buffer_pool *init_audio() {
 
     static audio_format_t audio_format = {
@@ -75,6 +77,7 @@ struct audio_buffer_pool *init_audio() {
     return producer_pool;
 }
 
+// void __xip_cache("my_sub_section") (play_gus)(void) {
 void play_gus() {
     puts("starting core 1");
     uint32_t start, end;
@@ -86,7 +89,7 @@ void play_gus() {
 
     // Init ISA DMA on this core so it handles the ISR
     puts("Initing ISA DMA PIO...");
-    dma_config = DMA_init(pio0, GUS_DMA_isr_pt);
+    dma_config = DMA_init(pio0, DMA_PIO_SM, GUS_DMA_isr_pt);
 
 #ifdef PSRAM_CORE1
 #ifdef PSRAM

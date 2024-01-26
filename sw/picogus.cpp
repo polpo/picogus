@@ -116,9 +116,8 @@ static uint8_t sel_reg = 0;
 static uint16_t cur_data = 0;
 static uint32_t cur_read = 0;
 
-static uint iow_sm;
-static uint ior_sm;
-static uint ior_write_sm;
+#define IOW_PIO_SM 0
+#define IOR_PIO_SM 1
 
 const char* firmware_string = PICO_PROGRAM_NAME " v" PICO_PROGRAM_VERSION_STRING;
 
@@ -297,13 +296,13 @@ static constexpr uint32_t IO_END = 0x0u;
 static constexpr uint32_t IOR_SET_VALUE = 0x0000ff00u;
 
 __force_inline void handle_iow(void) {
-    uint32_t iow_read = pio_sm_get(pio0, iow_sm); //>> 16;
+    uint32_t iow_read = pio_sm_get(pio0, IOW_PIO_SM); //>> 16;
     // printf("%x", iow_read);
     uint16_t port = (iow_read >> 8) & 0x3FF;
     // printf("IOW: %x %x\n", port, iow_read & 0xFF);
 #ifdef SOUND_DSP    
     if( port >= DSP_basePort && port <= (DSP_basePort+0xF)) {            
-            pio_sm_put(pio0, iow_sm, IO_WAIT);                        
+            pio_sm_put(pio0, IOW_PIO_SM, IO_WAIT);                        
             sbdsp_process();
             sbdsp_write(port & 0xF,iow_read & 0xFF);       
             sbdsp_process();                                         
@@ -319,7 +318,7 @@ __force_inline void handle_iow(void) {
         case 0x103:
         case 0x104:
             // Fast write, don't set iochrdy by writing 0
-            pio_sm_put(pio0, iow_sm, IO_END);
+            pio_sm_put(pio0, IOW_PIO_SM, IO_END);
             write_gus(port, iow_read & 0xFF);
             // Fast write - return early as we've already written 0x0u to the PIO
             return;
@@ -327,7 +326,7 @@ __force_inline void handle_iow(void) {
         default:
             // gpio_xor_mask(LED_PIN);
             // Slow write, set iochrdy by writing non-0
-            pio_sm_put(pio0, iow_sm, IO_WAIT);
+            pio_sm_put(pio0, IOW_PIO_SM, IO_WAIT);
             write_gus(port, iow_read & 0xFF);
             gpio_xor_mask(LED_PIN);
             break;
@@ -340,13 +339,13 @@ __force_inline void handle_iow(void) {
     switch (port - basePort) {
     case 0:
         // Fast write
-        pio_sm_put(pio0, iow_sm, IO_END);
+        pio_sm_put(pio0, IOW_PIO_SM, IO_END);
         OPL_Pico_PortWrite(OPL_REGISTER_PORT, iow_read & 0xFF);
         // Fast write - return early as we've already written 0x0u to the PIO
         return;
         break;
     case 1:
-        pio_sm_put(pio0, iow_sm, IO_WAIT);
+        pio_sm_put(pio0, IOW_PIO_SM, IO_WAIT);
         OPL_Pico_PortWrite(OPL_DATA_PORT, iow_read & 0xFF);
         // __dsb();
 #ifndef PICOW
@@ -358,13 +357,13 @@ __force_inline void handle_iow(void) {
 #ifdef SOUND_MPU
     switch (port - basePort) {
     case 0:
-        pio_sm_put(pio0, iow_sm, IO_WAIT);
+        pio_sm_put(pio0, IOW_PIO_SM, IO_WAIT);
         // printf("MPU IOW: port: %x value: %x\n", port, iow_read & 0xFF);
         MPU401_WriteData(iow_read & 0xFF, true);
         gpio_xor_mask(LED_PIN);
         break;
     case 1:
-        pio_sm_put(pio0, iow_sm, IO_WAIT);
+        pio_sm_put(pio0, IOW_PIO_SM, IO_WAIT);
         MPU401_WriteCommand(iow_read & 0xFF, true);
         // printf("MPU IOW: port: %x value: %x\n", port, iow_read & 0xFF);
         // __dsb();
@@ -373,7 +372,7 @@ __force_inline void handle_iow(void) {
 #endif // SOUND_MPU
 #ifdef SOUND_TANDY
     if (port == basePort) {
-        pio_sm_put(pio0, iow_sm, IO_END);
+        pio_sm_put(pio0, IOW_PIO_SM, IO_END);
         tandy_buffer.cmds[tandy_buffer.head++] = iow_read & 0xFF;
         return;
     } else // if follows down below
@@ -385,7 +384,7 @@ __force_inline void handle_iow(void) {
     case 0x1:
     case 0x2:
     case 0x3:
-        pio_sm_put(pio0, iow_sm, IO_END);
+        pio_sm_put(pio0, IOW_PIO_SM, IO_END);
         cms_buffer.cmds[cms_buffer.head++] = {
             port,
             (uint8_t)(iow_read & 0xFF)
@@ -395,7 +394,7 @@ __force_inline void handle_iow(void) {
     // CMS autodetect ports
     case 0x6:
     case 0x7:
-        pio_sm_put(pio0, iow_sm, IO_END);
+        pio_sm_put(pio0, IOW_PIO_SM, IO_END);
         cms_detect = iow_read & 0xFF;
         return;
         break;
@@ -403,7 +402,7 @@ __force_inline void handle_iow(void) {
 #endif // SOUND_CMS
 #ifdef USB_JOYSTICK
     if (port == joyPort) {
-        pio_sm_put(pio0, iow_sm, IO_END);
+        pio_sm_put(pio0, IOW_PIO_SM, IO_END);
         // Set times in # of cycles (affected by clkdiv) for each PWM slice to count up and wrap back to 0
         // TODO better calibrate this
         // GUS w/ gravis gamestick -
@@ -429,7 +428,7 @@ __force_inline void handle_iow(void) {
 #endif
     // PicoGUS control
     if (port == CONTROL_PORT) {
-        pio_sm_put(pio0, iow_sm, IO_WAIT);
+        pio_sm_put(pio0, IOW_PIO_SM, IO_WAIT);
         // printf("iow control port: %x %d\n", iow_read & 0xff, control_active);
         if ((iow_read & 0xFF) == 0xCC) {
             // printf("activate ");
@@ -438,7 +437,7 @@ __force_inline void handle_iow(void) {
             select_picogus(iow_read & 0xFF);
         }
     } else if (port == DATA_PORT_LOW) {
-        pio_sm_put(pio0, iow_sm, IO_END);
+        pio_sm_put(pio0, IOW_PIO_SM, IO_END);
         if (control_active) {
             write_picogus_low(iow_read & 0xFF);
         }
@@ -446,78 +445,79 @@ __force_inline void handle_iow(void) {
         return;
     } else if (port == DATA_PORT_HIGH) {
         // printf("iow data port: %x\n", iow_read & 0xff);
-        pio_sm_put(pio0, iow_sm, IO_WAIT);
+        pio_sm_put(pio0, IOW_PIO_SM, IO_WAIT);
         if (control_active) {
             write_picogus_high(iow_read & 0xFF);
         }
     }
     // Fallthrough if no match, or for slow write, reset PIO
-    pio_sm_put(pio0, iow_sm, IO_END);
+    pio_sm_put(pio0, IOW_PIO_SM, IO_END);
 }
 
 __force_inline void handle_ior(void) {
     uint8_t x;
-    uint16_t port = pio_sm_get(pio0, ior_sm) & 0x3FF;     
+    uint16_t port = pio_sm_get(pio0, IOR_PIO_SM) & 0x3FF;
     //
 #ifdef SOUND_DSP  
-    if( port >= DSP_basePort && port <= (DSP_basePort+0xF)) {      
-        pio_sm_put(pio0, ior_sm, IO_WAIT);
+    // if( port >= DSP_basePort && port <= (DSP_basePort+0xF)) {      
+    if ((port >> 4) == (DSP_basePort >> 4)) {      
+        pio_sm_put(pio0, IOR_PIO_SM, IO_WAIT);
         sbdsp_process();
-        pio_sm_put(pio0, ior_sm, IOR_SET_VALUE | sbdsp_read(port & 0xF));        
+        pio_sm_put(pio0, IOR_PIO_SM, IOR_SET_VALUE | sbdsp_read(port & 0xF));        
         sbdsp_process();
     } else
 #endif
 #if defined(SOUND_GUS)
     if ((port >> 4 | 0x10) == gus_port_test) {
         // Tell PIO to wait for data
-        pio_sm_put(pio0, ior_sm, IO_WAIT);
+        pio_sm_put(pio0, IOR_PIO_SM, IO_WAIT);
         uint32_t value = read_gus(port - basePort) & 0xff;
         // OR with 0x0000ff00 is required to set pindirs in the PIO
-        pio_sm_put(pio0, ior_sm, IOR_SET_VALUE | value);
+        pio_sm_put(pio0, IOR_PIO_SM, IOR_SET_VALUE | value);
         // printf("GUS IOR: port: %x value: %x\n", port, value);
         // gpio_xor_mask(LED_PIN);
     } else // if follows down below
 #elif defined(SOUND_OPL)
     if (port == basePort) {
         // Tell PIO to wait for data
-        pio_sm_put(pio0, ior_sm, IO_WAIT);
+        pio_sm_put(pio0, IOR_PIO_SM, IO_WAIT);
         uint32_t value = OPL_Pico_PortRead(OPL_REGISTER_PORT);
         // OR with 0x0000ff00 is required to set pindirs in the PIO
-        pio_sm_put(pio0, ior_sm, IOR_SET_VALUE | value);
+        pio_sm_put(pio0, IOR_PIO_SM, IOR_SET_VALUE | value);
     } else // if follows down below
 #elif defined(SOUND_MPU)
     if (port == basePort) {
         // Tell PIO to wait for data
-        pio_sm_put(pio0, ior_sm, IO_WAIT);
+        pio_sm_put(pio0, IOR_PIO_SM, IO_WAIT);
         uint32_t value = MPU401_ReadData();
         // printf("MPU IOR: port: %x value: %x\n", port, value);
         // OR with 0x0000ff00 is required to set pindirs in the PIO
-        pio_sm_put(pio0, ior_sm, IOR_SET_VALUE | value);
+        pio_sm_put(pio0, IOR_PIO_SM, IOR_SET_VALUE | value);
     } else if (port == basePort + 1) {
         // Tell PIO to wait for data
-        pio_sm_put(pio0, ior_sm, IO_WAIT);
+        pio_sm_put(pio0, IOR_PIO_SM, IO_WAIT);
         uint32_t value = MPU401_ReadStatus();
         // printf("MPU IOR: port: %x value: %x\n", port, value);
         // OR with 0x0000ff00 is required to set pindirs in the PIO
-        pio_sm_put(pio0, ior_sm, IOR_SET_VALUE | value);
+        pio_sm_put(pio0, IOR_PIO_SM, IOR_SET_VALUE | value);
     } else // if follows down below
 #elif defined(SOUND_CMS)
     switch (port - basePort) {
     // CMS autodetect ports
     case 0x4:
-        pio_sm_put(pio0, ior_sm, IO_WAIT);
-        pio_sm_put(pio0, ior_sm, IOR_SET_VALUE | 0x7F);
+        pio_sm_put(pio0, IOR_PIO_SM, IO_WAIT);
+        pio_sm_put(pio0, IOR_PIO_SM, IOR_SET_VALUE | 0x7F);
         return;
     case 0xa:
     case 0xb:
-        pio_sm_put(pio0, ior_sm, IO_WAIT);
-        pio_sm_put(pio0, ior_sm, IOR_SET_VALUE | cms_detect);
+        pio_sm_put(pio0, IOR_PIO_SM, IO_WAIT);
+        pio_sm_put(pio0, IOR_PIO_SM, IOR_SET_VALUE | cms_detect);
         return;
     }
 #endif // SOUND_CMS
 #ifdef USB_JOYSTICK
     if (port == joyPort) {
-        pio_sm_put(pio0, ior_sm, IO_WAIT);
+        pio_sm_put(pio0, IOR_PIO_SM, IO_WAIT);
         uint8_t value =
             // Proportional bits: 1 if counter is still counting, 0 otherwise
             (bool)pwm_get_counter(0) |
@@ -525,28 +525,28 @@ __force_inline void handle_ior(void) {
             ((bool)pwm_get_counter(2) << 2) |
             ((bool)pwm_get_counter(3) << 3) |
             joystate_struct.button_mask;
-        pio_sm_put(pio0, ior_sm, IOR_SET_VALUE | value);
+        pio_sm_put(pio0, IOR_PIO_SM, IOR_SET_VALUE | value);
     } else // if follows down below
 #endif
     if (port == CONTROL_PORT) {
         // Tell PIO to wait for data
-        pio_sm_put(pio0, ior_sm, IO_WAIT);
+        pio_sm_put(pio0, IOR_PIO_SM, IO_WAIT);
         uint32_t value = sel_reg;
         // OR with 0x0000ff00 is required to set pindirs in the PIO
-        pio_sm_put(pio0, ior_sm, IOR_SET_VALUE | value);
+        pio_sm_put(pio0, IOR_PIO_SM, IOR_SET_VALUE | value);
     } else if (port == DATA_PORT_LOW) {
         // Tell PIO to wait for data
-        pio_sm_put(pio0, ior_sm, IO_WAIT);
+        pio_sm_put(pio0, IOR_PIO_SM, IO_WAIT);
         uint32_t value = read_picogus_low();
         // OR with 0x0000ff00 is required to set pindirs in the PIO
-        pio_sm_put(pio0, ior_sm, IOR_SET_VALUE | value);
+        pio_sm_put(pio0, IOR_PIO_SM, IOR_SET_VALUE | value);
     } else if (port == DATA_PORT_HIGH) {
-        pio_sm_put(pio0, ior_sm, IO_WAIT);
+        pio_sm_put(pio0, IOR_PIO_SM, IO_WAIT);
         uint32_t value = read_picogus_high();
-        pio_sm_put(pio0, ior_sm, IOR_SET_VALUE | value);
+        pio_sm_put(pio0, IOR_PIO_SM, IOR_SET_VALUE | value);
     } else {
         // Reset PIO
-        pio_sm_put(pio0, ior_sm, IO_END);
+        pio_sm_put(pio0, IOR_PIO_SM, IO_END);
     }
 }
 
@@ -575,12 +575,25 @@ void err_blink(void) {
 #include "pico_pic.h"
 #endif
 
-constexpr uint32_t rp2_clock = 280000;
+constexpr uint32_t rp2_clock = 366000;
 constexpr float psram_clkdiv = (float)rp2_clock / 200000.0;
 constexpr float pwm_clkdiv = (float)rp2_clock / 22727.27;
+constexpr float iow_clkdiv = (float)rp2_clock / 183000.0;
 
+constexpr uint32_t iow_rxempty = 1u << (PIO_FSTAT_RXEMPTY_LSB + IOW_PIO_SM);
+__force_inline bool iow_has_data() {
+    return !(pio0->fstat & iow_rxempty);
+}
+
+constexpr uint32_t ior_rxempty = 1u << (PIO_FSTAT_RXEMPTY_LSB + IOR_PIO_SM);
+__force_inline bool ior_has_data() {
+    return !(pio0->fstat & ior_rxempty);
+}
+
+#include "hardware/structs/xip_ctrl.h"
 int main()
 {
+    hw_clear_bits(&xip_ctrl_hw->ctrl, XIP_CTRL_EN_BITS);
 #ifdef ASYNC_UART
     stdio_async_uart_init_full(UART_ID, BAUD_RATE, UART_TX_PIN, UART_RX_PIN);
 #else
@@ -634,10 +647,11 @@ int main()
     busy_wait_ms(250);
     // Overclock!
     printf("Overclocking... ");
-    vreg_set_voltage(VREG_VOLTAGE_1_30);
+    vreg_set_voltage(VREG_VOLTAGE_1_25);
     // vreg_set_voltage(VREG_VOLTAGE_1_15);
     busy_wait_ms(250);
     set_sys_clock_khz(rp2_clock, true);
+    busy_wait_ms(250);
     gpio_xor_mask(LED_PIN);
 #ifdef ASYNC_UART
     uart_init(UART_ID, 0);
@@ -673,6 +687,7 @@ int main()
 
     gpio_init(IRQ_PIN);
     gpio_set_dir(IRQ_PIN, GPIO_OUT);
+    gpio_set_drive_strength(IRQ_PIN, GPIO_DRIVE_STRENGTH_12MA);
 
 #ifdef SOUND_MPU
     puts("Initing MIDI UART...");
@@ -793,15 +808,15 @@ int main()
     gpio_set_slew_rate(ADS_PIN, GPIO_SLEW_RATE_FAST);
 
     uint iow_offset = pio_add_program(pio0, &iow_program);
-    iow_sm = pio_claim_unused_sm(pio0, true);
-    printf("iow sm: %u\n", iow_sm);
+    pio_sm_claim(pio0, IOW_PIO_SM);
+    printf("iow sm: %u\n", IOW_PIO_SM);
 
     uint ior_offset = pio_add_program(pio0, &ior_program);
-    ior_sm = pio_claim_unused_sm(pio0, true);
-    printf("ior sm: %u\n", ior_sm);
+    pio_sm_claim(pio0, IOR_PIO_SM);
+    printf("ior sm: %u\n", IOR_PIO_SM);
 
-    ior_program_init(pio0, ior_sm, ior_offset);
-    iow_program_init(pio0, iow_sm, iow_offset);
+    iow_program_init(pio0, IOW_PIO_SM, iow_offset, iow_clkdiv);
+    ior_program_init(pio0, IOR_PIO_SM, ior_offset);
 
 #ifdef USE_IRQ
     puts("Enabling IRQ on ISA IOR/IOW events");
@@ -827,12 +842,14 @@ int main()
 
     for (;;) {
 #ifndef USE_IRQ
-        if (!pio_sm_is_rx_fifo_empty(pio0, iow_sm)) {
+        // if (!pio_sm_is_rx_fifo_empty(pio0, IOW_PIO_SM)) {
+        if (iow_has_data()) {
             handle_iow();
             // gpio_xor_mask(LED_PIN);
         }
 
-        if (!pio_sm_is_rx_fifo_empty(pio0, ior_sm)) {
+        // if (!pio_sm_is_rx_fifo_empty(pio0, IOR_PIO_SM)) {
+        if (ior_has_data()) {
             handle_ior();
             // gpio_xor_mask(LED_PIN);
         }
