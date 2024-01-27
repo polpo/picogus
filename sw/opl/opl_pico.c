@@ -184,6 +184,10 @@ extern void TrackTimerCallback(void *track);
 extern uint8_t restart_song_state;
 #endif
 
+void OPL_Pico_simple(int16_t *buffer, uint32_t nsamples) {
+    OPL_calc_buffer(emu8950_opl, buffer, nsamples);
+}
+
 void OPL_Pico_Mix_callback(audio_buffer_t *audio_buffer)
 {
     unsigned int filled, buffer_samples;

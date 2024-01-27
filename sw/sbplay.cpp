@@ -15,6 +15,7 @@ Author : Kevin Moonlight <me@yyzkevin.com>
 #include "isa_dma.h"
 
 extern "C" void OPL_Pico_Mix_callback(audio_buffer_t *);
+extern "C" void OPL_Pico_simple(int16_t *buffer, uint32_t nsamples);
 
 
 irq_handler_t SBDSP_DMA_isr_pt;
@@ -167,22 +168,11 @@ void sbdsp_dma_enable() {
     }
 }
 
-uint32_t DSP_DMA_Event(Bitu val) {   
-    if(sbdsp_fifo_half()) {
-        sbdsp.dma_interval_trim = 5;        
-    }
-    else {
-        sbdsp.dma_interval_trim=-5;
-    }        
-    
-    DMA_Start_Write(&dma_config);    
-    return 0;
-}
+static bool done; // TODO I don't like this flag
 
-void sbdsp_dma_isr(void) {
-    const uint32_t dma_data = DMA_Complete_Write(&dma_config);    
-    uint16_t current_interval;
-    sbdsp_fifo_rx(dma_data & 0xFF);    
+uint32_t DSP_DMA_Event(Bitu val) {   
+    DMA_Start_Write(&dma_config);    
+    uint32_t current_interval;
     sbdsp.dma_sample_count_rx++;    
 
     if(sbdsp.dma_pause_duration) {
@@ -190,72 +180,45 @@ void sbdsp_dma_isr(void) {
         sbdsp.dma_pause_duration=0;
     }
     else {
-        current_interval = sbdsp.dma_interval + sbdsp.dma_interval_trim;
+        current_interval = sbdsp.dma_interval;
     }
 
 
     if(sbdsp.dma_sample_count_rx <= sbdsp.dma_sample_count) {        
-        PIC_AddEvent(DSP_DMA_Event,current_interval,1);
+        return current_interval;
     }
     else {                  
+        done = true;
         if(sbdsp.autoinit) {            
             sbdsp.dma_sample_count_rx=0;            
-            PIC_AddEvent(DSP_DMA_Event,current_interval,1);         
+            return current_interval;
         }
         else {            
             sbdsp_dma_disable();            
         }
-        PIC_ActivateIRQ();                                     
-    }    
+    } 
+    return 0;
 }
 
+static volatile uint8_t cur_sample; // TODO move to sbdsp struct
 
-void sbdsp_mix(audio_buffer_t *buffer) {
-    uint16_t i,x,y,req_bytes,rx_bytes;
-    int16_t *samples, *opl_samples;       
-    uint32_t offset;          
-    uint32_t step;
-
-    uint64_t starting_offset;
-
-    char buf[1024];
-    buffer->sample_count=0;
-    samples = (int16_t *) buffer->buffer->bytes;         
-    opl_samples = (int16_t *) opl_buffer->buffer->bytes;         
-    if(sbdsp.dma_enabled) {        
-        while(!sbdsp_fifo_level()) {//TODO: This is not ideal to block here.                        
-        }                
-        if(1==1) {//sbdsp_fifo_level() >= 16 ) {//TODO: this will be problem at the end.
-            x = sbdsp_fifo_tx(buf,sbdsp.dma_transfer_size);     //4       
-            starting_offset = sbdsp.sample_offset >> 16;   
-            for(i=0;i<(x*sbdsp.sample_factor);i++) {        
-                y=(sbdsp.sample_offset >> 16) - starting_offset;
-                if(y >= x) break;        
-                samples[(i<<1)+0] = buf[y]-0x80 << 4;              
-                samples[(i<<1)+1] = buf[y]-0x80 << 4;                      
-                sbdsp.sample_offset += sbdsp.sample_step;
-            }        
-            buffer->sample_count = i;
-            buffer->max_sample_count=i;        
-        }
-        else {
-            buffer->sample_count=0;                        
-        }
-    }        
-
-    if(!buffer->sample_count) {      
-        buffer->sample_count=1;             
-        for(x=0;x<buffer->sample_count*2;x++) samples[x]=0;         
+void sbdsp_dma_isr(void) {
+    if (done) {
+        done = false;
+        PIC_ActivateIRQ();
     }
-    
-    opl_buffer->max_sample_count = buffer->sample_count;  
-    OPL_Pico_Mix_callback(opl_buffer);                        
-    for(x=0;x<buffer->sample_count*2;x++) {        
-        samples[x] += opl_samples[x];
-    } 
-       
-    
-    return;    
+    const uint32_t dma_data = DMA_Complete_Write(&dma_config);    
+    uint16_t current_interval;
+    cur_sample = dma_data & 0xFF;
+}
+
+int16_t sbdsp_sample() {
+    int16_t snd16;
+    OPL_Pico_simple(&snd16, 1);
+    if (sbdsp.dma_enabled) {        
+        snd16 += (int16_t)(cur_sample)-0x80 << 4;
+    }
+    return snd16;
 }
 
 void sbdsp_init() {    
@@ -328,8 +291,12 @@ void sbdsp_process(void) {
                 if(sbdsp.current_command_index==1) {
                     //printf("(0x40) DSP_SET_TIME_CONSTANT\n\r");                                
                     sbdsp.time_constant = sbdsp.inbox;
+                    /*
                     sbdsp.sample_rate = 1000000ul / (256 - sbdsp.time_constant);           
                     sbdsp.dma_interval = 1000000ul / sbdsp.sample_rate; // redundant.                    
+                    */
+                    sbdsp.dma_interval = 256 - sbdsp.time_constant;
+                    sbdsp.sample_rate = 1000000ul / sbdsp.dma_interval;           
                     sbdsp.sample_step = sbdsp.sample_rate * 65535ul / OUTPUT_SAMPLERATE;                    
                     sbdsp.sample_factor = (OUTPUT_SAMPLERATE / sbdsp.sample_rate)+5; //Estimate
                     

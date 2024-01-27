@@ -83,6 +83,7 @@ extern "C" void OPL_Pico_Mix_callback(audio_buffer_t *);
 extern void sbdsp_process(void);
 extern void sbdsp_mix(audio_buffer_t *buffer);
 extern uint16_t sbdsp_fifo_level();
+extern int16_t sbdsp_sample();
 #endif
 
 
@@ -104,7 +105,10 @@ void play_adlib() {
 
     for (;;) {
         struct audio_buffer *buffer = take_audio_buffer(ap, true);
-        sbdsp_mix(buffer);
+        // sbdsp_mix(buffer);
+        int16_t *samples = (int16_t *) buffer->buffer->bytes;
+        samples[0] = samples[1] = sbdsp_sample();
+        buffer->sample_count=1;
         // putchar((unsigned char)buffer->buffer->bytes[1]);
         give_audio_buffer(ap, buffer);
 #ifdef USB_JOYSTICK

@@ -30,8 +30,8 @@ int64_t PIC_HandleEvent(alarm_id_t id, void *user_data) {
         return ret;
     }
     // A negative return value re-sets the alarm from the time when it initially triggered
-    /* return -(int64_t)ret; */
-    return (int64_t)ret;
+    return -(int64_t)ret;
+    /* return (int64_t)ret; */
 #else
     if (ret) {
         event->deadline = time_us_32() + ret;
