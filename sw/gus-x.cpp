@@ -43,6 +43,8 @@ extern dma_inst_t dma_config;
 
 using namespace std;
 
+#define FORCE_44KHZ
+
 //Extra bits of precision over normal gus
 #define WAVE_FRACT 9
 #define WAVE_FRACT_MASK ((1 << WAVE_FRACT)-1)
@@ -382,6 +384,9 @@ class GUSChannels {
         __force_inline void WriteWaveFreq(uint16_t val) {
             WaveFreq = val;
             WaveAdd = ((uint32_t)(val >> 1)) << ((uint32_t)(WAVE_FRACT-9));
+#ifdef FORCE_44KHZ
+            WaveAdd = ((WaveAdd * sample_rates[myGUS.ActiveChannels - 1]) + (44100 >> 1)) / 44100;
+#endif
         }
         __force_inline void WriteWaveCtrl(uint8_t val) {
             uint32_t oldirq=myGUS.WaveIRQ;
@@ -440,6 +445,9 @@ class GUSChannels {
 
             if (error < -1L || error > 1L)
                 LOG_MSG("RampAdd nonfixed error %ld (%lu != %lu)",error,(unsigned long)checkadd,(unsigned long)RampAdd);
+#endif
+#ifdef FORCE_44KHZ
+            RampAdd = ((RampAdd * sample_rates[myGUS.ActiveChannels + 1]) + (44100 >> 1)) / 44100;
 #endif
         }
         INLINE void WaveUpdate(void) {
@@ -1142,7 +1150,11 @@ __force_inline static void ExecuteGlobRegister(void) {
 
         myGUS.ActiveMask=0xffffffffU >> (32-myGUS.ActiveChannels);
         // myGUS.basefreq = (uint32_t)(1000000.0/(1.619695497*(float)(myGUS.ActiveChannels)));
+#ifdef FORCE_44KHZ
+        myGUS.basefreq = 44100;
+#else
         myGUS.basefreq = sample_rates[myGUS.ActiveChannels - 1];
+#endif
 
 #if LOG_GUS
         LOG_MSG("GUS set to %d channels freq=%luHz", myGUS.ActiveChannels,(unsigned long)myGUS.basefreq);
@@ -1567,7 +1579,7 @@ static int32_t __force_inline clamp(int32_t d, int32_t min, int32_t max) {
 }
 #endif // INTERP_CLAMP
 
-extern uint32_t __scratch_x("my_sub_section") (GUS_CallBack)(Bitu max_len, int16_t* play_buffer) {
+extern uint32_t /*__scratch_x("my_sub_section")*/ (GUS_CallBack)(Bitu max_len, int16_t* play_buffer) {
 // extern uint32_t GUS_CallBack(Bitu max_len, int16_t* play_buffer) {
     static int32_t accum[2];
     uint32_t s = 0;
