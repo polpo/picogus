@@ -45,11 +45,18 @@ using namespace std;
 
 #define FORCE_44KHZ
 
+#ifdef FORCE_44KHZ
 //Extra bits of precision over normal gus
+#define WAVE_FRACT 10
+#define WAVE_FRACT_MASK ((1 << WAVE_FRACT)-1)
+#define WAVE_MSWMASK ((1 << 17)-1)
+#define WAVE_LSWMASK (0xffffffff ^ WAVE_MSWMASK)
+#else
 #define WAVE_FRACT 9
 #define WAVE_FRACT_MASK ((1 << WAVE_FRACT)-1)
 #define WAVE_MSWMASK ((1 << 16)-1)
 #define WAVE_LSWMASK (0xffffffff ^ WAVE_MSWMASK)
+#endif
 
 //Amount of precision the volume has
 #define RAMP_FRACT (10)
@@ -383,9 +390,11 @@ class GUSChannels {
 
         __force_inline void WriteWaveFreq(uint16_t val) {
             WaveFreq = val;
-            WaveAdd = ((uint32_t)(val >> 1)) << ((uint32_t)(WAVE_FRACT-9));
 #ifdef FORCE_44KHZ
+            WaveAdd = ((uint32_t)(val >> 1)) << ((uint32_t)(WAVE_FRACT-9));
             WaveAdd = ((WaveAdd * sample_rates[myGUS.ActiveChannels - 1]) + (44100 >> 1)) / 44100;
+#else
+            WaveAdd = ((uint32_t)(val >> 1)) << ((uint32_t)(WAVE_FRACT-9));
 #endif
         }
         __force_inline void WriteWaveCtrl(uint8_t val) {
@@ -953,26 +962,50 @@ __force_inline static uint16_t ExecuteReadRegister(void) {
         if(curchan) return (uint16_t)(curchan->WaveFreq);
         else return 0x0000;
     case 0x82: // Channel MSB start address register
+#ifdef FORCE_44KHZ
+        if (curchan) return (uint16_t)(curchan->WaveStart >> 17);
+#else
         if (curchan) return (uint16_t)(curchan->WaveStart >> 16);
+#endif
         else return 0x0000;
     case 0x83: // Channel LSW start address register
+#ifdef FORCE_44KHZ
+        if (curchan) return (uint16_t)(curchan->WaveStart >> 1);
+#else
         if (curchan) return (uint16_t)(curchan->WaveStart);
+#endif
         else return 0x0000;
     case 0x84: // Channel MSB end address register
+#ifdef FORCE_44KHZ
+        if (curchan) return (uint16_t)(curchan->WaveEnd >> 17);
+#else
         if (curchan) return (uint16_t)(curchan->WaveEnd >> 16);
+#endif
         else return 0x0000;
     case 0x85: // Channel LSW end address register
+#ifdef FORCE_44KHZ
+        if (curchan) return (uint16_t)(curchan->WaveEnd >> 1);
+#else
         if (curchan) return (uint16_t)(curchan->WaveEnd);
+#endif
         else return 0x0000;
 
     case 0x89: // Channel volume register
         if (curchan) return (uint16_t)((curchan->RampVol >> RAMP_FRACT) << 4);
         else return 0x0000;
     case 0x8a: // Channel MSB current address register
+#ifdef FORCE_44KHZ
+        if (curchan) return (uint16_t)(curchan->WaveAddr >> 17);
+#else
         if (curchan) return (uint16_t)(curchan->WaveAddr >> 16);
+#endif
         else return 0x0000;
     case 0x8b: // Channel LSW current address register
+#ifdef FORCE_44KHZ
+        if (curchan) return (uint16_t)(curchan->WaveAddr >> 1);
+#else
         if (curchan) return (uint16_t)(curchan->WaveAddr);
+#endif
         else return 0x0000;
     case 0x8c: // Channel pan pot register
         if (curchan) return (uint16_t)(curchan->PanPot << 8);
@@ -1036,26 +1069,46 @@ __force_inline static void ExecuteGlobRegister(void) {
         break;
     case 0x2:  // Channel MSW start address register
         if (curchan) {
+#ifdef FORCE_44KHZ
+            uint32_t tmpaddr = (uint32_t)(myGUS.gRegData & 0x1fff) << 17; /* upper 13 bits of integer portion */
+            curchan->WaveStart = (curchan->WaveStart & WAVE_MSWMASK) | tmpaddr;
+#else
             uint32_t tmpaddr = (uint32_t)(myGUS.gRegData & 0x1fff) << 16; /* upper 13 bits of integer portion */
             curchan->WaveStart = (curchan->WaveStart & WAVE_MSWMASK) | tmpaddr;
+#endif
         }
         break;
     case 0x3:  // Channel LSW start address register
         if(curchan != NULL) {
+#ifdef FORCE_44KHZ
+            uint32_t tmpaddr = (uint32_t)(myGUS.gRegData & 0xffe0) << 1; /* lower 7 bits of integer portion, and all 4 bits of fractional portion. bits 4-0 of the incoming 16-bit WORD are not used */
+            curchan->WaveStart = (curchan->WaveStart & WAVE_LSWMASK) | tmpaddr;
+#else
             uint32_t tmpaddr = (uint32_t)(myGUS.gRegData & 0xffe0); /* lower 7 bits of integer portion, and all 4 bits of fractional portion. bits 4-0 of the incoming 16-bit WORD are not used */
             curchan->WaveStart = (curchan->WaveStart & WAVE_LSWMASK) | tmpaddr;
+#endif
         }
         break;
     case 0x4:  // Channel MSW end address register
         if(curchan != NULL) {
+#ifdef FORCE_44KHZ
+            uint32_t tmpaddr = (uint32_t)(myGUS.gRegData & 0x1fff) << 17; /* upper 13 bits of integer portion */
+            curchan->WaveEnd = (curchan->WaveEnd & WAVE_MSWMASK) | tmpaddr;
+#else
             uint32_t tmpaddr = (uint32_t)(myGUS.gRegData & 0x1fff) << 16; /* upper 13 bits of integer portion */
             curchan->WaveEnd = (curchan->WaveEnd & WAVE_MSWMASK) | tmpaddr;
+#endif
         }
         break;
     case 0x5:  // Channel MSW end address register
         if(curchan != NULL) {
+#ifdef FORCE_44KHZ
+            uint32_t tmpaddr = (uint32_t)(myGUS.gRegData & 0xffe0) << 1; /* lower 7 bits of integer portion, and all 4 bits of fractional portion. bits 4-0 of the incoming 16-bit WORD are not used */
+            curchan->WaveEnd = (curchan->WaveEnd & WAVE_LSWMASK) | tmpaddr;
+#else
             uint32_t tmpaddr = (uint32_t)(myGUS.gRegData & 0xffe0); /* lower 7 bits of integer portion, and all 4 bits of fractional portion. bits 4-0 of the incoming 16-bit WORD are not used */
             curchan->WaveEnd = (curchan->WaveEnd & WAVE_LSWMASK) | tmpaddr;
+#endif
         }
         break;
     case 0x6:  // Channel volume ramp rate register
@@ -1088,15 +1141,25 @@ __force_inline static void ExecuteGlobRegister(void) {
     case 0xA:  // Channel MSW current address register
         // gus_chan->FillUp();
         if(curchan != NULL) {
+#ifdef FORCE_44KHZ
+            uint32_t tmpaddr = (uint32_t)(myGUS.gRegData & 0x1fff) << 17; /* upper 13 bits of integer portion */
+            curchan->WaveAddr = (curchan->WaveAddr & WAVE_MSWMASK) | tmpaddr;
+#else
             uint32_t tmpaddr = (uint32_t)(myGUS.gRegData & 0x1fff) << 16; /* upper 13 bits of integer portion */
             curchan->WaveAddr = (curchan->WaveAddr & WAVE_MSWMASK) | tmpaddr;
+#endif
         }
         break;
     case 0xB:  // Channel LSW current address register
         // gus_chan->FillUp();
         if(curchan != NULL) {
+#ifdef FORCE_44KHZ
+            uint32_t tmpaddr = (uint32_t)(myGUS.gRegData & 0xffff) << 1; /* lower 7 bits of integer portion, and all 9 bits of fractional portion */
+            curchan->WaveAddr = (curchan->WaveAddr & WAVE_LSWMASK) | tmpaddr;
+#else
             uint32_t tmpaddr = (uint32_t)(myGUS.gRegData & 0xffff); /* lower 7 bits of integer portion, and all 9 bits of fractional portion */
             curchan->WaveAddr = (curchan->WaveAddr & WAVE_LSWMASK) | tmpaddr;
+#endif
         }
         break;
     case 0xC:  // Channel pan pot register
