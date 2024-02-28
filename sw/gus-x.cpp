@@ -113,8 +113,8 @@ static uint16_t const sample_rates[32] = {
     25725,
     24696,
     23746,
-    22866,
-    22050,
+    22866, // 27
+    22866, // 28
     21289,
     20580,
     19916,
@@ -390,6 +390,9 @@ class GUSChannels {
 
         __force_inline void WriteWaveFreq(uint16_t val) {
             WaveFreq = val;
+            if (myGUS.ActiveChannels == 28) { // fudge to the 27 channel rate
+                val = (uint16_t)((uint32_t)val * 22050ul / 22866ul);
+            }
             WaveAdd = ((uint32_t)(val >> 1)) << ((uint32_t)(WAVE_FRACT-9));
             if (myGUS.fixed_44k_output) {
                 WaveAdd = ((WaveAdd * sample_rates[myGUS.ActiveChannels - 1]) + (44100 >> 1)) / 44100;
