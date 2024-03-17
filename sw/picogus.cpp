@@ -134,6 +134,7 @@ __force_inline void select_picogus(uint8_t value) {
 #ifdef SOUND_GUS
     case 0x10: // Audio buffer size
     case 0x11: // DMA interval
+    case 0x12: // DMA interval
         break;
 #endif
 #ifdef SOUND_MPU
@@ -182,6 +183,9 @@ __force_inline void write_picogus_high(uint8_t value) {
         break;
     case 0x11: // DMA interval
         GUS_SetDMAInterval(value);
+        break;
+    case 0x12: // Force 44k output
+        GUS_SetFixed44k(value);
         break;
 #endif
 #ifdef SOUND_MPU

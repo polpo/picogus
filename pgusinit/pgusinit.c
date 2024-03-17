@@ -35,7 +35,7 @@ void banner(void) {
 }
 
 const char* usage_by_card[] = {
-    "[/a n] [/d n]",            // GUS_MODE
+    "[/a n] [/d n] [/4]",       // GUS_MODE
     "[/p x]",                   // ADLIB_MODE
     "[/p x] [/v x] [/s] [/n]",  // MPU_MODE
     "[/p x]",                   // TANDY_MODE
@@ -77,6 +77,7 @@ void usage(char *argv0, card_mode_t mode) {
         fprintf(stderr, "    /d n - force DMA interval to n us. Default: 0, Min: 0, Max: 255\n");
         fprintf(stderr, "           Specifying 0 restores the GUS default behavior.\n");
         fprintf(stderr, "           (if games with streaming audio like Doom stutter, increase this)\n");
+        fprintf(stderr, "    /4   - Force audio output to 44.1kHz for all channels [EXPERIMENTAL]\n");
         fprintf(stderr, "The ULTRASND environment variable must be set in the following format:\n");
         fprintf(stderr, "\tset ULTRASND=xxx,y,n,z,n\n");
         fprintf(stderr, "Where xxx = port, y = DMA, z = IRQ. n is ignored.\n");
@@ -275,6 +276,7 @@ int main(int argc, char* argv[]) {
     int e;
     unsigned short buffer_size = 0;
     unsigned short dma_interval = 0;
+    uint8_t force_44k = 0;
     uint16_t port_override = 0;
     uint8_t wt_volume = 100;
     char fw_filename[256] = {0};
@@ -304,6 +306,8 @@ int main(int argc, char* argv[]) {
             return 0;
         } else if (stricmp(argv[i], "/j") == 0) {
             enable_joystick = 1;
+        } else if (stricmp(argv[i], "/4") == 0) {
+            force_44k = 1;
         } else if (stricmp(argv[i], "/a") == 0) {
             if (i + 1 >= argc) {
                 usage(argv[0], mode);
@@ -420,6 +424,15 @@ int main(int argc, char* argv[]) {
         } else {
             printf("DMA interval forced to %u us\n", dma_interval);
         }
+
+        outp(CONTROL_PORT, 0x12); // Select force 44k buffer
+        outp(DATA_PORT_HIGH, force_44k);
+        if (force_44k) {
+            printf("Fixed 44.1kHz output enabled (EXPERIMENTAL)");
+        } else {
+            printf("GF1 variable sample rate output enabled");
+        }
+        
         outp(CONTROL_PORT, 0x04); // Select port register
         port = inpw(DATA_PORT_LOW); // Get port
         printf("Running in GUS mode on port %x\n", port);

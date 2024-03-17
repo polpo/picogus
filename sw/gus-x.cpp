@@ -180,7 +180,7 @@ struct GFGus {
     bool irqenabled;
     bool initUnmaskDMA;
     bool force_master_irq_enable;
-    bool fixed_sample_rate_output;
+    bool fixed_44k_output = false;
     bool clearTCIfPollingIRQStatus;
     double lastIRQStatusPollAt;
     int lastIRQStatusPollRapidCount;
@@ -206,7 +206,7 @@ extern uint8_t GUS_activeChannels(void) {
 }
 
 extern uint32_t GUS_basefreq(void) {
-    return myGUS.fixed_sample_rate_output ? 44100 : myGUS.basefreq;
+    return myGUS.basefreq;
 }
 
 Bitu DEBUG_EnableDebugger(void);
@@ -391,7 +391,7 @@ class GUSChannels {
         __force_inline void WriteWaveFreq(uint16_t val) {
             WaveFreq = val;
             WaveAdd = ((uint32_t)(val >> 1)) << ((uint32_t)(WAVE_FRACT-9));
-            if (myGUS.fixed_sample_rate_output) {
+            if (myGUS.fixed_44k_output) {
                 WaveAdd = ((WaveAdd * sample_rates[myGUS.ActiveChannels - 1]) + (44100 >> 1)) / 44100;
             }
         }
@@ -453,7 +453,7 @@ class GUSChannels {
             if (error < -1L || error > 1L)
                 LOG_MSG("RampAdd nonfixed error %ld (%lu != %lu)",error,(unsigned long)checkadd,(unsigned long)RampAdd);
 #endif
-            if (myGUS.fixed_sample_rate_output) {
+            if (myGUS.fixed_44k_output) {
                 RampAdd = ((RampAdd * sample_rates[myGUS.ActiveChannels + 1]) + (44100 >> 1)) / 44100;
             }
         }
@@ -800,7 +800,7 @@ static void GUSReset(void) {
 
         PIC_RemoveEvents(GUS_TimerEvent);
 
-        myGUS.fixed_sample_rate_output = true;
+        // myGUS.fixed_44k_output = false;
 
         myGUS.DMAControl = 0x00;
         myGUS.mixControl = 0x0b;    // latches enabled by default LINEs disabled
@@ -808,7 +808,7 @@ static void GUSReset(void) {
         myGUS.SampControl = 0x00;
         myGUS.ActiveChannels = 14;
         myGUS.ActiveMask=0xffffffffU >> (32-myGUS.ActiveChannels);
-        myGUS.basefreq = sample_rates[myGUS.ActiveChannels - 1];
+        myGUS.basefreq = myGUS.fixed_44k_output ? 44100 : sample_rates[myGUS.ActiveChannels - 1];
 
         myGUS.gCurChannel = 0;
         curchan = guschan[myGUS.gCurChannel];
@@ -1169,11 +1169,7 @@ __force_inline static void ExecuteGlobRegister(void) {
 
         myGUS.ActiveMask=0xffffffffU >> (32-myGUS.ActiveChannels);
         // myGUS.basefreq = (uint32_t)(1000000.0/(1.619695497*(float)(myGUS.ActiveChannels)));
-        if (myGUS.fixed_sample_rate_output) {
-            myGUS.basefreq = 44100;
-        } else {
-            myGUS.basefreq = sample_rates[myGUS.ActiveChannels - 1];
-        }
+        myGUS.basefreq = myGUS.fixed_44k_output ? 44100 : sample_rates[myGUS.ActiveChannels - 1];
 
 #if LOG_GUS
         LOG_MSG("GUS set to %d channels freq=%luHz", myGUS.ActiveChannels,(unsigned long)myGUS.basefreq);
@@ -1761,6 +1757,11 @@ void GUS_SetDMAInterval(const uint16_t newInterval) {
     // PICOGUS special port to set DMA interval
     printf("setting dma interval to %u\n", newInterval);
     myGUS.dmaIntervalOverride = newInterval;
+}
+void GUS_SetFixed44k(const bool new_force44k) {
+    // PICOGUS special port to set audio buffer size
+    myGUS.fixed_44k_output = new_force44k;
+    printf("fixed 44k output: %u\n", myGUS.fixed_44k_output);
 }
 
 
