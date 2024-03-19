@@ -113,8 +113,12 @@ static uint16_t const sample_rates[32] = {
     25725,
     24696,
     23746,
-    22866, // 27
-    22866, // 28
+    22866,
+#ifdef FORCE_28CH_27CH
+    22866,
+#else
+    22050,
+#endif
     21289,
     20580,
     19916,
@@ -206,7 +210,12 @@ extern uint8_t GUS_activeChannels(void) {
 }
 
 extern uint32_t GUS_basefreq(void) {
+    // Special 28 channel handling to work around PCM510xA DAC issues:
+#if defined(SCALE_22K_TO_44K)
+    return myGUS.ActiveChannels == 28 ? 44100 : myGUS.basefreq;
+#else
     return myGUS.basefreq;
+#endif
 }
 
 Bitu DEBUG_EnableDebugger(void);
@@ -390,9 +399,11 @@ class GUSChannels {
 
         __force_inline void WriteWaveFreq(uint16_t val) {
             WaveFreq = val;
-            if (myGUS.ActiveChannels == 28) { // fudge to the 27 channel rate
+#ifdef FORCE_28CH_27CH
+            if (!myGUS.fixed_44k_output && myGUS.ActiveChannels == 28) { // fudge to the 27 channel rate
                 val = (uint16_t)((uint32_t)val * 22050ul / 22866ul);
             }
+#endif
             WaveAdd = ((uint32_t)(val >> 1)) << ((uint32_t)(WAVE_FRACT-9));
             if (myGUS.fixed_44k_output) {
                 WaveAdd = ((WaveAdd * sample_rates[myGUS.ActiveChannels - 1]) + (44100 >> 1)) / 44100;
@@ -1597,9 +1608,13 @@ static int32_t __force_inline clamp(int32_t d, int32_t min, int32_t max) {
 }
 #endif // INTERP_CLAMP
 
+
 extern uint32_t /*__scratch_x("my_sub_section")*/ (GUS_CallBack)(Bitu max_len, int16_t* play_buffer) {
 // extern uint32_t GUS_CallBack(Bitu max_len, int16_t* play_buffer) {
     static int32_t accum[2];
+#ifdef SCALE_22K_TO_44K
+    static int32_t prev_accum[2];
+#endif
     uint32_t s = 0;
 
     if ((GUS_reset_reg & 0x01/*!master reset*/) == 0x01 && (GUS_reset_reg & 0x02/*DAC enable*/) == 0x02) {
@@ -1610,13 +1625,31 @@ extern uint32_t /*__scratch_x("my_sub_section")*/ (GUS_CallBack)(Bitu max_len, i
                 guschan[c]->generateSample(accum);
             }
 #ifdef INTERP_CLAMP
+#ifdef SCALE_22K_TO_44K
+            if (!myGUS.fixed_44k_output && myGUS.ActiveChannels == 28) {
+                play_buffer[s << 1] = clamp16((accum[0] + prev_accum[0]) >> 1);
+                play_buffer[(s << 1) + 1] = clamp16((accum[1] + prev_accum[1]) >> 1);
+                ++s;
+            }
+#endif // SCALE_22K_TO_44K
             play_buffer[s << 1] = clamp16(accum[0]);
             play_buffer[(s << 1) + 1] = clamp16(accum[1]);
-#else
+#else // INTERP_CLAMP
+#ifdef SCALE_22K_TO_44K
+            if (!myGUS.fixed_44k_output && myGUS.ActiveChannels == 28) {
+                play_buffer[s << 1] = clamp((accum[0]  + prev_accum[0]) >> 13, -32768, 32767);
+                play_buffer[(s << 1) + 1] = clamp((accum[1] + prev_accum[1]) >> 13, -32768, 32767);
+                ++s;
+            }
+#endif // SCALE_22K_TO_44K
             play_buffer[s << 1] = clamp(accum[0] >> 14, -32768, 32767);
             play_buffer[(s << 1) + 1] = clamp(accum[1] >> 14, -32768, 32767);
-#endif
+#endif // INTERP_CLAMP
             ++s;
+#ifdef SCALE_22K_TO_44K
+            prev_accum[0] = accum[0];
+            prev_accum[1] = accum[1];
+#endif
             if (cur_rate != myGUS.basefreq) {
                 // Bail out if our sampling rate changed. This will produce 1 sample at the
                 // wrong rate, but it's better than producing up to buffer_size samples at the 
