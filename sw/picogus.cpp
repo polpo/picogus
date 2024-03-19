@@ -98,10 +98,19 @@ uint8_t joystate_bin;
 
 // PicoGUS control and data ports
 // 1D0 chosen as the base port as nothing is listed in Ralf Brown's Port List (http://www.cs.cmu.edu/~ralf/files.html)
+// MPU moved to 1D3-1D5 to function alongside PicoGUS
+#ifdef SOUND_MPU
+#define CONTROL_PORT 0x1D3
+#define DATA_PORT_LOW  0x1D4
+#define DATA_PORT_HIGH 0x1D5
+#define PICOGUS_PROTOCOL_VER 2
+#else
 #define CONTROL_PORT 0x1D0
 #define DATA_PORT_LOW  0x1D1
 #define DATA_PORT_HIGH 0x1D2
 #define PICOGUS_PROTOCOL_VER 2
+#endif
+
 static bool control_active = false;
 static uint8_t sel_reg = 0;
 static uint16_t cur_data = 0;

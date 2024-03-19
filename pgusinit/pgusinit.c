@@ -7,10 +7,11 @@
 #include <stdbool.h>
 #include <i86.h>
 
-#define CONTROL_PORT 0x1D0
-#define DATA_PORT_LOW  0x1D1
-#define DATA_PORT_HIGH 0x1D2
 #define PICOGUS_PROTOCOL_VER 2
+
+unsigned short CONTROL_PORT=0x1D0; // Change to a variable with GUS defaults
+unsigned short DATA_PORT_LOW=0x1D1;
+unsigned short DATA_PORT_HIGH=0x1D2;
 
 typedef enum {
     PICO_FIRMWARE_IDLE = 0,
@@ -56,6 +57,7 @@ void usage(char *argv0, card_mode_t mode) {
     fprintf(stderr, "    /?        - show this message\n");
     fprintf(stderr, "    /f fw.uf2 - program the PicoGUS with the firmware file fw.uf2\n");
     fprintf(stderr, "    /j        - enable USB joystick support\n");
+    fprintf(stderr, "    /m        - switch to PicoMPU communication\n");
     if (mode > GUS_MODE && mode < JOYSTICK_ONLY_MODE) {
         fprintf(stderr, "AdLib, MPU-401, Tandy, CMS modes only:\n");
         fprintf(stderr, "    /p x - set the (hex) base port address of the emulated card. Defaults:\n");
@@ -285,6 +287,17 @@ int main(int argc, char* argv[]) {
     uint8_t mpu_fakeallnotesoff = 0;
     uint8_t enable_joystick = 0;
 
+    int i = 1;
+    while (i < argc) {
+        if (stricmp(argv[i], "/m") == 0) {
+            CONTROL_PORT=0x1D3; // Change the GUS ports to MPU mode
+            DATA_PORT_LOW=0x1D4;
+            DATA_PORT_HIGH=0x1D5;
+        }
+        ++i;
+    }
+    i = 1;
+    
     banner();
     // Get magic value from port on PicoGUS that is not on real GUS
     outp(CONTROL_PORT, 0xCC); // Knock on the door...
@@ -299,7 +312,6 @@ int main(int argc, char* argv[]) {
     outp(CONTROL_PORT, 0x03); // Select mode register
     mode = inp(DATA_PORT_HIGH);
 
-    int i = 1;
     while (i < argc) {
         if (stricmp(argv[i], "/?") == 0) {
             usage(argv[0], mode);
