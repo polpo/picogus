@@ -77,7 +77,7 @@ void usage(char *argv0, card_mode_t mode) {
         fprintf(stderr, "    /d n - force DMA interval to n us. Default: 0, Min: 0, Max: 255\n");
         fprintf(stderr, "           Specifying 0 restores the GUS default behavior.\n");
         fprintf(stderr, "           (if games with streaming audio like Doom stutter, increase this)\n");
-        fprintf(stderr, "    /4   - Force audio output to 44.1kHz for all channels [EXPERIMENTAL]\n");
+        fprintf(stderr, "    /4   - Enable fixed 44.1kHz output for all active voice #s [EXPERIMENTAL]\n");
         fprintf(stderr, "The ULTRASND environment variable must be set in the following format:\n");
         fprintf(stderr, "\tset ULTRASND=xxx,y,n,z,n\n");
         fprintf(stderr, "Where xxx = port, y = DMA, z = IRQ. n is ignored.\n");
@@ -428,9 +428,7 @@ int main(int argc, char* argv[]) {
         outp(CONTROL_PORT, 0x12); // Select force 44k buffer
         outp(DATA_PORT_HIGH, force_44k);
         if (force_44k) {
-            printf("Fixed 44.1kHz output enabled (EXPERIMENTAL)");
-        } else {
-            printf("GF1 variable sample rate output enabled");
+            printf("Fixed 44.1kHz output enabled (EXPERIMENTAL)\n");
         }
         
         outp(CONTROL_PORT, 0x04); // Select port register

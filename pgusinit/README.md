@@ -55,6 +55,11 @@ specified in ULTRASND.
   with a value of 10-12. Note that increasing this will slow down sample
   loading. Set to 0 to use the GUS's default DMA interval handling, where the
   DMA interval is set by the program using it.
+* `/4` - enables fixed 44.1kHz output. Normally the GF1 varies its output
+  sample rate from 44.1kHz at 14 voices to 19.2kHz at 32 voices. Using this
+  option enables 44.1kHz output for all numbers of voices, similar to the
+  Interwave. This will result in stuttering in most games that use streaming DMA
+  for sound effects like Doom, hence it is EXPERIMENTAL.
 
 See the Compatibility List wiki for notes on programs that require these
 options to be set: https://github.com/polpo/picogus/wiki/Compatibility-list
