@@ -4,7 +4,8 @@
 
 ### GUS emulation:
 * Works around a hardware bug in the PCM510xA DAC that results in ~10% of chips to be silent at 22.05kHz sampling rate. This is the rate produced by the GUS at 28 channels, and is used by Doom and the demo "Dope". The workaround is to run the DAC at 44.1kHz, linearly interpolating the 22.05kHz output.
-* New EXPERIMENTAL fixed 44.1kHz output. Normally the GF1 varies its output sample rate from 44.1kHz at 14 voices to 19.2kHz at 32 voices. Using this option enables 44.1kHz output for all numbers of voices, similar to the Interwave. This gives much higher quality output when playing lots of channels.  This will result in stuttering in most games that use streaming DMA for sound effects like Doom, hence it is EXPERIMENTAL. It can be enabled with the `/4` switch in pgusinit.
+* Increased fractional precision of wave addresses to 10 bits from 9.
+* New EXPERIMENTAL fixed 44.1kHz output. Normally the GF1 varies its output sample rate from 44.1kHz at 14 voices to 19.2kHz at 32 voices. Using this option enables 44.1kHz output for all numbers of voices, similar to the Interwave. This gives much higher quality output when playing lots of channels.  This will result in stuttering in most games that use streaming DMA for sound effects like Doom, hence it is EXPERIMENTAL. It can be enabled with the `/4` switch in pgusinit. Thanks to [wbcbz7](https://github.com/wbcbz7) for contributing this support along with the increased wave address precision.
 
 ### pgusinit
 * New `/4` switch when in GUS mode to enable fixed 44.1kHz output.
