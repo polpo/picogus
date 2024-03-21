@@ -254,15 +254,16 @@ void send_midi_byte() {
         critical_section_exit(&midi_crit);
         return;   // nothing to send
     }
-    Bit8u data = midi_out_buff.buffer[midi_out_buff.tail];
-    midi_out_buff.tail = (midi_out_buff.tail + 1) & RAWBUF_BITS;   // increment tail, wrap to 0 if we're at the end
-    critical_section_exit(&midi_crit);
     if (midi.sysex.start) {
         Bit32u passed_ticks = time_us_32() - midi.sysex.start;
         if (passed_ticks < midi.sysex.delay) { // still waiting for sysex delay
-            busy_wait_us_32(midi.sysex.delay - passed_ticks);
+            critical_section_exit(&midi_crit);
+            return; // Don't send data yet
         }
     }
+    Bit8u data = midi_out_buff.buffer[midi_out_buff.tail];
+    midi_out_buff.tail = (midi_out_buff.tail + 1) & RAWBUF_BITS;   // increment tail, wrap to 0 if we're at the end
+    critical_section_exit(&midi_crit);
 
     if (midi.sysex.status==0xf0) { // Start 
         /* putchar('s'); */
