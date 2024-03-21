@@ -23,6 +23,7 @@ void play_mpu() {
     PIC_Init();
     puts("pic inited on core 1");
 #endif
+    MPU401_Init(false, false);
 
     for (;;) {
         send_midi_byte();				// see if we need to send a byte	

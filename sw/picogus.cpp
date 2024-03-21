@@ -674,8 +674,6 @@ int main()
         gpio_set_drive_strength(UART_TX_PIN, GPIO_DRIVE_STRENGTH_12MA);
     }
     gpio_set_function(UART_TX_PIN, GPIO_FUNC_UART);
-    busy_wait_ms(100);
-    MPU401_Init(false, false);
 #endif // SOUND_MPU
 
 #ifdef PSRAM_CORE0

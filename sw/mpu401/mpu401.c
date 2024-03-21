@@ -69,6 +69,7 @@ bool MIDI_Available(void);
 
 static uint32_t MPU401_Event(Bitu val);
 static uint32_t MPU401_ResetDone(Bitu val);
+static uint32_t MPU401_InitHandler(Bitu val);
 static uint32_t MPU401_EOIHandler(Bitu val);
 static void MPU401_Reset(void);
 static void MPU401_EOIHandlerDispatch(void);
@@ -97,6 +98,8 @@ typedef enum MpuDataType MpuDataType; /* SOFTMPU */
 #define MSG_MPU_ACK             0xfe
 
 static bool config_versionfix = false;
+static bool config_delaysysex = false;
+static bool config_fakeallnotesoff = false;
 
 static struct {
     bool intelligent;
@@ -745,27 +748,30 @@ __force_inline static void MPU401_Reset(void) {
 /* HardMPU: Initialisation */
 void MPU401_Init(bool delaysysex, bool fakeallnotesoff)
 {
-    /* Initalise PIC code */
-    /* PIC_Init(); */
+    config_delaysysex = delaysysex;
+    config_fakeallnotesoff = fakeallnotesoff;
+    config_versionfix = false;
     if (!critical_section_is_initialized(&mpu_crit)) {
         critical_section_init(&mpu_crit);
     }
+    PIC_AddEvent(MPU401_InitHandler, 1000, 3);
+}
 
+uint32_t MPU401_InitHandler(Bitu val)
+{
     /* Initialise MIDI handler */
-    MIDI_Init(delaysysex, fakeallnotesoff);
-    if (!MIDI_Available()) return;
-
-    config_versionfix = false;
+    MIDI_Init(config_delaysysex, config_fakeallnotesoff);
+    if (!MIDI_Available()) return 0;
 
     mpu.queue_used=0;
     mpu.queue_pos=0;
     mpu.mode=M_UART;
 
     mpu.intelligent=true; /* Default is on */
-    if (!mpu.intelligent) return;
 
     /* SOFTMPU: Moved IRQ 9 handler init to asm */
     MPU401_Reset();
+    return 0;
 }
 
 #if 0
