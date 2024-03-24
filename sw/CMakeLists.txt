@@ -131,7 +131,7 @@ if(PROJECT_TYPE STREQUAL "OPL")
         USE_ALARM=1
         USE_EMU8950_OPL=1        
         EMU8950_ASM=1
-        PICOW=1
+        # PICOW=1
     )
     add_subdirectory(opl)
     pico_enable_stdio_uart(picogus 1)

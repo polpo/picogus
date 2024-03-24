@@ -13,6 +13,7 @@ Author : Kevin Moonlight <me@yyzkevin.com>
 */
 
 #include "isa_dma.h"
+#include "clamp.h"
 
 extern "C" void OPL_Pico_Mix_callback(audio_buffer_t *);
 extern "C" void OPL_Pico_simple(int16_t *buffer, uint32_t nsamples);
@@ -214,11 +215,14 @@ void sbdsp_dma_isr(void) {
 
 int16_t sbdsp_sample() {
     int16_t snd16;
+    int32_t snd32;
     OPL_Pico_simple(&snd16, 1);
     if (sbdsp.dma_enabled) {        
-        snd16 += (int16_t)(cur_sample)-0x80 << 4;
+        snd32 = ((int32_t)(cur_sample)-0x80 << 4) + snd16;
+    } else {
+        snd32 = snd16;
     }
-    return snd16;
+    return clamp16(snd32);
 }
 
 void sbdsp_init() {    
@@ -235,7 +239,7 @@ void sbdsp_init() {
     opl_buffer->buffer->size = 512*4; // 49716/8000*64==397
     opl_buffer->buffer->bytes = (uint8_t *) malloc(opl_buffer->buffer->size);
 
-
+    clamp_setup();
 
 }
 

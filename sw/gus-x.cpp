@@ -30,7 +30,7 @@
 extern psram_spi_inst_t psram_spi;
 #endif
 
-#if defined(INTERP_CLAMP) || defined(INTERP_LINEAR)
+#if defined(INTERP_LINEAR)
 #include "hardware/interp.h"
 #endif
 
@@ -40,6 +40,8 @@ critical_section_t gus_crit;
 #include "pico_pic.h"
 #include "isa_dma.h"
 extern dma_inst_t dma_config;
+
+#include "clamp.h"
 
 using namespace std;
 
@@ -1597,19 +1599,7 @@ __force_inline void GUS_StartDMA() {
 }
 
 
-#ifdef INTERP_CLAMP
-static int16_t __force_inline clamp16(int32_t d) {
-    interp1->accum[0] = d;
-    return interp1->peek[0];
-}
-#else
-static int32_t __force_inline clamp(int32_t d, int32_t min, int32_t max) {
-    return d < min ? min : (d > max ? max : d);
-}
-#endif // INTERP_CLAMP
-
-
-extern uint32_t /*__scratch_x("my_sub_section")*/ (GUS_CallBack)(Bitu max_len, int16_t* play_buffer) {
+extern uint32_t __scratch_x("my_sub_section") (GUS_CallBack)(Bitu max_len, int16_t* play_buffer) {
 // extern uint32_t GUS_CallBack(Bitu max_len, int16_t* play_buffer) {
     static int32_t accum[2];
 #ifdef SCALE_22K_TO_44K
@@ -1624,7 +1614,6 @@ extern uint32_t /*__scratch_x("my_sub_section")*/ (GUS_CallBack)(Bitu max_len, i
             for (Bitu c = 0; c < myGUS.ActiveChannels; ++c) {
                 guschan[c]->generateSample(accum);
             }
-#ifdef INTERP_CLAMP
 #ifdef SCALE_22K_TO_44K
             if (!myGUS.fixed_44k_output && myGUS.ActiveChannels == 28) {
                 play_buffer[s << 1] = clamp16((accum[0] + prev_accum[0]) >> 1);
@@ -1634,17 +1623,6 @@ extern uint32_t /*__scratch_x("my_sub_section")*/ (GUS_CallBack)(Bitu max_len, i
 #endif // SCALE_22K_TO_44K
             play_buffer[s << 1] = clamp16(accum[0]);
             play_buffer[(s << 1) + 1] = clamp16(accum[1]);
-#else // INTERP_CLAMP
-#ifdef SCALE_22K_TO_44K
-            if (!myGUS.fixed_44k_output && myGUS.ActiveChannels == 28) {
-                play_buffer[s << 1] = clamp((accum[0]  + prev_accum[0]) >> 13, -32768, 32767);
-                play_buffer[(s << 1) + 1] = clamp((accum[1] + prev_accum[1]) >> 13, -32768, 32767);
-                ++s;
-            }
-#endif // SCALE_22K_TO_44K
-            play_buffer[s << 1] = clamp(accum[0] >> 14, -32768, 32767);
-            play_buffer[(s << 1) + 1] = clamp(accum[1] >> 14, -32768, 32767);
-#endif // INTERP_CLAMP
             ++s;
 #ifdef SCALE_22K_TO_44K
             prev_accum[0] = accum[0];
@@ -1887,10 +1865,8 @@ void GUS_OnReset(void) {
 }
 
 void GUS_Setup() {
-#if defined(INTERP_LINEAR) || defined(INTERP_CLAMP)
+#if defined(INTERP_LINEAR)
         interp_config cfg;
-#endif
-#ifdef INTERP_LINEAR
         cfg = interp_default_config();
         // Linear interpolation setup
         interp_config_set_blend(&cfg, true);
@@ -1900,18 +1876,5 @@ void GUS_Setup() {
         interp_config_set_signed(&cfg, true);
         interp_set_config(interp0, 1, &cfg);
 #endif
-
-#ifdef INTERP_CLAMP
-        // Clamp setup
-        cfg = interp_default_config();
-        interp_config_set_clamp(&cfg, true);
-        interp_config_set_shift(&cfg, 14);
-        // set mask according to new position of sign bit..
-        interp_config_set_mask(&cfg, 0, 17);
-        // ...so that the shifted value is correctly sign extended
-        interp_config_set_signed(&cfg, true);
-        interp_set_config(interp1, 0, &cfg);
-        interp1->base[0] = -32768;
-        interp1->base[1] = 32767;
-#endif
+        clamp_setup();
 }
