@@ -13,10 +13,6 @@ Author : Kevin Moonlight <me@yyzkevin.com>
 */
 
 #include "isa_dma.h"
-#include "clamp.h"
-
-extern "C" void OPL_Pico_Mix_callback(audio_buffer_t *);
-extern "C" void OPL_Pico_simple(int16_t *buffer, uint32_t nsamples);
 
 
 irq_handler_t SBDSP_DMA_isr_pt;
@@ -103,8 +99,6 @@ typedef struct sbdsp_t {
 } sbdsp_t;
 
 sbdsp_t sbdsp;
-
-audio_buffer_t *opl_buffer;
 
 void sbdsp_process(void);
 
@@ -214,15 +208,7 @@ void sbdsp_dma_isr(void) {
 }
 
 int16_t sbdsp_sample() {
-    int16_t snd16;
-    int32_t snd32;
-    OPL_Pico_simple(&snd16, 1);
-    if (sbdsp.dma_enabled) {        
-        snd32 = ((int32_t)(cur_sample)-0x80 << 4) + snd16;
-    } else {
-        snd32 = snd16;
-    }
-    return clamp16(snd32);
+    return sbdsp.dma_enabled ? (int16_t)(cur_sample)-0x80 << 4 : 0;
 }
 
 void sbdsp_init() {    
@@ -233,14 +219,6 @@ void sbdsp_init() {
     puts("Initing ISA DMA PIO...");    
     SBDSP_DMA_isr_pt = sbdsp_dma_isr;
     dma_config = DMA_init(pio0, DMA_PIO_SM, SBDSP_DMA_isr_pt);         
-
-    opl_buffer = (audio_buffer_t *) malloc(sizeof(audio_buffer_t));
-    opl_buffer->buffer = (mem_buffer_t *) malloc(sizeof(mem_buffer_t));        
-    opl_buffer->buffer->size = 512*4; // 49716/8000*64==397
-    opl_buffer->buffer->bytes = (uint8_t *) malloc(opl_buffer->buffer->size);
-
-    clamp_setup();
-
 }
 
 

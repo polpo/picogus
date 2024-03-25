@@ -19,6 +19,11 @@
 #include "pico/audio_i2s.h"
 
 #include "opl.h"
+extern "C" void OPL_Pico_simple(int16_t *buffer, uint32_t nsamples);
+
+extern int16_t sbdsp_sample();
+
+#include "clamp.h"
 
 #ifdef USB_JOYSTICK
 #include "tusb.h"
@@ -77,16 +82,6 @@ struct audio_buffer_pool *init_audio() {
     return producer_pool;
 }
 
-extern "C" void OPL_Pico_Mix_callback(audio_buffer_t *);
-
-#ifdef SOUND_DSP
-extern void sbdsp_process(void);
-extern void sbdsp_mix(audio_buffer_t *buffer);
-extern uint16_t sbdsp_fifo_level();
-extern int16_t sbdsp_sample();
-#endif
-
-
 void play_adlib() {
     puts("starting core 1");
     uint32_t start, end;
@@ -101,13 +96,16 @@ void play_adlib() {
     tuh_init(BOARD_TUH_RHPORT);
 #endif
 
+    clamp_setup();
+
     struct audio_buffer_pool *ap = init_audio();
 
     for (;;) {
         struct audio_buffer *buffer = take_audio_buffer(ap, true);
-        // sbdsp_mix(buffer);
         int16_t *samples = (int16_t *) buffer->buffer->bytes;
-        samples[0] = samples[1] = sbdsp_sample();
+        int16_t opl_sample;
+        OPL_Pico_simple(&opl_sample, 1);
+        samples[0] = samples[1] = clamp16((int32_t)sbdsp_sample() + (int32_t)opl_sample);
         buffer->sample_count=1;
         // putchar((unsigned char)buffer->buffer->bytes[1]);
         give_audio_buffer(ap, buffer);

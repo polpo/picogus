@@ -61,13 +61,13 @@ jobs:
           cmake --build . --config $BUILD_TYPE --parallel $(nproc)
           cp picogus.uf2 $OUTPUT_DIR/pg-gus.uf2
 
-      - name: Build OPL / AdLib Firmware
+      - name: Build SB Firmware
         working-directory: ${{github.workspace}}/build
         shell: bash
         run: |
-          cmake $GITHUB_WORKSPACE/sw -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DPROJECT_TYPE="OPL" -DUSE_LTO=1 -DUSB_JOYSTICK=1
+          cmake $GITHUB_WORKSPACE/sw -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DPROJECT_TYPE="SB" -DUSE_LTO=1 -DUSB_JOYSTICK=1
           cmake --build . --config $BUILD_TYPE --parallel $(nproc)
-          cp picogus.uf2 $OUTPUT_DIR/pg-adlib.uf2
+          cp picogus.uf2 $OUTPUT_DIR/pg-sb.uf2
 
       - name: Build MPU401 Firmware
         working-directory: ${{github.workspace}}/build

@@ -117,16 +117,17 @@ if(PROJECT_TYPE STREQUAL "GUS")
     pico_enable_stdio_semihosting(picogus 0)
 endif()
 
-if(PROJECT_TYPE STREQUAL "OPL")
-    pico_set_program_name(picogus "picogus-adlib")
-    target_sources(picogus PRIVATE adlibplay.cpp sbplay.cpp pico_pic.c isa_dma.c)    
+if(PROJECT_TYPE STREQUAL "SB")
+    pico_set_program_name(picogus "picogus-sb")
+    target_sources(picogus PRIVATE sbdsp.cpp sbplay.cpp pico_pic.c isa_dma.c)    
     
     target_link_libraries(
         picogus        
         opl        
     )
     target_compile_definitions(picogus PRIVATE
-        SOUND_OPL=1
+        SOUND_SB=1
+        # SOUND_OPL=1
         SOUND_DSP=1
         USE_ALARM=1
         USE_EMU8950_OPL=1        

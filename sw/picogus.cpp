@@ -14,10 +14,11 @@ enum board_type { PICO_BASED = 0, PICOGUS_2 = 1 } BOARD_TYPE;
 
 typedef enum {
     GUS_MODE = 0,
-    ADLIB_MODE = 1,
+    ADLIB_MODE = 1, // deprecated
     MPU_MODE = 2,
     TANDY_MODE = 3,
     CMS_MODE = 4,
+    SB_MODE = 5,
     JOYSTICK_ONLY_MODE = 0x0f
 } card_mode_t;
 
@@ -41,22 +42,21 @@ uint LED_PIN;
 #include "M62429/M62429.h"
 M62429* m62429;
 
-#ifdef SOUND_OPL
+#ifdef SOUND_SB
 #include "opl.h"
-static uint16_t basePort = 0x388u;
+static uint16_t basePort = 0x220u;
+static uint16_t sb_port_test = basePort >> 4;
 
 void play_adlib(void);
 extern "C" int OPL_Pico_Init(unsigned int);
 extern "C" void OPL_Pico_PortWrite(opl_port_t, unsigned int);
 extern "C" unsigned int OPL_Pico_PortRead(opl_port_t);
-#endif
 
-#ifdef SOUND_DSP
 extern void sbdsp_write(uint8_t address, uint8_t value);
 extern uint8_t sbdsp_read(uint8_t address);
 extern void sbdsp_init();
 extern void sbdsp_process();
-static uint16_t DSP_basePort = 0x220u;
+static uint16_t adlib_basePort = 0x388u;
 #endif
 
 #ifdef SOUND_GUS
@@ -173,12 +173,15 @@ __force_inline void write_picogus_low(uint8_t value) {
 __force_inline void write_picogus_high(uint8_t value) {
     switch (sel_reg) {
     case 0x04: // Base port
-#if defined(SOUND_GUS) || defined(SOUND_OPL) || defined(SOUND_MPU) || defined(SOUND_TANDY) || defined(SOUND_CMS)
+#if defined(SOUND_GUS) || defined(SOUND_SB) || defined(SOUND_MPU) || defined(SOUND_TANDY) || defined(SOUND_CMS)
         basePort = (value << 8) | basePort_tmp;
 #endif
 #ifdef SOUND_GUS
         gus_port_test = basePort >> 4 | 0x10;
         // GUS_SetPort(basePort);
+#endif
+#ifdef SOUND_SB
+        sb_port_test = basePort >> 4;
 #endif
         break;
     case 0x0f: // enable joystick
@@ -216,7 +219,7 @@ __force_inline void write_picogus_high(uint8_t value) {
 __force_inline uint8_t read_picogus_low(void) {
     switch (sel_reg) {
     case 0x04: // Base port
-#if defined(SOUND_GUS) || defined(SOUND_OPL) || defined(SOUND_MPU) || defined(SOUND_TANDY) || defined(SOUND_CMS)
+#if defined(SOUND_GUS) || defined(SOUND_SB) || defined(SOUND_MPU) || defined(SOUND_TANDY) || defined(SOUND_CMS)
         return basePort & 0xff;
 #else
         return 0xff;
@@ -254,6 +257,8 @@ __force_inline uint8_t read_picogus_high(void) {
         return TANDY_MODE;
 #elif defined(SOUND_CMS)
         return CMS_MODE;
+#elif defined(SOUND_SB)
+        return SB_MODE;
 #elif defined(USB_JOYSTICK_ONLY)
         return JOYSTICK_ONLY_MODE;
 #else
@@ -261,7 +266,7 @@ __force_inline uint8_t read_picogus_high(void) {
 #endif
         break;
     case 0x04: // Base port
-#if defined(SOUND_GUS) || defined(SOUND_OPL) || defined(SOUND_MPU) || defined(SOUND_TANDY) || defined(SOUND_CMS)
+#if defined(SOUND_GUS) || defined(SOUND_SB) || defined(SOUND_MPU) || defined(SOUND_TANDY) || defined(SOUND_CMS)
         return basePort >> 8;
 #else
         return 0xff;
@@ -304,14 +309,6 @@ __force_inline void handle_iow(void) {
     // printf("%x", iow_read);
     uint16_t port = (iow_read >> 8) & 0x3FF;
     // printf("IOW: %x %x\n", port, iow_read & 0xFF);
-#ifdef SOUND_DSP    
-    if( port >= DSP_basePort && port <= (DSP_basePort+0xF)) {            
-            pio_sm_put(pio0, IOW_PIO_SM, IO_WAIT);                        
-            sbdsp_process();
-            sbdsp_write(port & 0xF,iow_read & 0xFF);       
-            sbdsp_process();                                         
-    } else
-#endif
 #ifdef SOUND_GUS
     if ((port >> 4 | 0x10) == gus_port_test) {
         port -= basePort;
@@ -339,25 +336,46 @@ __force_inline void handle_iow(void) {
         // puts("IOW");
     } else // if follows down below
 #endif // SOUND_GUS
-#ifdef SOUND_OPL
-    switch (port - basePort) {
-    case 0:
+#ifdef SOUND_SB
+    if ((port >> 4) == sb_port_test) {      
+        switch (port - basePort) {
+        // OPL ports
+        case 0x8:
+            // Fast write
+            pio_sm_put(pio0, IOW_PIO_SM, IO_END);
+            OPL_Pico_PortWrite(OPL_REGISTER_PORT, iow_read & 0xFF);
+            // Fast write - return early as we've already written 0x0u to the PIO
+            return;
+            break;
+        case 0x9:
+            pio_sm_put(pio0, IOW_PIO_SM, IO_WAIT);
+            OPL_Pico_PortWrite(OPL_DATA_PORT, iow_read & 0xFF);
+            break;
+        // DSP ports
+        default:
+            pio_sm_put(pio0, IOW_PIO_SM, IO_WAIT);                        
+            sbdsp_process();
+            sbdsp_write(port & 0xF,iow_read & 0xFF);       
+            sbdsp_process();                                         
+            break;
+        } 
+#ifndef PICOW
+        gpio_xor_mask(LED_PIN);
+#endif
+    } else if (port == adlib_basePort) {
         // Fast write
         pio_sm_put(pio0, IOW_PIO_SM, IO_END);
         OPL_Pico_PortWrite(OPL_REGISTER_PORT, iow_read & 0xFF);
         // Fast write - return early as we've already written 0x0u to the PIO
         return;
-        break;
-    case 1:
+    } else if (port == adlib_basePort + 1) {
         pio_sm_put(pio0, IOW_PIO_SM, IO_WAIT);
         OPL_Pico_PortWrite(OPL_DATA_PORT, iow_read & 0xFF);
-        // __dsb();
 #ifndef PICOW
         gpio_xor_mask(LED_PIN);
 #endif
-        break;
-    }
-#endif // SOUND_OPL
+    } else // if follows down below
+#endif // SOUND_SB
 #ifdef SOUND_MPU
     switch (port - basePort) {
     case 0:
@@ -461,16 +479,6 @@ __force_inline void handle_iow(void) {
 __force_inline void handle_ior(void) {
     uint8_t x;
     uint16_t port = pio_sm_get(pio0, IOR_PIO_SM) & 0x3FF;
-    //
-#ifdef SOUND_DSP  
-    // if( port >= DSP_basePort && port <= (DSP_basePort+0xF)) {      
-    if ((port >> 4) == (DSP_basePort >> 4)) {      
-        pio_sm_put(pio0, IOR_PIO_SM, IO_WAIT);
-        sbdsp_process();
-        pio_sm_put(pio0, IOR_PIO_SM, IOR_SET_VALUE | sbdsp_read(port & 0xF));        
-        sbdsp_process();
-    } else
-#endif
 #if defined(SOUND_GUS)
     if ((port >> 4 | 0x10) == gus_port_test) {
         // Tell PIO to wait for data
@@ -481,13 +489,20 @@ __force_inline void handle_ior(void) {
         // printf("GUS IOR: port: %x value: %x\n", port, value);
         // gpio_xor_mask(LED_PIN);
     } else // if follows down below
-#elif defined(SOUND_OPL)
-    if (port == basePort) {
+#elif defined(SOUND_SB)
+    if ((port >> 4) == sb_port_test) {
+        pio_sm_put(pio0, IOR_PIO_SM, IO_WAIT);
+        if (port - basePort == 0x8) {
+            pio_sm_put(pio0, IOR_PIO_SM, IOR_SET_VALUE | OPL_Pico_PortRead(OPL_REGISTER_PORT));
+        } else {
+            sbdsp_process();
+            pio_sm_put(pio0, IOR_PIO_SM, IOR_SET_VALUE | sbdsp_read(port & 0xF));        
+            sbdsp_process();
+        }
+    } else if (port == adlib_basePort) {
         // Tell PIO to wait for data
         pio_sm_put(pio0, IOR_PIO_SM, IO_WAIT);
-        uint32_t value = OPL_Pico_PortRead(OPL_REGISTER_PORT);
-        // OR with 0x0000ff00 is required to set pindirs in the PIO
-        pio_sm_put(pio0, IOR_PIO_SM, IOR_SET_VALUE | value);
+        pio_sm_put(pio0, IOR_PIO_SM, IOR_SET_VALUE | OPL_Pico_PortRead(OPL_REGISTER_PORT));
     } else // if follows down below
 #elif defined(SOUND_MPU)
     if (port == basePort) {
@@ -741,15 +756,13 @@ int main()
 #endif // PSRAM_CORE0
 
 
-#ifdef SOUND_DSP
+#ifdef SOUND_SB
     puts("Initializing SoundBlaster DSP");
     sbdsp_init();
-#endif
-#ifdef SOUND_OPL
     puts("Creating OPL");
     OPL_Pico_Init(basePort);
     multicore_launch_core1(&play_adlib);
-#endif // SOUND_OPL
+#endif // SOUND_SB
 
 #ifdef SOUND_GUS
     puts("Creating GUS");
