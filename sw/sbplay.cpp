@@ -20,14 +20,20 @@
 
 #include "opl.h"
 extern "C" void OPL_Pico_simple(int16_t *buffer, uint32_t nsamples);
+extern "C" void OPL_Pico_PortWrite(opl_port_t, unsigned int);
 
 extern int16_t sbdsp_sample();
 
 #include "clamp.h"
 
+#include "cmd_buffers.h"
+extern cms_buffer_t opl_buffer;
+
 #ifdef USB_JOYSTICK
 #include "tusb.h"
 #endif
+
+extern uint LED_PIN;
 
 #ifdef USE_ALARM
 #include "pico_pic.h"
@@ -101,6 +107,19 @@ void play_adlib() {
     struct audio_buffer_pool *ap = init_audio();
 
     for (;;) {
+        bool notfirst = false;
+        while (opl_buffer.tail != opl_buffer.head) {
+            if (!notfirst) {
+#ifndef PICOW
+                gpio_xor_mask(LED_PIN);
+#endif
+                notfirst = true;
+            }
+            auto cmd = opl_buffer.cmds[opl_buffer.tail];
+            OPL_Pico_PortWrite((opl_port_t)cmd.addr, cmd.data);
+            // putchar('.');
+            ++opl_buffer.tail;
+        }
         struct audio_buffer *buffer = take_audio_buffer(ap, true);
         int16_t *samples = (int16_t *) buffer->buffer->bytes;
         int16_t opl_sample;

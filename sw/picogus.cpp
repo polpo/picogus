@@ -49,8 +49,9 @@ static uint16_t sb_port_test = basePort >> 4;
 
 void play_adlib(void);
 extern "C" int OPL_Pico_Init(unsigned int);
-extern "C" void OPL_Pico_PortWrite(opl_port_t, unsigned int);
 extern "C" unsigned int OPL_Pico_PortRead(opl_port_t);
+#include "cmd_buffers.h"
+cms_buffer_t opl_buffer = { {0}, 0, 0 };
 
 extern void sbdsp_write(uint8_t address, uint8_t value);
 extern uint8_t sbdsp_read(uint8_t address);
@@ -249,8 +250,6 @@ __force_inline uint8_t read_picogus_high(void) {
     case 0x03: // Mode (GUS, OPL, MPU, etc...)
 #if defined(SOUND_GUS)
         return GUS_MODE;
-#elif defined(SOUND_OPL)
-        return ADLIB_MODE;
 #elif defined(SOUND_MPU)
         return MPU_MODE;
 #elif defined(SOUND_TANDY)
@@ -343,13 +342,22 @@ __force_inline void handle_iow(void) {
         case 0x8:
             // Fast write
             pio_sm_put(pio0, IOW_PIO_SM, IO_END);
-            OPL_Pico_PortWrite(OPL_REGISTER_PORT, iow_read & 0xFF);
+            opl_buffer.cmds[opl_buffer.head++] = {
+                OPL_REGISTER_PORT,
+                (uint8_t)(iow_read & 0xFF)
+            };
             // Fast write - return early as we've already written 0x0u to the PIO
             return;
             break;
         case 0x9:
-            pio_sm_put(pio0, IOW_PIO_SM, IO_WAIT);
-            OPL_Pico_PortWrite(OPL_DATA_PORT, iow_read & 0xFF);
+            // Fast write
+            pio_sm_put(pio0, IOW_PIO_SM, IO_END);
+            opl_buffer.cmds[opl_buffer.head++] = {
+                OPL_DATA_PORT,
+                (uint8_t)(iow_read & 0xFF)
+            };
+            // Fast write - return early as we've already written 0x0u to the PIO
+            return;
             break;
         // DSP ports
         default:
@@ -359,21 +367,24 @@ __force_inline void handle_iow(void) {
             sbdsp_process();                                         
             break;
         } 
-#ifndef PICOW
-        gpio_xor_mask(LED_PIN);
-#endif
     } else if (port == adlib_basePort) {
         // Fast write
         pio_sm_put(pio0, IOW_PIO_SM, IO_END);
-        OPL_Pico_PortWrite(OPL_REGISTER_PORT, iow_read & 0xFF);
+        opl_buffer.cmds[opl_buffer.head++] = {
+            OPL_REGISTER_PORT,
+            (uint8_t)(iow_read & 0xFF)
+        };
         // Fast write - return early as we've already written 0x0u to the PIO
         return;
     } else if (port == adlib_basePort + 1) {
-        pio_sm_put(pio0, IOW_PIO_SM, IO_WAIT);
-        OPL_Pico_PortWrite(OPL_DATA_PORT, iow_read & 0xFF);
-#ifndef PICOW
-        gpio_xor_mask(LED_PIN);
-#endif
+        // Fast write
+        pio_sm_put(pio0, IOW_PIO_SM, IO_END);
+        opl_buffer.cmds[opl_buffer.head++] = {
+            OPL_DATA_PORT,
+            (uint8_t)(iow_read & 0xFF)
+        };
+        // Fast write - return early as we've already written 0x0u to the PIO
+        return;
     } else // if follows down below
 #endif // SOUND_SB
 #ifdef SOUND_MPU
@@ -493,6 +504,10 @@ __force_inline void handle_ior(void) {
     if ((port >> 4) == sb_port_test) {
         pio_sm_put(pio0, IOR_PIO_SM, IO_WAIT);
         if (port - basePort == 0x8) {
+            // wait for OPL buffer to process
+            while (opl_buffer.tail != opl_buffer.head) {
+                tight_loop_contents();
+            }
             pio_sm_put(pio0, IOR_PIO_SM, IOR_SET_VALUE | OPL_Pico_PortRead(OPL_REGISTER_PORT));
         } else {
             sbdsp_process();
@@ -502,6 +517,10 @@ __force_inline void handle_ior(void) {
     } else if (port == adlib_basePort) {
         // Tell PIO to wait for data
         pio_sm_put(pio0, IOR_PIO_SM, IO_WAIT);
+        // wait for OPL buffer to process
+        while (opl_buffer.tail != opl_buffer.head) {
+            tight_loop_contents();
+        }
         pio_sm_put(pio0, IOR_PIO_SM, IOR_SET_VALUE | OPL_Pico_PortRead(OPL_REGISTER_PORT));
     } else // if follows down below
 #elif defined(SOUND_MPU)
