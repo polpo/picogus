@@ -122,7 +122,8 @@ jobs:
       - name: Install OpenWatcom 2.0
         uses: open-watcom/setup-watcom@v0
         with:
-          version: "2.0"
+          version: "2.0-64"
+          tag: "2024-03-01-Build"
 
       - name: Build pgusinit
         working-directory: ${{github.workspace}}/pgusinit
