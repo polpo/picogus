@@ -188,11 +188,15 @@ __force_inline void write_picogus_high(uint8_t value) {
 #endif
         break;
     case 0x05: // Adlib Base port
+#ifdef SOUND_SB
         adlib_basePort = (value << 8) | basePort_tmp;
+#endif
+        break;
     case 0x0f: // enable joystick
 #ifdef USB_JOYSTICK
         joyPort = value ? 0x201u : 0xffff;
 #endif
+        break;
 #ifdef SOUND_GUS
     case 0x10: // Audio buffer size
         // Value is sent by pgusinit as the size - 1, so we need to add 1 back to it
