@@ -350,14 +350,11 @@ __force_inline void handle_iow(void) {
             return;
             break;
         case 0x9:
-            // Fast write
-            pio_sm_put(pio0, IOW_PIO_SM, IO_END);
+            pio_sm_put(pio0, IOW_PIO_SM, IO_WAIT);
             opl_buffer.cmds[opl_buffer.head++] = {
                 OPL_DATA_PORT,
                 (uint8_t)(iow_read & 0xFF)
             };
-            // Fast write - return early as we've already written 0x0u to the PIO
-            return;
             break;
         // DSP ports
         default:
@@ -377,14 +374,12 @@ __force_inline void handle_iow(void) {
         // Fast write - return early as we've already written 0x0u to the PIO
         return;
     } else if (port == adlib_basePort + 1) {
-        // Fast write
-        pio_sm_put(pio0, IOW_PIO_SM, IO_END);
+        pio_sm_put(pio0, IOW_PIO_SM, IO_WAIT);
+        busy_wait_us(1); // busy wait for speed sensitive games :(
         opl_buffer.cmds[opl_buffer.head++] = {
             OPL_DATA_PORT,
             (uint8_t)(iow_read & 0xFF)
         };
-        // Fast write - return early as we've already written 0x0u to the PIO
-        return;
     } else // if follows down below
 #endif // SOUND_SB
 #ifdef SOUND_MPU
