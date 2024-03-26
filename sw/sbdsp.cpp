@@ -163,15 +163,12 @@ void sbdsp_dma_enable() {
     }
 }
 
-static bool done; // TODO I don't like this flag
-
 uint32_t DSP_DMA_Event(Bitu val) {   
     DMA_Start_Write(&dma_config);    
     uint32_t current_interval;
     sbdsp.dma_sample_count_rx++;    
 
     if(sbdsp.dma_pause_duration) {
-        printf("pause");
         current_interval = sbdsp.dma_interval * sbdsp.dma_pause_duration;        
         sbdsp.dma_pause_duration=0;
     }
@@ -179,12 +176,11 @@ uint32_t DSP_DMA_Event(Bitu val) {
         current_interval = sbdsp.dma_interval;
     }
 
-
     if(sbdsp.dma_sample_count_rx <= sbdsp.dma_sample_count) {        
         return current_interval;
     }
     else {                  
-        done = true;
+        PIC_ActivateIRQ();
         if(sbdsp.autoinit) {            
             sbdsp.dma_sample_count_rx=0;            
             return current_interval;
@@ -199,10 +195,6 @@ uint32_t DSP_DMA_Event(Bitu val) {
 static volatile uint8_t cur_sample; // TODO move to sbdsp struct
 
 void sbdsp_dma_isr(void) {
-    if (done) {
-        done = false;
-        PIC_ActivateIRQ();
-    }
     const uint32_t dma_data = DMA_Complete_Write(&dma_config);    
     uint16_t current_interval;
     cur_sample = dma_data & 0xFF;
@@ -241,7 +233,6 @@ void sbdsp_process(void) {
         }
     }
 
-    // printf("%x ", sbdsp.current_command);
     switch(sbdsp.current_command) {  
         case DSP_DMA_PAUSE:
             sbdsp.current_command=0;                                    
@@ -257,6 +248,7 @@ void sbdsp_process(void) {
             // printf("(0x1C)DMA_AUTO\n\r");                   
             sbdsp.autoinit=1;           
             sbdsp.dma_sample_count = sbdsp.dma_block_size;
+            sbdsp.dma_sample_count_rx=0;
             sbdsp_dma_enable();            
             sbdsp.current_command=0;                 
             break;        
@@ -280,11 +272,11 @@ void sbdsp_process(void) {
                     sbdsp.dma_interval = 1000000ul / sbdsp.sample_rate; // redundant.                    
                     */
                     sbdsp.dma_interval = 256 - sbdsp.time_constant;
-                    sbdsp.sample_rate = 1000000ul / sbdsp.dma_interval;           
-                    sbdsp.sample_step = sbdsp.sample_rate * 65535ul / OUTPUT_SAMPLERATE;                    
-                    sbdsp.sample_factor = (OUTPUT_SAMPLERATE / sbdsp.sample_rate)+5; //Estimate
+                    // sbdsp.sample_rate = 1000000ul / sbdsp.dma_interval;           
+                    // sbdsp.sample_step = sbdsp.sample_rate * 65535ul / OUTPUT_SAMPLERATE;                    
+                    // sbdsp.sample_factor = (OUTPUT_SAMPLERATE / sbdsp.sample_rate)+5; //Estimate
                     
-                    sbdsp.dma_transfer_size = 4;
+                    // sbdsp.dma_transfer_size = 4;
                     
                     //sbdsp.i2s_buffer_size = ((OUTPUT_SAMPLERATE * 65535ul) / sbdsp.sample_rate * sbdsp.dma_buffer_size) >> 16;
                     
