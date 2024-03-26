@@ -137,6 +137,7 @@ __force_inline void select_picogus(uint8_t value) {
     case 0x03: // Mode (GUS, OPL, MPU, etc...)
         break;
     case 0x04: // Base port
+    case 0x05: // Adlib Base port
         basePort_tmp = 0;
         break;
     case 0x0f: // enable joystick
@@ -166,6 +167,7 @@ __force_inline void select_picogus(uint8_t value) {
 __force_inline void write_picogus_low(uint8_t value) {
     switch (sel_reg) {
     case 0x04: // Base port
+    case 0x05: // Adlib Base port
         basePort_tmp = value;
         break;
     }
@@ -185,6 +187,8 @@ __force_inline void write_picogus_high(uint8_t value) {
         sb_port_test = basePort >> 4;
 #endif
         break;
+    case 0x05: // Adlib Base port
+        adlib_basePort = (value << 8) | basePort_tmp;
     case 0x0f: // enable joystick
 #ifdef USB_JOYSTICK
         joyPort = value ? 0x201u : 0xffff;
@@ -226,6 +230,12 @@ __force_inline uint8_t read_picogus_low(void) {
         return 0xff;
 #endif
         break;
+    case 0x05: // Adlib Base port
+#if defined(SOUND_SB)
+        return adlib_basePort & 0xff;
+#else
+        return 0xff;
+#endif
     default:
         return 0x0;
     }
@@ -267,6 +277,13 @@ __force_inline uint8_t read_picogus_high(void) {
     case 0x04: // Base port
 #if defined(SOUND_GUS) || defined(SOUND_SB) || defined(SOUND_MPU) || defined(SOUND_TANDY) || defined(SOUND_CMS)
         return basePort >> 8;
+#else
+        return 0xff;
+#endif
+        break;
+    case 0x05: // Adlib Base port
+#if defined(SOUND_SB)
+        return adlib_basePort >> 8;
 #else
         return 0xff;
 #endif

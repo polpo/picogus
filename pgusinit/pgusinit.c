@@ -27,6 +27,7 @@ typedef enum {
     MPU_MODE = 2,
     TANDY_MODE = 3,
     CMS_MODE = 4,
+    SB_MODE = 5,
     JOYSTICK_ONLY_MODE = 0x0f
 } card_mode_t;
 
@@ -40,7 +41,8 @@ const char* usage_by_card[] = {
     "[/p x] [/v x] [/s] [/n]",  // MPU_MODE
     "[/p x]",                   // TANDY_MODE
     "[/p x]",                   // CMS_MODE
-    "", "", "", "", "", "", "", "", "", "", // future expansion
+    "[/p x] [/o x]",            // SB_MODE
+    "", "", "", "", "", "", "", "", "", // future expansion
     "",                         // JOYSTICK_ONLY_MODE
 };
 
@@ -57,9 +59,13 @@ void usage(char *argv0, card_mode_t mode) {
     fprintf(stderr, "    /f fw.uf2 - program the PicoGUS with the firmware file fw.uf2\n");
     fprintf(stderr, "    /j        - enable USB joystick support\n");
     if (mode > GUS_MODE && mode < JOYSTICK_ONLY_MODE) {
-        fprintf(stderr, "AdLib, MPU-401, Tandy, CMS modes only:\n");
+        fprintf(stderr, "Sound Blaster, MPU-401, Tandy, CMS modes only:\n");
         fprintf(stderr, "    /p x - set the (hex) base port address of the emulated card. Defaults:\n");
-        fprintf(stderr, "           AdLib: 388; MPU-401: 330; Tandy: 2C0; CMS: 220\n");
+        fprintf(stderr, "           Sound Blaster: 220; MPU-401: 330; Tandy: 2C0; CMS: 220\n");
+        //              "................................................................................\n"
+    }
+    if (mode == SB_MODE) {
+        fprintf(stderr, "    /o x - set the base address of the OPL2/AdLib on the SB. Default: 388\n");
         //              "................................................................................\n"
     }
     if (mode == MPU_MODE) {
@@ -278,6 +284,7 @@ int main(int argc, char* argv[]) {
     unsigned short dma_interval = 0;
     uint8_t force_44k = 0;
     uint16_t port_override = 0;
+    uint16_t opl_port_override = 0;
     uint8_t wt_volume = 100;
     char fw_filename[256] = {0};
     card_mode_t mode;
@@ -338,6 +345,16 @@ int main(int argc, char* argv[]) {
                 usage(argv[0], mode);
                 return 4;
             }
+        } else if (stricmp(argv[i], "/o") == 0) {
+            if (i + 1 >= argc) {
+                usage(argv[0], mode);
+                return 255;
+            }
+            e = sscanf(argv[++i], "%hx", &opl_port_override);
+            if (e != 1 || opl_port_override > 0x3ffu) {
+                usage(argv[0], mode);
+                return 4;
+            }
         } else if (stricmp(argv[i], "/v") == 0) {
             if (i + 1 >= argc) {
                 usage(argv[0], mode);
@@ -393,6 +410,7 @@ int main(int argc, char* argv[]) {
     printf("\n");
 
     uint16_t port;
+    uint16_t opl_port;
     if (mode != GUS_MODE) {
         if (port_override) {
             outp(CONTROL_PORT, 0x04); // Select port register
@@ -401,11 +419,19 @@ int main(int argc, char* argv[]) {
 
         outp(CONTROL_PORT, 0x04); // Select port register
         port = inpw(DATA_PORT_LOW); // Get port
+        if (mode == SB_MODE) {
+            if (opl_port_override) {
+                outp(CONTROL_PORT, 0x05); // Select OPL port register
+                outpw(DATA_PORT_LOW, opl_port_override); // Write port
+            }
+            outp(CONTROL_PORT, 0x05); // Select OPL port register
+            opl_port = inpw(DATA_PORT_LOW); // Get port
+        }
     }
 
     outp(CONTROL_PORT, 0x0f); // Select joystick enable register
     outp(DATA_PORT_HIGH, enable_joystick);
-    printf("USB joystick support %s\n", enable_joystick ? "enabled" : "disabled");
+    printf("USB joystick support %s\n", enable_joystick ? "enabled" : "disabled (use /j to enable)");
 
     switch(mode) {
     case GUS_MODE:
@@ -454,6 +480,9 @@ int main(int argc, char* argv[]) {
         break;
     case CMS_MODE:
         printf("Running in CMS/Game Blaster mode on port %x\n", port);
+        break;
+    case SB_MODE:
+        printf("Running in Sound Blaster 2.0 mode on port %x (AdLib port %x)\n", port, opl_port);
         break;
     case JOYSTICK_ONLY_MODE:
         printf("Running in Joystick exclusive mode on port 201\n");
