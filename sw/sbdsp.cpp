@@ -2,7 +2,6 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
-#include "pico/audio_i2s.h"
 #include "pico_pic.h"
 
 /*
@@ -39,6 +38,7 @@ dma_inst_t dma_config;
 #define DSP_DMA_AUTO            0X1C    //length based on 48h
 #define DSP_DMA_BLOCK_SIZE      0x48    //block size for highspeed/dma
 //#define DSP_DMA_DAC 0x14
+#define DSP_DIRECT_DAC          0x10
 #define DSP_DIRECT_ADC          0x20
 #define DSP_MIDI_READ_POLL      0x30
 #define DSP_MIDI_WRITE_POLL     0x38
@@ -171,6 +171,7 @@ uint32_t DSP_DMA_Event(Bitu val) {
     sbdsp.dma_sample_count_rx++;    
 
     if(sbdsp.dma_pause_duration) {
+        printf("pause");
         current_interval = sbdsp.dma_interval * sbdsp.dma_pause_duration;        
         sbdsp.dma_pause_duration=0;
     }
@@ -208,7 +209,7 @@ void sbdsp_dma_isr(void) {
 }
 
 int16_t sbdsp_sample() {
-    return sbdsp.dma_enabled ? (int16_t)(cur_sample)-0x80 << 4 : 0;
+    return (sbdsp.dma_enabled || sbdsp.current_command == DSP_DIRECT_DAC) ? (int16_t)(cur_sample)-0x80 << 4 : 0;
 }
 
 void sbdsp_init() {    
@@ -240,6 +241,7 @@ void sbdsp_process(void) {
         }
     }
 
+    // printf("%x ", sbdsp.current_command);
     switch(sbdsp.current_command) {  
         case DSP_DMA_PAUSE:
             sbdsp.current_command=0;                                    
@@ -252,14 +254,14 @@ void sbdsp_process(void) {
             //printf("(0xD4)DMA RESUME\n\r");                                            
             break;
         case DSP_DMA_AUTO:     
-            //printf("(0x1C)DMA_AUTO\n\r");                   
+            // printf("(0x1C)DMA_AUTO\n\r");                   
             sbdsp.autoinit=1;           
             sbdsp.dma_sample_count = sbdsp.dma_block_size;
             sbdsp_dma_enable();            
             sbdsp.current_command=0;                 
             break;        
         case DSP_DMA_HS_AUTO:
-            //printf("(0x90) DMA_HS_AUTO\n\r");            
+            // printf("(0x90) DMA_HS_AUTO\n\r");            
             sbdsp.dav_dsp=0;
             sbdsp.current_command=0;  
             sbdsp.autoinit=1;
@@ -310,7 +312,7 @@ void sbdsp_process(void) {
             break;          
         
         case DSP_DMA_HS_SINGLE:
-            //printf("(0x91) DMA_HS_SINGLE\n\r");            
+            // printf("(0x91) DMA_HS_SINGLE\n\r");            
             sbdsp.dav_dsp=0;
             sbdsp.current_command=0;  
             sbdsp.autoinit=0;
@@ -325,7 +327,7 @@ void sbdsp_process(void) {
                     sbdsp.dav_dsp=0;                    
                 }
                 else if(sbdsp.current_command_index==2) {
-                    //printf("(0x14)DMA_SINGLE\n\r");                      
+                    // printf("(0x14)DMA_SINGLE\n\r");                      
                     sbdsp.dma_sample_count += (sbdsp.inbox << 8);
                     sbdsp.dma_sample_count_rx=0;                    
                     sbdsp.dav_dsp=0;
@@ -373,6 +375,16 @@ void sbdsp_process(void) {
             //printf("DISABLE SPEAKER\n");
             sbdsp.current_command=0;
             break;        
+        case DSP_DIRECT_DAC:
+            if(sbdsp.dav_dsp) {            
+                if(sbdsp.current_command_index==1) {
+                    cur_sample=sbdsp.inbox;
+                    sbdsp.dav_dsp=0;                    
+                    sbdsp.current_command=0;        
+                }
+                sbdsp.current_command_index++;
+            }
+            break;
         //case DSP_DIRECT_ADC:
         //case DSP_MIDI_READ_POLL:
         //case DSP_MIDI_WRITE_POLL:
