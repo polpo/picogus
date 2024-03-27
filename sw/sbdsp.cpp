@@ -14,8 +14,8 @@ Author : Kevin Moonlight <me@yyzkevin.com>
 #include "isa_dma.h"
 
 
-irq_handler_t SBDSP_DMA_isr_pt;
-dma_inst_t dma_config;
+static irq_handler_t SBDSP_DMA_isr_pt;
+static dma_inst_t dma_config;
 #define DMA_PIO_SM 2
 
 #define DSP_VERSION_MAJOR 2
@@ -66,7 +66,7 @@ typedef struct sbdsp_t {
     uint8_t current_command_index;
 
     uint16_t dma_interval;     
-    int16_t dma_interval_trim;
+    // int16_t dma_interval_trim;
     uint8_t dma_transfer_size;
     uint8_t  dma_buffer[DSP_DMA_FIFO_SIZE];
     volatile uint16_t dma_buffer_tail;
@@ -80,12 +80,12 @@ typedef struct sbdsp_t {
     uint32_t dma_sample_count_rx;
 
     uint8_t time_constant;
-    uint16_t sample_rate;
-    uint32_t sample_step;
-    uint64_t cycle_us;
+    // uint16_t sample_rate;
+    // uint32_t sample_step;
+    // uint64_t cycle_us;
 
-    uint64_t sample_offset;  
-    uint8_t sample_factor;
+    // uint64_t sample_offset;  
+    // uint8_t sample_factor;
                 
     bool autoinit;    
     bool dma_enabled;
@@ -95,15 +95,17 @@ typedef struct sbdsp_t {
     volatile bool dsp_busy;
 
     uint8_t reset_state;  
-    
+   
+    volatile uint8_t cur_sample; 
 } sbdsp_t;
 
-sbdsp_t sbdsp;
+static sbdsp_t sbdsp;
 
 void sbdsp_process(void);
 
 uint32_t DSP_DMA_Event(Bitu val);
 
+#if 0
 uint16_t sbdsp_fifo_level() {
     if(sbdsp.dma_buffer_tail < sbdsp.dma_buffer_head) return DSP_DMA_FIFO_SIZE - (sbdsp.dma_buffer_head - sbdsp.dma_buffer_tail);
     return sbdsp.dma_buffer_tail - sbdsp.dma_buffer_head;
@@ -140,15 +142,16 @@ uint16_t sbdsp_fifo_tx(char *buffer,uint16_t len) {
     }
     return 0;    
 }
+#endif
 
-void sbdsp_dma_disable() {
+static __force_inline void sbdsp_dma_disable() {
     sbdsp.dma_enabled=false;    
     PIC_RemoveEvents(DSP_DMA_Event);  
 }
 
-void sbdsp_dma_enable() {    
+static __force_inline void sbdsp_dma_enable() {    
     if(!sbdsp.dma_enabled) {
-        sbdsp_fifo_clear();
+        // sbdsp_fifo_clear();
         sbdsp.dma_enabled=true;            
         if(sbdsp.dma_pause_duration) {            
             PIC_AddEvent(DSP_DMA_Event,sbdsp.dma_interval * sbdsp.dma_pause_duration,1);
@@ -192,16 +195,14 @@ uint32_t DSP_DMA_Event(Bitu val) {
     return 0;
 }
 
-static volatile uint8_t cur_sample; // TODO move to sbdsp struct
-
-void sbdsp_dma_isr(void) {
+static void sbdsp_dma_isr(void) {
     const uint32_t dma_data = DMA_Complete_Write(&dma_config);    
     uint16_t current_interval;
-    cur_sample = dma_data & 0xFF;
+    sbdsp.cur_sample = dma_data & 0xFF;
 }
 
 int16_t sbdsp_sample() {
-    return (sbdsp.dma_enabled || sbdsp.current_command == DSP_DIRECT_DAC) ? (int16_t)(cur_sample)-0x80 << 4 : 0;
+    return (sbdsp.dma_enabled || sbdsp.current_command == DSP_DIRECT_DAC) ? (int16_t)(sbdsp.cur_sample)-0x80 << 5 : 0;
 }
 
 void sbdsp_init() {    
@@ -215,7 +216,7 @@ void sbdsp_init() {
 }
 
 
-void sbdsp_output(uint8_t value) {
+static __force_inline void sbdsp_output(uint8_t value) {
     sbdsp.outbox=value;
     sbdsp.dav_pc=1;    
 }
@@ -370,7 +371,7 @@ void sbdsp_process(void) {
         case DSP_DIRECT_DAC:
             if(sbdsp.dav_dsp) {            
                 if(sbdsp.current_command_index==1) {
-                    cur_sample=sbdsp.inbox;
+                    sbdsp.cur_sample=sbdsp.inbox;
                     sbdsp.dav_dsp=0;                    
                     sbdsp.current_command=0;        
                 }
@@ -428,13 +429,13 @@ void sbdsp_process(void) {
     }                
     sbdsp.dsp_busy=0;
 }
-void sbdsp_reset(uint8_t value) {
+static __force_inline void sbdsp_reset(uint8_t value) {
     //TODO: COLDBOOT ? WARMBOOT ?    
     value &= 1; // Some games may write unknown data for bits other than the LSB.
     switch(value) {
         case 1:                        
             sbdsp.autoinit=0;
-            sbdsp.dma_enabled=false;
+            sbdsp_dma_disable();
             sbdsp.reset_state=1;
             break;
         case 0:

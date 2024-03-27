@@ -58,6 +58,7 @@ extern uint8_t sbdsp_read(uint8_t address);
 extern void sbdsp_init();
 extern void sbdsp_process();
 static uint16_t adlib_basePort = 0x388u;
+static bool adlib_wait = false;
 #endif
 
 #ifdef SOUND_GUS
@@ -148,9 +149,14 @@ __force_inline void select_picogus(uint8_t value) {
     case 0x12: // Force 44k
         break;
 #endif
-#ifdef SOUND_MPU
     case 0x20: // Wavetable mixer volume
+        break;
+#ifdef SOUND_MPU
     case 0x21: // MPU init
+        break;
+#endif
+#ifdef SOUND_SB
+    case 0x30: // Adlib speed sensitive fix
         break;
 #endif
     case 0xF0: // Hardware version
@@ -209,14 +215,19 @@ __force_inline void write_picogus_high(uint8_t value) {
         GUS_SetFixed44k(value);
         break;
 #endif
-#ifdef SOUND_MPU
     case 0x20: // Wavetable mixer volume
         if (BOARD_TYPE == PICOGUS_2) {
             m62429->setVolume(M62429_BOTH, value);
         }
         break;
+#ifdef SOUND_MPU
     case 0x21: // MIDI emulation flags
         MPU401_Init(value & 0x1 /* delaysysex */, value & 0x2 /* fakeallnotesoff */);
+        break;
+#endif
+#ifdef SOUND_SB
+    case 0x30: // Adlib speed sensitive fix
+        adlib_wait = value;
         break;
 #endif
     case 0xff: // Firmware write
@@ -298,7 +309,6 @@ __force_inline uint8_t read_picogus_high(void) {
 #else
         return 0;
 #endif
-#ifdef SOUND_MPU
     case 0x20: // Wavetable mixer volume
         if (BOARD_TYPE == PICOGUS_2) {
             return m62429->getVolume(0);
@@ -306,7 +316,6 @@ __force_inline uint8_t read_picogus_high(void) {
             return 0;
         }
         break;
-#endif
     case 0xF0: // Hardware version
         return BOARD_TYPE;
     case 0xff:
@@ -396,7 +405,9 @@ __force_inline void handle_iow(void) {
         return;
     } else if (port == adlib_basePort + 1) {
         pio_sm_put(pio0, IOW_PIO_SM, IO_WAIT);
-        busy_wait_us(1); // busy wait for speed sensitive games :(
+        if (adlib_wait) {
+            busy_wait_us(1); // busy wait for speed sensitive games
+        }
         opl_buffer.cmds[opl_buffer.head++] = {
             OPL_DATA_PORT,
             (uint8_t)(iow_read & 0xFF)

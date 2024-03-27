@@ -41,7 +41,7 @@ const char* usage_by_card[] = {
     "[/p x] [/v x] [/s] [/n]",  // MPU_MODE
     "[/p x]",                   // TANDY_MODE
     "[/p x]",                   // CMS_MODE
-    "[/p x] [/o x]",            // SB_MODE
+    "[/p x] [/o x] [/w]",       // SB_MODE
     "", "", "", "", "", "", "", "", "", // future expansion
     "",                         // JOYSTICK_ONLY_MODE
 };
@@ -66,6 +66,7 @@ void usage(char *argv0, card_mode_t mode) {
     }
     if (mode == SB_MODE) {
         fprintf(stderr, "    /o x - set the base address of the OPL2/AdLib on the SB. Default: 388\n");
+        fprintf(stderr, "    /w   - wait on OPL2 data write. Can fix speed-sensitive early AdLib games\n");
         //              "................................................................................\n"
     }
     if (mode == MPU_MODE) {
@@ -285,12 +286,13 @@ int main(int argc, char* argv[]) {
     uint8_t force_44k = 0;
     uint16_t port_override = 0;
     uint16_t opl_port_override = 0;
-    uint8_t wt_volume = 100;
+    uint8_t wt_volume;
     char fw_filename[256] = {0};
     card_mode_t mode;
     uint8_t mpu_delaysysex = 0;
     uint8_t mpu_fakeallnotesoff = 0;
     uint8_t enable_joystick = 0;
+    uint8_t adlib_wait = 0;
 
     banner();
     // Get magic value from port on PicoGUS that is not on real GUS
@@ -305,6 +307,9 @@ int main(int argc, char* argv[]) {
 
     outp(CONTROL_PORT, 0x03); // Select mode register
     mode = inp(DATA_PORT_HIGH);
+
+    // Default wavetable volume to 100 in MPU mode, 0 otherwise
+    wt_volume = (mode == MPU_MODE) ? 100 : 0;
 
     int i = 1;
     while (i < argc) {
@@ -355,6 +360,8 @@ int main(int argc, char* argv[]) {
                 usage(argv[0], mode);
                 return 4;
             }
+        } else if (stricmp(argv[i], "/w") == 0) {
+            adlib_wait = 1;
         } else if (stricmp(argv[i], "/v") == 0) {
             if (i + 1 >= argc) {
                 usage(argv[0], mode);
@@ -433,6 +440,12 @@ int main(int argc, char* argv[]) {
     outp(DATA_PORT_HIGH, enable_joystick);
     printf("USB joystick support %s\n", enable_joystick ? "enabled" : "disabled (use /j to enable)");
 
+    if (board_type == PICOGUS_2) {
+        outp(CONTROL_PORT, 0x20); // Select wavetable volume register
+        outp(DATA_PORT_HIGH, wt_volume); // Write volume
+        printf("Wavetable volume set to %u\n", wt_volume);
+    }
+
     switch(mode) {
     case GUS_MODE:
         init_gus(argv[0]);
@@ -465,11 +478,6 @@ int main(int argc, char* argv[]) {
         printf("Running in AdLib/OPL2 mode on port %x\n", port);
         break;
     case MPU_MODE:
-        if (board_type == PICOGUS_2) {
-            outp(CONTROL_PORT, 0x20); // Select wavetable volume register
-            outp(DATA_PORT_HIGH, wt_volume); // Write volume
-            printf("Wavetable volume set to %u\n", wt_volume);
-        }
         printf("MPU-401 sysex delay: %s, fake all notes off: %s\n", mpu_delaysysex ? "on" : "off", mpu_fakeallnotesoff ? "on" : "off");
         outp(CONTROL_PORT, 0x21); // Select MPU settings register
         outp(DATA_PORT_HIGH, mpu_delaysysex | (mpu_fakeallnotesoff << 1)); // Write sysex delay and fake all notes off settings
@@ -482,7 +490,10 @@ int main(int argc, char* argv[]) {
         printf("Running in CMS/Game Blaster mode on port %x\n", port);
         break;
     case SB_MODE:
-        printf("Running in Sound Blaster 2.0 mode on port %x (AdLib port %x)\n", port, opl_port);
+        outp(CONTROL_PORT, 0x30); // Select Adlib wait register
+        outp(DATA_PORT_HIGH, adlib_wait); // Write sysex delay and fake all notes off settings
+        printf("Running in Sound Blaster 2.0 mode on port %x (AdLib port %x%s)\n",
+               port, opl_port, adlib_wait ? ", wait on" : "");
         break;
     case JOYSTICK_ONLY_MODE:
         printf("Running in Joystick exclusive mode on port 201\n");
