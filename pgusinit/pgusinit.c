@@ -32,7 +32,7 @@ typedef enum {
 } card_mode_t;
 
 void banner(void) {
-    printf("PicoGUSinit v2.0.1 (c) 2024 Ian Scott - licensed under the GNU GPL v2\n\n");
+    printf("PicoGUSinit v2.1.0 (c) 2024 Ian Scott - licensed under the GNU GPL v2\n\n");
 }
 
 const char* usage_by_card[] = {
@@ -58,8 +58,10 @@ void usage(char *argv0, card_mode_t mode) {
     fprintf(stderr, "    /?        - show this message\n");
     fprintf(stderr, "    /f fw.uf2 - program the PicoGUS with the firmware file fw.uf2\n");
     fprintf(stderr, "    /j        - enable USB joystick support\n");
+    fprintf(stderr, "    /v x      - set the volume of the wavetable header. Scale 0-100, Default: 100\n");
+    fprintf(stderr, "                (for PicoGUS v2.0 boards only)\n");
     if (mode > GUS_MODE && mode < JOYSTICK_ONLY_MODE) {
-        fprintf(stderr, "Sound Blaster, MPU-401, Tandy, CMS modes only:\n");
+        fprintf(stderr, "Sound Blaster/AdLib, MPU-401, Tandy, CMS modes only:\n");
         fprintf(stderr, "    /p x - set the (hex) base port address of the emulated card. Defaults:\n");
         fprintf(stderr, "           Sound Blaster: 220; MPU-401: 330; Tandy: 2C0; CMS: 220\n");
         //              "................................................................................\n"
@@ -71,8 +73,6 @@ void usage(char *argv0, card_mode_t mode) {
     }
     if (mode == MPU_MODE) {
         fprintf(stderr, "MPU-401 mode only:\n");
-        fprintf(stderr, "    /v x - set the volume of the wavetable header. Scale 0-100, Default: 100\n");
-        fprintf(stderr, "           (for PicoGUS v2.0 boards only)\n");
         fprintf(stderr, "    /s   - delay SYSEX (for rev.0 Roland MT-32)\n");
         fprintf(stderr, "    /n   - fake all notes off (for Roland RA-50)\n");
         //              "................................................................................\n"

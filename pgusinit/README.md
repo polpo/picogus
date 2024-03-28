@@ -1,4 +1,4 @@
-# PicoGUSinit v2.0.0
+# PicoGUSinit v2.1.0
 
 PicoGUSinit (also called pgusinit, after the program's .exe file) detects and
 initializes a PicoGUS card. In GUS emulation mode, it should be used instead of
@@ -28,11 +28,14 @@ settings. Options may be given for other settings:
 * `/f firmware.uf2` - uploads firmware in the file named firmware.uf2 to the
   PicoGUS.
 * `/j` - enables game port joystick emulation mode (disabled by default).
+* `/v x` - sets wavetable header volume to x percent (PicoGUS 2.0 boards only).
+  Available in all modes in case you want to use the wavetable header as an aux
+  input (for example for an internal CD-ROM drive).
 
 Firmware files that come with the releases:
 
 * `pg-gus.uf2` - GUS emulation
-* `pg-adlib.uf2` - AdLib emulation
+* `pg-sb.uf2` - Sound Blaster/AdLib emulation
 * `pg-mpu.uf2` - MPU-401 with intelligent mode emulation
 * `pg-tandy.uf2` - Tandy 3-Voice emulation
 * `pg-cms.uf2` - CMS/Game Blaster emulation
@@ -64,14 +67,19 @@ specified in ULTRASND.
 See the Compatibility List wiki for notes on programs that require these
 options to be set: https://github.com/polpo/picogus/wiki/Compatibility-list
 
-### AdLib, MPU-401, Tandy, and CMS emulation modes
+### Sound Blaster/AdLib, MPU-401, Tandy, and CMS emulation modes
 
-* `/p x` - sets the base port of the emulated card to x. Defaults to 388 for
-  AdLib, 330 for MPU-401, 2C0 for Tandy, and 220 for CMS.
+* `/p x` - sets the base port of the emulated card to x. Defaults to 220 for
+  Sound Blaster, 330 for MPU-401, 2C0 for Tandy, and 220 for CMS.
+
+### Sound Blaster/AdLib mode
+
+* `/o x` - sets the base port of the OPL/AdLib. Defaults to 388.
+* `/w` - wait on OPL2 data write. Can fix speed-sensitive early AdLib games on
+  fast systems (example: 688 Attack Sub).
 
 ### MPU-401 emulation mode
 
-* `/v x` - Sets wavetable header volume to x percent (PicoGUS 2.0 boards only).
 * `/s` - enable sysex delay to prevent buffer overflows on older MPU-401
   revisions.
 * `/n` - Fake all-notes-off for the Roland RA-50.

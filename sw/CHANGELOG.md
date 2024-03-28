@@ -1,3 +1,25 @@
+# v1.2.0
+
+## New features/fixes
+
+### Sound Blaster 2.0 emulation:
+
+The AdLib mode (`pg-adlib.uf2`) has been replaced with a _new_ Sound Blaster 2.0 mode (`pg-sb.uf2`)! Code to emulate the Sound Blaster DSP was contributed by [Kevin Moonlight](https://github.com/yyzkevin) - huge thanks to him.
+
+* Sound Blaster 2.0 DSP support is pretty well tested but you may run into issues. Please consult the [Compatibility List](https://github.com/polpo/picogus/wiki/Compatibility-list) for titles with known issues, and feel free to [file an issue on GitHub](https://github.com/polpo/picogus/issues/new) to report any problems.
+* AdLib/OPL2 emulation has been improved, fixing issues with missing/wrong notes.
+* The SB base port can be set with pgusinit with the `/p` option, and the OPL/AdLib base port with the new `/o` option.
+* Some older titles supporting AdLib are "speed sensitive" and have weird playback on fast systems (even with a genuine OPL2/OPL3). A new `/w` option in pgusinit can work around these issues in most circumstances.
+
+### MPU-401 emulation:
+
+* Fixes an issue reported by zuldan on Vogons where running pgusinit in MPU-401 mode wouldn't work on certain systems. Fixed by initing the MPU-401 and sending the reset MIDI data asynchronously, preventing IOCHRDY from being held low for too long.
+* Sysex delay handled without busy wait. Shouldn't have much effect presently, but may allow MPU-401 to be emulated simultaneously with other modes in the future.
+
+### General:
+
+* Allows the volume of the wavetable header to be set with the `/v` option in pgusinit in all modes. This is useful if you want to use the wavetable header to mix in other external audio sources like a CD-ROM drive (connection guide coming to the Wiki).
+
 # v1.1.0
 
 ## New features/fixes
