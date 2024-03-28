@@ -7,7 +7,7 @@
 ISA sound card emulation on the Raspberry Pi Pico's RP2040 microcontroller. PicoGUS can emulate:
 
 * [Gravis Ultrasound (GUS)](https://en.wikipedia.org/wiki/Gravis_Ultrasound) - the primary focus of PicoGUS, hence the name
-* [AdLib (OPL2)](https://en.wikipedia.org/wiki/Ad_Lib,_Inc.)
+* [Sound Blaster 2.0](https://en.wikipedia.org/wiki/Sound_Blaster#Sound_Blaster_2.0,_CT1350) / [AdLib (OPL2)](https://en.wikipedia.org/wiki/Ad_Lib,_Inc.)
 * [MPU-401 (with intelligent mode)](https://en.wikipedia.org/wiki/MPU-401) - outputs MIDI data on 3.5mm MIDI TRS connector
 * [Tandy 3-voice](http://www.vgmpf.com/Wiki/index.php?title=Tandy_3_Voice)
 * [CMS/Game Blaster](http://nerdlypleasures.blogspot.com/2012/10/all-you-ever-wanted-to-know-about.html)
@@ -34,6 +34,15 @@ Looking for the original project, using Raspberry Pi 3/4? See the [pigus repo](h
 
 See/hear PicoGUS in action on YouTube:
 
+Videos by others:
+
+[<img src="https://img.youtube.com/vi/bBYUTwKRyNk/hqdefault.jpg" width=400>](https://youtu.be/bBYUTwKRyNk)
+[<img src="https://img.youtube.com/vi/oEHVB0FITqU/hqdefault.jpg" width=400>](https://youtu.be/oEHVB0FITqU)
+[<img src="https://img.youtube.com/vi/aeejxbaAQ4g/hqdefault.jpg" width=400>](https://youtu.be/aeejxbaAQ4g)
+[<img src="https://img.youtube.com/vi/okSBZJwqVb8/hqdefault.jpg" width=400>](https://youtu.be/okSBZJwqVb8)
+
+My videos:
+
 [<img src="https://img.youtube.com/vi/h4iWSnTc9Ag/hqdefault.jpg" alt="September 2022 update" width=400>](https://youtu.be/h4iWSnTc9Ag)
 [<img src="https://img.youtube.com/vi/CkJvkJVRscQ/hqdefault.jpg" alt="October 2022 update" width=400>](https://youtu.be/CkJvkJVRscQ)
 [<img src="https://img.youtube.com/vi/F5Zk_hHHkTg/hqdefault.jpg" alt="December 2022 update" width=400>](https://youtu.be/F5Zk_hHHkTg)
@@ -49,7 +58,8 @@ See/hear PicoGUS in action on YouTube:
 * OPL/AdLib emulation from [rp2040-doom](https://github.com/kilograham/rp2040-doom) (based on [emu8950](https://github.com/digital-sound-antiques/emu8950))
 * MPU-401 emulation adapted from [HardMPU](https://github.com/ab0tj/HardMPU) and [DOSBox-X](https://github.com/joncampbell123/dosbox-x)
 * Tandy 3-voice emulation based on code contributed by [Aaron Giles](https://aarongiles.com/), adapted from [DREAMM](https://aarongiles.com/dreamm/) 
-* CMS emulation based on code contributed by [Aaron Giles](https://aarongiles.com/), adapted from [DREAMM](https://aarongiles.com/dreamm/) 
+* CMS emulation based on code contributed by [Aaron Giles](https://aarongiles.com/), adapted from [DREAMM](https://aarongiles.com/dreamm/)
+* USB joystick support uses [TinyUSB](https://github.com/hathach/tinyusb) and [tusb_xinput](https://github.com/Ryzee119/tusb_xinput)
 
 ## License
 
