@@ -48,6 +48,7 @@ static dma_inst_t dma_config;
 #define DSP_ENABLE_SPEAKER      0xD1
 #define DSP_DISABLE_SPEAKER     0xD3
 #define DSP_DMA_RESUME          0xD4
+#define DSP_SPEAKER_STATUS      0xD8
 #define DSP_IDENT               0xE0
 #define DSP_VERSION             0xE1
 #define DSP_WRITETEST           0xE4
@@ -89,6 +90,8 @@ typedef struct sbdsp_t {
                 
     bool autoinit;    
     bool dma_enabled;
+
+    bool speaker_on;
         
     volatile bool dav_pc;
     volatile bool dav_dsp;
@@ -96,14 +99,12 @@ typedef struct sbdsp_t {
 
     uint8_t reset_state;  
    
-    volatile uint8_t cur_sample; 
+    volatile int16_t cur_sample;
 } sbdsp_t;
 
 static sbdsp_t sbdsp;
 
-void sbdsp_process(void);
-
-uint32_t DSP_DMA_Event(Bitu val);
+static uint32_t DSP_DMA_Event(Bitu val);
 
 #if 0
 uint16_t sbdsp_fifo_level() {
@@ -147,6 +148,7 @@ uint16_t sbdsp_fifo_tx(char *buffer,uint16_t len) {
 static __force_inline void sbdsp_dma_disable() {
     sbdsp.dma_enabled=false;    
     PIC_RemoveEvents(DSP_DMA_Event);  
+    sbdsp.cur_sample = 0;  // zero current sample
 }
 
 static __force_inline void sbdsp_dma_enable() {    
@@ -166,7 +168,7 @@ static __force_inline void sbdsp_dma_enable() {
     }
 }
 
-uint32_t DSP_DMA_Event(Bitu val) {   
+static uint32_t DSP_DMA_Event(Bitu val) {
     DMA_Start_Write(&dma_config);    
     uint32_t current_interval;
     sbdsp.dma_sample_count_rx++;    
@@ -197,17 +199,16 @@ uint32_t DSP_DMA_Event(Bitu val) {
 
 static void sbdsp_dma_isr(void) {
     const uint32_t dma_data = DMA_Complete_Write(&dma_config);    
-    uint16_t current_interval;
-    sbdsp.cur_sample = dma_data & 0xFF;
+    sbdsp.cur_sample = (int16_t)(dma_data & 0xFF) - 0x80 << 5;
 }
 
 int16_t sbdsp_sample() {
-    return (sbdsp.dma_enabled || sbdsp.current_command == DSP_DIRECT_DAC) ? (int16_t)(sbdsp.cur_sample)-0x80 << 5 : 0;
+    return sbdsp.speaker_on ? sbdsp.cur_sample : 0;
 }
 
 void sbdsp_init() {    
-    uint8_t x,y,z;    
-    char buffer[32];
+    // uint8_t x,y,z;    
+    // char buffer[32];
        
 
     puts("Initing ISA DMA PIO...");    
@@ -362,18 +363,26 @@ void sbdsp_process(void) {
             break;
         case DSP_ENABLE_SPEAKER:
             //printf("ENABLE SPEAKER\n");
+            sbdsp.speaker_on = true;
             sbdsp.current_command=0;
-            break;        
+            break;
         case DSP_DISABLE_SPEAKER:
             //printf("DISABLE SPEAKER\n");
+            sbdsp.speaker_on = false;
             sbdsp.current_command=0;
-            break;        
+            break;
+        case DSP_SPEAKER_STATUS:
+            if(sbdsp.current_command_index==0) {
+                sbdsp.current_command=0;
+                sbdsp_output(sbdsp.speaker_on ? 0xff : 0x00);
+            }
+            break;
         case DSP_DIRECT_DAC:
-            if(sbdsp.dav_dsp) {            
+            if(sbdsp.dav_dsp) {
                 if(sbdsp.current_command_index==1) {
-                    sbdsp.cur_sample=sbdsp.inbox;
-                    sbdsp.dav_dsp=0;                    
-                    sbdsp.current_command=0;        
+                    sbdsp.cur_sample=(int16_t)(sbdsp.inbox) - 0x80 << 5;
+                    sbdsp.dav_dsp=0;
+                    sbdsp.current_command=0;
                 }
                 sbdsp.current_command_index++;
             }
@@ -450,7 +459,7 @@ static __force_inline void sbdsp_reset(uint8_t value) {
                 sbdsp.dma_block_size=0x7FF; //default per 2.01
                 sbdsp.dma_sample_count=0;
                 sbdsp.dma_sample_count_rx=0;              
-
+                sbdsp.speaker_on = false;
             }
             break;
         default:
