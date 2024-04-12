@@ -121,20 +121,23 @@ if(PROJECT_TYPE STREQUAL "SB")
     pico_set_program_name(picogus "picogus-sb")
     target_sources(picogus PRIVATE sbdsp.cpp sbplay.cpp pico_pic.c isa_dma.c)    
     
+    target_sources(picogus PRIVATE Nuked-OPL3/opl3.c)
+
     target_link_libraries(
         picogus        
-        opl        
+        # opl        
     )
     target_compile_definitions(picogus PRIVATE
         SOUND_SB=1
         # SOUND_OPL=1
         SOUND_DSP=1
         USE_ALARM=1
-        USE_EMU8950_OPL=1        
-        EMU8950_ASM=1
+        # USE_EMU8950_OPL=1        
+        # EMU8950_ASM=1
         # PICOW=1
+        OPL_NUKED=1
     )
-    add_subdirectory(opl)
+    # add_subdirectory(opl)
     pico_enable_stdio_uart(picogus 1)
     pico_enable_stdio_usb(picogus 0)
     pico_enable_stdio_semihosting(picogus 0)

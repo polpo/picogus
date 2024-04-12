@@ -42,15 +42,21 @@ uint LED_PIN;
 M62429* m62429;
 
 #ifdef SOUND_SB
-#include "opl.h"
 static uint16_t basePort = 0x220u;
 static uint16_t sb_port_test = basePort >> 4;
 
 void play_adlib(void);
+#ifdef OPL_NUKED
+#include "Nuked-OPL3/opl3.h"
+uint8_t opl_reg;
+opl3_chip nuked_chip = {};
+#else
+#include "opl.h"
 extern "C" int OPL_Pico_Init(unsigned int);
 extern "C" unsigned int OPL_Pico_PortRead(opl_port_t);
 #include "cmd_buffers.h"
 cms_buffer_t opl_buffer = { {0}, 0, 0 };
+#endif
 
 extern void sbdsp_write(uint8_t address, uint8_t value);
 extern uint8_t sbdsp_read(uint8_t address);
@@ -371,19 +377,27 @@ __force_inline void handle_iow(void) {
         case 0x8:
             // Fast write
             pio_sm_put(pio0, IOW_PIO_SM, IO_END);
+#ifdef OPL_NUKED
+        opl_reg = iow_read & 0xFF;
+#else
             opl_buffer.cmds[opl_buffer.head++] = {
                 OPL_REGISTER_PORT,
                 (uint8_t)(iow_read & 0xFF)
             };
+#endif
             // Fast write - return early as we've already written 0x0u to the PIO
             return;
             break;
         case 0x9:
             pio_sm_put(pio0, IOW_PIO_SM, IO_WAIT);
+#ifdef OPL_NUKED
+            OPL3_WriteRegBuffered(&nuked_chip, opl_reg, iow_read & 0xFF);
+#else
             opl_buffer.cmds[opl_buffer.head++] = {
                 OPL_DATA_PORT,
                 (uint8_t)(iow_read & 0xFF)
             };
+#endif
             break;
         // DSP ports
         default:
@@ -396,10 +410,14 @@ __force_inline void handle_iow(void) {
     } else if (port == adlib_basePort) {
         // Fast write
         pio_sm_put(pio0, IOW_PIO_SM, IO_END);
+#ifdef OPL_NUKED
+        opl_reg = iow_read & 0xFF;
+#else
         opl_buffer.cmds[opl_buffer.head++] = {
             OPL_REGISTER_PORT,
             (uint8_t)(iow_read & 0xFF)
         };
+#endif
         // Fast write - return early as we've already written 0x0u to the PIO
         return;
     } else if (port == adlib_basePort + 1) {
@@ -407,10 +425,14 @@ __force_inline void handle_iow(void) {
         if (adlib_wait) {
             busy_wait_us(1); // busy wait for speed sensitive games
         }
+#ifdef OPL_NUKED
+        OPL3_WriteRegBuffered(&nuked_chip, opl_reg, iow_read & 0xFF);
+#else
         opl_buffer.cmds[opl_buffer.head++] = {
             OPL_DATA_PORT,
             (uint8_t)(iow_read & 0xFF)
         };
+#endif
     } else // if follows down below
 #endif // SOUND_SB
 #ifdef SOUND_MPU
@@ -528,26 +550,41 @@ __force_inline void handle_ior(void) {
     } else // if follows down below
 #elif defined(SOUND_SB)
     if ((port >> 4) == sb_port_test) {
+#ifdef OPL_NUKED
+        pio_sm_put(pio0, IOR_PIO_SM, IO_END);
+#else
         pio_sm_put(pio0, IOR_PIO_SM, IO_WAIT);
+#endif
         if (port - basePort == 0x8) {
+#ifdef OPL_NUKED
+#else
             // wait for OPL buffer to process
             while (opl_buffer.tail != opl_buffer.head) {
                 tight_loop_contents();
             }
             pio_sm_put(pio0, IOR_PIO_SM, IOR_SET_VALUE | OPL_Pico_PortRead(OPL_REGISTER_PORT));
+#endif
         } else {
+            pio_sm_put(pio0, IOR_PIO_SM, IO_WAIT);
             sbdsp_process();
             pio_sm_put(pio0, IOR_PIO_SM, IOR_SET_VALUE | sbdsp_read(port & 0xF));        
             sbdsp_process();
         }
     } else if (port == adlib_basePort) {
         // Tell PIO to wait for data
+#ifdef OPL_NUKED
+        pio_sm_put(pio0, IOR_PIO_SM, IO_END);
+#else
         pio_sm_put(pio0, IOR_PIO_SM, IO_WAIT);
+#endif
+#ifdef OPL_NUKED
+#else
         // wait for OPL buffer to process
         while (opl_buffer.tail != opl_buffer.head) {
             tight_loop_contents();
         }
         pio_sm_put(pio0, IOR_PIO_SM, IOR_SET_VALUE | OPL_Pico_PortRead(OPL_REGISTER_PORT));
+#endif
     } else // if follows down below
 #elif defined(SOUND_MPU)
     if (port == basePort) {
@@ -820,7 +857,9 @@ int main()
     puts("Initializing SoundBlaster DSP");
     sbdsp_init();
     puts("Creating OPL");
+#ifndef OPL_NUKED
     OPL_Pico_Init(basePort);
+#endif
     multicore_launch_core1(&play_adlib);
 #endif // SOUND_SB
 

@@ -18,16 +18,21 @@
 
 #include "pico/audio_i2s.h"
 
+#ifdef OPL_NUKED
+#include "Nuked-OPL3/opl3.h"
+extern opl3_chip nuked_chip;
+#else
 #include "opl.h"
 extern "C" void OPL_Pico_simple(int16_t *buffer, uint32_t nsamples);
 extern "C" void OPL_Pico_PortWrite(opl_port_t, unsigned int);
 
+#include "cmd_buffers.h"
+extern cms_buffer_t opl_buffer;
+#endif
+
 extern int16_t sbdsp_sample();
 
 #include "clamp.h"
-
-#include "cmd_buffers.h"
-extern cms_buffer_t opl_buffer;
 
 #ifdef USB_JOYSTICK
 #include "tusb.h"
@@ -105,10 +110,15 @@ void play_adlib() {
 
     clamp_setup();
 
+#ifdef OPL_NUKED
+    OPL3_Reset(&nuked_chip, 49716);
+#endif
+
     struct audio_buffer_pool *ap = init_audio();
 
     puts("starting audio");
     for (;;) {
+#ifndef OPL_NUKED
         bool notfirst = false;
         while (opl_buffer.tail != opl_buffer.head) {
             if (!notfirst) {
@@ -122,11 +132,19 @@ void play_adlib() {
             // putchar('.');
             ++opl_buffer.tail;
         }
+#endif
         struct audio_buffer *buffer = take_audio_buffer(ap, true);
         int16_t *samples = (int16_t *) buffer->buffer->bytes;
+#ifdef OPL_NUKED
+        int16_t opl_samples[2] = {0};
+        OPL3_Generate(&nuked_chip, opl_samples);
+        samples[0] = clamp16((int32_t)sbdsp_sample() + (int32_t)opl_samples[0]);
+        samples[1] = clamp16((int32_t)sbdsp_sample() + (int32_t)opl_samples[1]);
+#else
         int16_t opl_sample;
         OPL_Pico_simple(&opl_sample, 1);
         samples[0] = samples[1] = clamp16((int32_t)sbdsp_sample() + (int32_t)opl_sample);
+#endif
         buffer->sample_count=1;
         // putchar((unsigned char)buffer->buffer->bytes[1]);
         give_audio_buffer(ap, buffer);
