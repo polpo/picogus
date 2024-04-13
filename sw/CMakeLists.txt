@@ -20,8 +20,15 @@ project(picogus
     LANGUAGES C CXX ASM
 )
 
+#set(PICO_BOARD picow-fast)
+#set(PICO_CYW43_SUPPORTED "1")
+#pico_register_common_scope_var(PICO_CYW43_SUPPORTED)
+set(PICO_BOARD PICO_W) #  Temporary hack to make  sure sdk includes cyw43
+
+
+set(PROJECT_TYPE "NE2000")
 set(PICO_BOARD_HEADER_DIRS ${CMAKE_CURRENT_LIST_DIR})
-set(PICO_BOARD picogus2)
+
 
 
 
@@ -208,6 +215,28 @@ if(PROJECT_TYPE STREQUAL "JOY")
      pico_enable_stdio_uart(picogus 1)
      pico_enable_stdio_usb(picogus 0)
      pico_enable_stdio_semihosting(picogus 0)
+endif()
+
+if(PROJECT_TYPE STREQUAL "NE2000")
+    pico_set_program_name(picogus "picogus-ne2000")
+    set(USB_JOYSTICK 0)
+    set(PICO_BOARD PICO_W) # For now, until USB Dongle
+    add_subdirectory(ne2000)
+    target_compile_definitions(picogus PRIVATE
+       NE2000=1
+       PICOW=1
+    )
+    target_sources(picogus PRIVATE
+        ne2000play.cpp
+    )
+    target_link_libraries(
+        picogus        
+        pico_cyw43_arch_lwip_threadsafe_background         
+        ne2000        
+    )
+    pico_enable_stdio_uart(picogus 1)
+    pico_enable_stdio_usb(picogus 0)
+    pico_enable_stdio_semihosting(picogus 0)
 endif()
 
 if(USB_JOYSTICK)

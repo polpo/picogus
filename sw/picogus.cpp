@@ -96,6 +96,18 @@ static uint8_t cms_detect = 0xFF;
 cms_buffer_t cms_buffer = { {0}, 0, 0 };
 #endif
 
+
+#ifdef NE2000
+extern "C" {
+#include "ne2000/ne2000.h"
+}
+
+
+
+void play_ne2000(void);
+#endif
+
+
 #ifdef USB_JOYSTICK
 static uint16_t joyPort = 0xffffu;
 #ifdef USB_JOYSTICK_ONLY
@@ -106,6 +118,7 @@ extern "C" joystate_struct_t joystate_struct;
 uint8_t joystate_bin;
 #include "hardware/pwm.h"
 #endif
+
 
 // PicoGUS control and data ports
 // 1D0 chosen as the base port as nothing is listed in Ralf Brown's Port List (http://www.cs.cmu.edu/~ralf/files.html)
@@ -486,6 +499,12 @@ __force_inline void handle_iow(void) {
         return;
     } else // if follows down below
 #endif
+#ifdef NE2000
+    if(port >= 0x300 && port <=0x31F) {
+        pio_sm_put(pio0, IOW_PIO_SM, IO_WAIT);
+        PG_NE2000_Write(port,iow_read & 0xFF);        
+    }
+#endif
     // PicoGUS control
     if (port == CONTROL_PORT) {
         pio_sm_put(pio0, IOW_PIO_SM, IO_WAIT);
@@ -580,6 +599,15 @@ __force_inline void handle_ior(void) {
         return;
     }
 #endif // SOUND_CMS
+
+#ifdef NE2000
+    if(port >= 0x300 && port <= 0x31F) {
+        pio_sm_put(pio0, IOR_PIO_SM, IO_WAIT);
+        uint8_t value = PG_NE2000_Read(port);
+        pio_sm_put(pio0, IOR_PIO_SM, IOR_SET_VALUE | value);
+        return;
+    }
+#endif
 #ifdef USB_JOYSTICK
     if (port == joyPort) {
         pio_sm_put(pio0, IOR_PIO_SM, IO_WAIT);
@@ -631,7 +659,7 @@ void ior_isr(void) {
 
 void err_blink(void) {
     for (;;) {
-        gpio_xor_mask(LED_PIN);
+        //gpio_xor_mask(LED_PIN);//need to abscrat  led functions out to handle chipdown vs  picow
         busy_wait_ms(100);
     }
 }
@@ -829,6 +857,14 @@ int main()
     puts("Creating CMS");
     multicore_launch_core1(&play_cms);
 #endif // SOUND_CMS
+
+#ifdef NE2000
+extern void PIC_ActivateIRQ(void);
+extern void PIC_DeActivateIRQ(void);
+
+    puts("Creating NE2000");    
+    multicore_launch_core1(&play_ne2000);
+#endif
 
 #ifdef USB_JOYSTICK
     // Init joystick as centered with no buttons pressed
