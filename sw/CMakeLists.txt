@@ -55,13 +55,17 @@ add_executable(picogus picogus.cpp)
 pico_set_program_version(picogus ${CMAKE_PROJECT_VERSION})
 
 add_compile_definitions(
-        USE_AUDIO_I2S=1
-        PICO_AUDIO_I2S_DATA_PIN=16
-        PICO_AUDIO_I2S_CLOCK_PIN_BASE=17
+        # USE_AUDIO_I2S=1
+        # PICO_AUDIO_I2S_DATA_PIN=16
+        # PICO_AUDIO_I2S_CLOCK_PIN_BASE=17
         PICO_DEFAULT_UART=0
-        PICO_DEFAULT_UART_TX_PIN=28
+        PICO_DEFAULT_UART_TX_PIN=-1
         PICO_DEFAULT_UART_RX_PIN=-1
-        PICO_AUDIO_I2S_PIO=1
+        # PICO_AUDIO_I2S_PIO=1
+        PICO_AUDIO_SPDIF_PIN=28
+        PICO_AUDIO_SPDIF_DMA_IRQ=0
+        PICO_AUDIO_SPDIF_PIO=1
+        
         # USE_IRQ=1
         USE_ALARM=1
         PICO_STDIO_USB_CONNECT_WAIT_TIMEOUT_MS=250
@@ -111,7 +115,7 @@ if(PROJECT_TYPE STREQUAL "GUS")
         )
         pico_enable_stdio_uart(picogus 0)
     else()
-        pico_enable_stdio_uart(picogus 1)
+        pico_enable_stdio_uart(picogus 0)
     endif()
     pico_enable_stdio_usb(picogus 0)
     pico_enable_stdio_semihosting(picogus 0)
@@ -231,7 +235,7 @@ target_link_libraries(
     picogus
     pico_stdlib
     pico_multicore
-    pico_audio_i2s
+    pico_audio_spdif
     hardware_pio
     hardware_pll
     hardware_flash

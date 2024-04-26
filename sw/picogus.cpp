@@ -766,6 +766,7 @@ int main()
     }
     gpio_set_function(UART_TX_PIN, GPIO_FUNC_UART);
 #endif // SOUND_MPU
+        gpio_set_drive_strength(UART_TX_PIN, GPIO_DRIVE_STRENGTH_12MA);
 
 #ifdef PSRAM_CORE0
 #ifdef PSRAM

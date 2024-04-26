@@ -14,7 +14,8 @@
 #endif
 
 #include "pico/stdlib.h"
-#include "pico/audio_i2s.h"
+// #include "pico/audio_i2s.h"
+#include "pico/audio_spdif.h"
 
 #ifdef USE_ALARM
 #include "pico_pic.h"
@@ -27,10 +28,10 @@
 extern psram_spi_inst_t psram_spi;
 #endif
 
-#if PICO_ON_DEVICE
-#include "pico/binary_info.h"
-bi_decl(bi_3pins_with_names(PICO_AUDIO_I2S_DATA_PIN, "I2S DIN", PICO_AUDIO_I2S_CLOCK_PIN_BASE, "I2S BCK", PICO_AUDIO_I2S_CLOCK_PIN_BASE+1, "I2S LRCK"));
-#endif
+// #if PICO_ON_DEVICE
+// #include "pico/binary_info.h"
+// bi_decl(bi_3pins_with_names(PICO_AUDIO_I2S_DATA_PIN, "I2S DIN", PICO_AUDIO_I2S_CLOCK_PIN_BASE, "I2S BCK", PICO_AUDIO_I2S_CLOCK_PIN_BASE+1, "I2S LRCK"));
+// #endif
 
 #include "isa_dma.h"
 extern irq_handler_t GUS_DMA_isr_pt;
@@ -58,22 +59,40 @@ struct audio_buffer_pool *init_audio() {
                                                                       SAMPLES_PER_BUFFER); // todo correct size
     bool __unused ok;
     const struct audio_format *output_format;
-    struct audio_i2s_config config = {
-            .data_pin = PICO_AUDIO_I2S_DATA_PIN,
-            .clock_pin_base = PICO_AUDIO_I2S_CLOCK_PIN_BASE,
-            .dma_channel = 6,
-            .pio_sm = 3,
+    // struct audio_i2s_config config = {
+    //         .data_pin = PICO_AUDIO_I2S_DATA_PIN,
+    //         .clock_pin_base = PICO_AUDIO_I2S_CLOCK_PIN_BASE,
+    //         .dma_channel = 6,
+    //         .pio_sm = 3,
+    // };
+    // 
+    const struct audio_spdif_config config = {
+        .pin = 28,
+        .dma_channel = 6,
+        .pio_sm = 3
     };
 
-    output_format = audio_i2s_setup(&audio_format, &config);
+    // output_format = audio_i2s_setup(&audio_format, &config);
+
+    output_format = audio_spdif_setup(&audio_format, &config);
+
     if (!output_format) {
         panic("PicoAudio: Unable to open audio device.\n");
     }
 
     //ok = audio_i2s_connect(producer_pool);
-    ok = audio_i2s_connect_extra(producer_pool, false, 1, SAMPLES_PER_BUFFER, NULL);
+    // bool audio_i2s_connect_extra(audio_buffer_pool_t *producer, bool buffer_on_give, uint buffer_count,
+    //                                  uint samples_per_buffer, audio_connection_t *connection);
+    // ok = audio_i2s_connect_extra(producer_pool, false, 1, SAMPLES_PER_BUFFER, NULL);
+    // bool audio_spdif_connect_extra(audio_buffer_pool_t *producer, bool buffer_on_give, uint buffer_count,
+    //                                audio_connection_t *connection);
+    ok = audio_spdif_connect_extra(producer_pool, false, 1, NULL);
     assert(ok);
-    audio_i2s_set_enabled(true);
+    // audio_i2s_set_enabled(true);
+    audio_spdif_set_enabled(true);
+
+
+
     return producer_pool;
 }
 
@@ -122,6 +141,7 @@ void play_gus() {
 
     struct audio_buffer_pool *ap = init_audio();
     for (;;) {
+    gpio_xor_mask(1u << PICO_DEFAULT_LED_PIN);
         // uint8_t active_voices = GUS_activeChannels();
         uint32_t playback_rate = GUS_basefreq();
         // if GUS sample rate changed
