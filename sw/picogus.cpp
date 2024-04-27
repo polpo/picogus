@@ -23,7 +23,6 @@
 #include "hardware/adc.h"
 #include "hardware/pio.h"
 #include "hardware/irq.h"
-#include "hardware/regs/vreg_and_chip_reset.h"
 #include "hardware/vreg.h"
 #include "hardware/clocks.h"
 
@@ -863,7 +862,7 @@ __force_inline bool ior_has_data() {
     return !(pio0->fstat & ior_rxempty);
 }
 
-#include "hardware/structs/xip_ctrl.h"
+// #include "hardware/structs/xip_ctrl.h"
 int main()
 {
 #ifdef ASYNC_UART
@@ -872,6 +871,7 @@ int main()
     stdio_init_all();
 #endif
     puts(firmware_string);
+#ifdef PICO_RP2040
     io_rw_32 *reset_reason = (io_rw_32 *) (VREG_AND_CHIP_RESET_BASE + VREG_AND_CHIP_RESET_CHIP_RESET_OFFSET);
     if (*reset_reason & VREG_AND_CHIP_RESET_CHIP_RESET_HAD_POR_BITS) {
         puts("I was reset due to power on reset or brownout detection.");
@@ -880,6 +880,20 @@ int main()
     } else if(*reset_reason & VREG_AND_CHIP_RESET_CHIP_RESET_HAD_PSM_RESTART_BITS) {
         puts("I was reset due the debug port");
     }
+#else
+    io_rw_32 *reset_reason = (io_rw_32 *) (POWMAN_BASE + POWMAN_CHIP_RESET_OFFSET);
+    if (*reset_reason & POWMAN_CHIP_RESET_HAD_POR_BITS) {
+        puts("pico2 I was reset due to power on reset.");
+    } else if (*reset_reason & POWMAN_CHIP_RESET_HAD_BOR_BITS) {
+        puts("pico2 I was reset due to brownout detection.");
+    } else if (*reset_reason & POWMAN_CHIP_RESET_HAD_RUN_LOW_BITS) {
+        puts("pico2 I was reset due to the RUN pin (either manually or due to ISA RESET signal)");
+    } else if(*reset_reason & POWMAN_CHIP_RESET_HAD_DP_RESET_REQ_BITS) {
+        puts("pico2 I was reset due the debug port");
+    } else if (*reset_reason & POWMAN_CHIP_RESET_HAD_GLITCH_DETECT_BITS) {
+        puts("pico2 I was reset due to power glitch detector");
+    }
+#endif
 
     // Load settings from flash
     loadSettings(&settings);
