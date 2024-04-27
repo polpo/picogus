@@ -18,15 +18,23 @@ build () {
     local EXTRA_CMAKE="$3"
 
     cd "$BUILD_DIR"
-    cmake .. --fresh -DPROJECT_TYPE=$PROJECT_TYPE $EXTRA_CMAKE
+#    cmake .. --fresh -DPROJECT_TYPE=$PROJECT_TYPE $EXTRA_CMAKE
+    cmake --clean-first .. -DPROJECT_TYPE=$PROJECT_TYPE $EXTRA_CMAKE
     make clean && make -j
-    cp picogus.uf2 "$STAGING_DIR"/pg-$FW_SUFFIX.uf2
-    cd -
+    if [[ ! $2 == 'BOOT' ]]; then
+        cp picogus.bin "$STAGING_DIR"/pg-$FW_SUFFIX.bin
+        cp picogus.uf2 "$STAGING_DIR"/pg-$FW_SUFFIX.uf2
+        cd -
+    else
+        cp bootloader.bin "$STAGING_DIR"/bootloader.bin 
+        gcc ../uf2create.c -o uf2create
+    fi
 }
 
 # Build pgusinit
 cd "$SW_HOME"/../pgusinit
-export WATCOM="$(readlink -f "$SW_HOME"/../../watcom)"
+#export WATCOM="$(readlink -f "$SW_HOME"/../../watcom)"
+export WATCOM="/usr/bin/watcom"
 if [[ $OSTYPE == 'darwin'* ]]; then
     # Assuming Apple ARM 
     BINDIR="$WATCOM"/armo64
@@ -43,15 +51,23 @@ cp README.md "$STAGING_DIR"
 cd -
 
 # Build picogus releases
+build BOOT "BOOT"  # BOOTLOADER for multifw
 build GUS "gus" "-DGUS_DEFAULT_PORT=0x240"
-build OPL "adlib"
+build SB "sb"
 build MPU "mpu"
 build TANDY "tandy"
 build CMS "cms"
+build JOY "joy"
 
 # Get release version
 cd "$BUILD_DIR"
 PICOGUS_VERSION=$(cmake --system-information | awk -F= '$1~/CMAKE_PROJECT_VERSION:STATIC/{print$2}')
+cd -
+
+#bin files for multi-firmware
+cd "$STAGING_DIR"
+"$BUILD_DIR"/uf2create bootloader.bin pg-gus.bin pg-sb.bin pg-mpu.bin pg-tandy.bin pg-cms.bin pg-joy.bin pg-multi.uf2
+rm *.bin
 cd -
 
 # Create zip file

@@ -32,7 +32,7 @@ typedef enum {
 } card_mode_t;
 
 void banner(void) {
-    printf("PicoGUSinit v2.1.0 (c) 2024 Ian Scott - licensed under the GNU GPL v2\n\n");
+    printf("PicoGUSinit v2.1.6 (c) 2024 Ian Scott - licensed under the GNU GPL v2\n\n");
 }
 
 const char* usage_by_card[] = {
@@ -50,7 +50,7 @@ void usage(char *argv0, card_mode_t mode) {
     // Max line length @ 80 chars:
     //              "................................................................................\n"
     fprintf(stderr, "Usage:\n");
-    fprintf(stderr, "  %s [/?] | [/f fw.uf2]", argv0);
+    fprintf(stderr, "  %s [/?] | [/f fw.uf2] | [/m x [d]]", argv0);
     if (mode <= CMS_MODE) {
         fprintf(stderr, " | [/j] %s", usage_by_card[mode]);
     }
@@ -58,8 +58,11 @@ void usage(char *argv0, card_mode_t mode) {
     fprintf(stderr, "    /?        - show this message\n");
     fprintf(stderr, "    /f fw.uf2 - program the PicoGUS with the firmware file fw.uf2\n");
     fprintf(stderr, "    /j        - enable USB joystick support\n");
-    fprintf(stderr, "    /v x      - set the volume of the wavetable header. Scale 0-100, Default: 100\n");
+    fprintf(stderr, "    /v x      - set volume of the wavetable header. Scale 0-100, Default: 100\n");
     fprintf(stderr, "                (for PicoGUS v2.0 boards only)\n");
+    fprintf(stderr, "    /m x [d]  - change card mode to x (1=gus,2=sb,3=mpu,4=tandy,5=cms,6=joy)\n");
+    fprintf(stderr, "                the optional parameter 'd' makes the mode permanent at boot\n");
+    fprintf(stderr, "                (Only if pg-multi.uf2 is flashed)\n");
     if (mode > GUS_MODE && mode < JOYSTICK_ONLY_MODE) {
         fprintf(stderr, "Sound Blaster/AdLib, MPU-401, Tandy, CMS modes only:\n");
         fprintf(stderr, "    /p x - set the (hex) base port address of the emulated card. Defaults:\n");
@@ -170,13 +173,44 @@ void print_firmware_string(void) {
     printf("Firmware version: %s\n", firmware_string);
 }
 
+
 bool wait_for_read(uint8_t value) {
-    for (uint32_t i = 0; i < 1000000; ++i) {
+    for (uint32_t i = 0; i < 6000000; ++i) {    // Up to 6000000, for bigger fws like pg-multi.uf2, waiting for flash erase. If not, timeout and error.
         if (inp(DATA_PORT_HIGH) == value) {
             return true;
         }
     }
     return false;
+}
+
+// For multifw
+int reboot_to_firmware(uint8_t value, int mode) {
+
+    const char *fwnames[6];
+    fwnames[0] = "GUS";
+    fwnames[1] = "SB";
+    fwnames[2] = "MPU";
+    fwnames[3] = "TANDY";
+    fwnames[4] = "CMS";
+    fwnames[5] = "JOY";
+
+    outp(CONTROL_PORT, 0xCC); // Knock on the door...
+
+    outp(CONTROL_PORT, 0xE0); // Select firmware selection register
+    outpw(DATA_PORT_LOW, (0x0000 + value + (mode << 8))); // Send firmware number and permanent flag
+
+    printf("\nMode change requested. Rebooting to fw: %d (%s)...\n", value, fwnames[value-1]);
+    if (mode)
+            printf("%s mode selected as permanent on system boot.\n", fwnames[value-1]);
+
+    // Wait for card to reboot to new firmware
+    if (!wait_for_read(0xDD)) {
+        fprintf(stderr, "ERROR: card is not alive after rebooting to new firmware\n");
+        return 99;
+    }
+    printf("PicoGUS detected: ");
+    print_firmware_string();
+    return 0;
 }
 
 int write_firmware(const char* fw_filename, uint8_t protocol) {
@@ -244,7 +278,7 @@ int write_firmware(const char* fw_filename, uint8_t protocol) {
                 // up waiting on IOCHRDY and release the ISA bus after a certain amount of time before
                 // the flash operation is finished. This is an extra delay to work around this issue.
                 if (i == 0) { // first block takes longer due to flash erase
-                    delay(500);
+                    delay(5000);
                 } else {
                     delay(25);
                 }
@@ -293,6 +327,8 @@ int main(int argc, char* argv[]) {
     uint8_t mpu_fakeallnotesoff = 0;
     uint8_t enable_joystick = 0;
     uint8_t adlib_wait = 0;
+    uint8_t fwnum = 7;
+    int pMode = 0;
 
     banner();
     // Get magic value from port on PicoGUS that is not on real GUS
@@ -318,6 +354,21 @@ int main(int argc, char* argv[]) {
             return 0;
         } else if (stricmp(argv[i], "/j") == 0) {
             enable_joystick = 1;
+        } else if (stricmp(argv[i], "/m") == 0) {               
+            if (i + 1 >= argc) {
+                usage(argv[0], mode);
+                return 255;
+            }
+            e = sscanf(argv[++i], "%hu", &fwnum);
+            if (e != 1 || fwnum < 1 || fwnum> 6) {
+                usage(argv[0], mode);
+                return 5;
+            }
+            if (argc >= i + 2) {
+                if (!stricmp(argv[++i], "d")) {
+                    pMode = 1;
+                }               
+            }
         } else if (stricmp(argv[i], "/4") == 0) {
             force_44k = 1;
         } else if (stricmp(argv[i], "/a") == 0) {
@@ -403,6 +454,10 @@ int main(int argc, char* argv[]) {
 
     if (fw_filename[0]) {
         return write_firmware(fw_filename, protocol_got);
+    }
+
+    if (fwnum < 7) {
+        return reboot_to_firmware(fwnum, pMode);
     }
 
     outp(CONTROL_PORT, 0xf0); // Select hardware type register

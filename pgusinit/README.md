@@ -1,4 +1,4 @@
-# PicoGUSinit v2.1.0
+# PicoGUSinit v2.1.5
 
 PicoGUSinit (also called pgusinit, after the program's .exe file) detects and
 initializes a PicoGUS card. In GUS emulation mode, it should be used instead of
@@ -31,6 +31,9 @@ settings. Options may be given for other settings:
 * `/v x` - sets wavetable header volume to x percent (PicoGUS 2.0 boards only).
   Available in all modes in case you want to use the wavetable header as an aux
   input (for example for an internal CD-ROM drive).
+* `/m x [d]` - changes operation mode (reboots card to x firmware, only if 
+   pg-multi.uf2 is flashed) for x: (1=gus, 2=sb, 3=mpu, 4=tandy, 5=cms, 6=joy)
+   the optional parameter 'd' makes the selected mode permanent at system boot
 
 Firmware files that come with the releases:
 
@@ -41,6 +44,8 @@ Firmware files that come with the releases:
 * `pg-cms.uf2` - CMS/Game Blaster emulation
 * `pg-joyex.uf2` - Joystick exclusive mode (doesn't emulate any sound cards,
   just the game port)
+* `pg-multi.uf2` - Multi-firmware. Contains all 6 firmwares in one. To be used
+  with /m x option in pgusinit to change mode.
 
 ### GUS emulation mode
 
