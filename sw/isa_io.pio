@@ -39,6 +39,10 @@ static inline void iow_program_init(PIO pio, uint sm, uint offset, float clkdiv)
     sm_config_set_out_shift(&c, true, true /* autopull */, 32);
 
     // Set the pin direction for IOW and AD0 bus as input at the PIO
+    pio_gpio_init(pio, IOW_PIN); // necessary on RP2350
+    for (int i = 0; i < 10; ++i) {
+        pio_gpio_init(pio, AD0_PIN + i);
+    }
     pio_sm_set_consecutive_pindirs(pio, sm, IOW_PIN, 1, false);
     pio_sm_set_consecutive_pindirs(pio, sm, AD0_PIN, 10, false);
 
@@ -86,6 +90,10 @@ static inline void ior_program_init(PIO pio, uint sm, uint offset) {
     sm_config_set_in_shift(&c, false, true, 10);
 
     // Set the pin direction to input at the PIO
+    pio_gpio_init(pio, IOR_PIN); // necessary on RP2350
+    for (int i = 0; i < 10; ++i) {
+        pio_gpio_init(pio, AD0_PIN + i);
+    }
     pio_sm_set_consecutive_pindirs(pio, sm, IOR_PIN, 1, false);
     pio_sm_set_consecutive_pindirs(pio, sm, AD0_PIN, 10, false);
 

@@ -99,6 +99,7 @@ void play_adlib() {
 
 #ifdef USB_JOYSTICK
     // Init TinyUSB for joystick support
+    puts("tinyusb init");
     tuh_init(BOARD_TUH_RHPORT);
 #endif
 
@@ -106,6 +107,7 @@ void play_adlib() {
 
     struct audio_buffer_pool *ap = init_audio();
 
+    puts("starting audio");
     for (;;) {
         bool notfirst = false;
         while (opl_buffer.tail != opl_buffer.head) {

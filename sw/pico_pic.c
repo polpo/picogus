@@ -62,7 +62,7 @@ void PIC_RemoveEvents(PIC_EventHandler handler) {
 void PIC_Init() {
 #ifdef USE_ALARM
     alarm_pool = alarm_pool_create(2, PICO_TIME_DEFAULT_ALARM_POOL_MAX_TIMERS);
-    irq_set_priority(TIMER_IRQ_2, PICO_HIGHEST_IRQ_PRIORITY);
+    irq_set_priority(TIMER0_IRQ_2, PICO_HIGHEST_IRQ_PRIORITY);
     for (int i = 0; i < 4; ++i) {
         timerEvents[i].alarm_id = 0;
         timerEvents[i].handler = 0;

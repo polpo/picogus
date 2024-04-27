@@ -264,11 +264,9 @@ inline void update_joystate_xinput(uint16_t wButtons, int16_t sThumbLX, int16_t 
     /* printf("%04x %04x\n", wButtons, joystate_struct.button_mask); */
 }
 
-void tuh_xinput_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t const *report, uint16_t len)
+void tuh_xinput_report_received_cb(uint8_t dev_addr, uint8_t instance, xinputh_interface_t const* xid_itf, uint16_t len)
 {
-    xinputh_interface_t *xid_itf = (xinputh_interface_t *)report;
     xinput_gamepad_t *p = &xid_itf->pad;
-    /*
     const char* type_str;
     switch (xid_itf->type)
     {
@@ -278,13 +276,10 @@ void tuh_xinput_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t c
         case 4: type_str = "Xbox OG";           break;
         default: type_str = "Unknown";
     }
-    */
 
     if (xid_itf->connected && xid_itf->new_pad_data) {
-        /*
         printf("[%02x, %02x], Type: %s, Buttons %04x, LT: %02x RT: %02x, LX: %d, LY: %d, RX: %d, RY: %d\n",
              dev_addr, instance, type_str, p->wButtons, p->bLeftTrigger, p->bRightTrigger, p->sThumbLX, p->sThumbLY, p->sThumbRX, p->sThumbRY);
-        */
         update_joystate_xinput(p->wButtons, p->sThumbLX, p->sThumbLY, p->sThumbRX, p->sThumbRY, p->bLeftTrigger, p->bRightTrigger);
     }
     tuh_xinput_receive_report(dev_addr, instance);

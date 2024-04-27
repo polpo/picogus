@@ -21,7 +21,7 @@ project(picogus
 )
 
 set(PICO_BOARD_HEADER_DIRS ${CMAKE_CURRENT_LIST_DIR})
-set(PICO_BOARD picogus2)
+# set(PICO_BOARD PICO)
 
 
 
@@ -217,7 +217,7 @@ if(USB_JOYSTICK)
     target_include_directories(picogus PUBLIC ${CMAKE_CURRENT_LIST_DIR}/joy_hid)
     target_link_libraries(picogus tinyusb_host)
     add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/tusb_xinput)
-    target_link_libraries(picogus xinput_host_app_driver)
+    target_link_libraries(picogus xinput_host)
     target_compile_definitions(picogus PRIVATE USB_JOYSTICK=1)
 endif()
 
