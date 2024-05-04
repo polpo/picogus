@@ -10,6 +10,10 @@
 
 #include "pico_reflash.h"
 
+// For multifw
+#include "hardware/watchdog.h"
+#include "hardware/structs/watchdog.h"
+
 enum board_type { PICO_BASED = 0, PICOGUS_2 = 1 } BOARD_TYPE;
 
 typedef enum {
@@ -124,6 +128,7 @@ static uint32_t cur_read = 0;
 const char* firmware_string = PICO_PROGRAM_NAME " v" PICO_PROGRAM_VERSION_STRING;
 
 uint16_t basePort_tmp;
+uint16_t multifw_tmp;
 
 __force_inline void select_picogus(uint8_t value) {
     // printf("select picogus %x\n", value);
@@ -159,6 +164,8 @@ __force_inline void select_picogus(uint8_t value) {
     case 0x30: // Adlib speed sensitive fix
         break;
 #endif
+    case 0xE0: // Select firmware boot mode register
+        break;
     case 0xF0: // Hardware version
         break;
     case 0xFF: // Firmware write mode
@@ -175,6 +182,11 @@ __force_inline void write_picogus_low(uint8_t value) {
     case 0x04: // Base port
     case 0x05: // Adlib Base port
         basePort_tmp = value;
+        break;
+    // For multifw
+    case 0xE0:
+        // set firmware num and perm flag
+        multifw_tmp = value;
         break;
     }
 }
@@ -230,6 +242,12 @@ __force_inline void write_picogus_high(uint8_t value) {
         adlib_wait = value;
         break;
 #endif
+    // For multifw
+    case 0xE0:
+            // set firmware num, perm flag and reboot
+	        watchdog_hw->scratch[3] = ((value << 8) | multifw_tmp);
+	        watchdog_reboot(0, 0, 0);
+            break;
     case 0xff: // Firmware write
         pico_firmware_write(value);
         break;

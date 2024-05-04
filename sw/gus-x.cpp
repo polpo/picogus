@@ -1599,8 +1599,8 @@ __force_inline void GUS_StartDMA() {
 }
 
 
-extern uint32_t __scratch_x("my_sub_section") (GUS_CallBack)(Bitu max_len, int16_t* play_buffer) {
-// extern uint32_t GUS_CallBack(Bitu max_len, int16_t* play_buffer) {
+//extern uint32_t __scratch_x("my_sub_section") (GUS_CallBack)(Bitu max_len, int16_t* play_buffer) {  // did not compile/link multifw with this.. scratch?? check.
+extern uint32_t GUS_CallBack(Bitu max_len, int16_t* play_buffer) {
     static int32_t accum[2];
 #ifdef SCALE_22K_TO_44K
     static int32_t prev_accum[2];

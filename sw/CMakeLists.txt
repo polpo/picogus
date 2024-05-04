@@ -2,8 +2,7 @@
 
 cmake_minimum_required(VERSION 3.13)
 
-set(CMAKE_C_STANDARD 11)
-set(CMAKE_CXX_STANDARD 17)
+
 
 # Initialise pico_sdk from installed location
 # (note this can come from environment, CMake cache etc)
@@ -13,27 +12,36 @@ set(CMAKE_CXX_STANDARD 17)
 
 # Pull in Raspberry Pi Pico SDK (must be before project)
 include(pico_sdk_import.cmake)
-include(pico_extras_import.cmake)
 
 project(picogus
-    VERSION "1.2.0"
+    VERSION "1.2.6"
     LANGUAGES C CXX ASM
 )
 
+if( NOT (PROJECT_TYPE STREQUAL "BOOT"))
+
+set(CMAKE_C_STANDARD 11)
+set(CMAKE_CXX_STANDARD 17)
+
+include(pico_extras_import.cmake)
+
+
 set(PICO_BOARD_HEADER_DIRS ${CMAKE_CURRENT_LIST_DIR})
 set(PICO_BOARD picogus2)
-
-
-
-#set(PICO_DEOPTIMIZED_DEBUG "1")
-#set(CMAKE_BUILD_TYPE "Debug")
-set(CMAKE_BUILD_TYPE "Release")
 set(PICO_COPY_TO_RAM 1)
-#set(SKIP_PICO_MALLOC 1)
 
 # Tell the Pico SDK to use our local tinyusb instead of the one included in the SDK
 # This is needed to support tusb_xinput
 set(PICO_TINYUSB_PATH ${CMAKE_CURRENT_LIST_DIR}/tinyusb)
+
+endif() #NOT BOOT
+
+#set(PICO_DEOPTIMIZED_DEBUG "1")
+#set(CMAKE_BUILD_TYPE "Debug")
+set(CMAKE_BUILD_TYPE "Release")
+#set(SKIP_PICO_MALLOC 1)
+
+
 
 if(NOT PROJECT_TYPE)
     set(PROJECT_TYPE "GUS")
@@ -42,6 +50,30 @@ endif()
 
 # Initialise the Raspberry Pi Pico SDK
 pico_sdk_init()
+
+################################################################################
+# Helper function
+function(set_linker_script TARGET script)
+    target_link_directories(${TARGET} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+    pico_set_linker_script(${TARGET} ${CMAKE_CURRENT_SOURCE_DIR}/${script})
+
+    # Add dependencies on the 'included' linker scripts so that the target gets
+    # rebuilt if they are changed
+    pico_add_link_depend(${TARGET} ${CMAKE_CURRENT_SOURCE_DIR}/${script})
+endfunction()
+
+if(PROJECT_TYPE STREQUAL "BOOT")
+
+add_executable(bootloader)
+target_sources(bootloader PRIVATE bootloader.c)
+target_link_libraries(bootloader PRIVATE pico_stdlib hardware_flash pico_multicore)
+pico_add_extra_outputs(bootloader)
+set_linker_script(bootloader bootloader.ld)
+
+else()
+################################################################################
+
+set(USB_JOYSTICK 1) 
 
 if(USE_LTO)
     # Pico SDK must be patched to allow for LTO so it is not enabled by default.
@@ -115,6 +147,8 @@ if(PROJECT_TYPE STREQUAL "GUS")
     endif()
     pico_enable_stdio_usb(picogus 0)
     pico_enable_stdio_semihosting(picogus 0)
+
+    set_linker_script(picogus firmware1.ld)
 endif()
 
 if(PROJECT_TYPE STREQUAL "SB")
@@ -138,6 +172,8 @@ if(PROJECT_TYPE STREQUAL "SB")
     pico_enable_stdio_uart(picogus 1)
     pico_enable_stdio_usb(picogus 0)
     pico_enable_stdio_semihosting(picogus 0)
+
+    set_linker_script(picogus firmware2.ld)
 endif()
 
 if(PROJECT_TYPE STREQUAL "MPU")
@@ -159,6 +195,8 @@ if(PROJECT_TYPE STREQUAL "MPU")
         pico_enable_stdio_usb(picogus 1)
     endif()
     pico_enable_stdio_semihosting(picogus 0)
+
+    set_linker_script(picogus firmware3.ld)
 endif()
 
 if(PROJECT_TYPE STREQUAL "TANDY")
@@ -175,6 +213,8 @@ if(PROJECT_TYPE STREQUAL "TANDY")
     pico_enable_stdio_uart(picogus 1)
     pico_enable_stdio_usb(picogus 0)
     pico_enable_stdio_semihosting(picogus 0)
+
+    set_linker_script(picogus firmware4.ld)
 endif()
 
 if(PROJECT_TYPE STREQUAL "CMS")
@@ -193,6 +233,8 @@ if(PROJECT_TYPE STREQUAL "CMS")
     pico_enable_stdio_uart(picogus 1)
     pico_enable_stdio_usb(picogus 0)
     pico_enable_stdio_semihosting(picogus 0)
+
+    set_linker_script(picogus firmware5.ld)
 endif()
 
 if(PROJECT_TYPE STREQUAL "JOY")
@@ -208,6 +250,8 @@ if(PROJECT_TYPE STREQUAL "JOY")
      pico_enable_stdio_uart(picogus 1)
      pico_enable_stdio_usb(picogus 0)
      pico_enable_stdio_semihosting(picogus 0)
+
+    set_linker_script(picogus firmware6.ld)
 endif()
 
 if(USB_JOYSTICK)
@@ -256,3 +300,5 @@ add_custom_target(
     DEPENDS picogus
     COMMAND openocd -f interface/cmsis-dap.cfg -f target/rp2040.cfg -c "adapter speed 5000\; program picogus.elf verify reset exit"
 )
+
+endif()  # endif BOOTLOADER
