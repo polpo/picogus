@@ -51,9 +51,11 @@ void play_adlib(void);
 uint8_t opl_reg;
 opl3_chip nuked_chip = {};
 #else
+#ifdef USE_EMU8950_OPL
 #include "opl.h"
 extern "C" int OPL_Pico_Init(unsigned int);
 extern "C" unsigned int OPL_Pico_PortRead(opl_port_t);
+#endif
 #include "cmd_buffers.h"
 cms_buffer_t opl_buffer = { {0}, 0, 0 };
 #endif
@@ -378,10 +380,10 @@ __force_inline void handle_iow(void) {
             // Fast write
             pio_sm_put(pio0, IOW_PIO_SM, IO_END);
 #ifdef OPL_NUKED
-        opl_reg = iow_read & 0xFF;
+            opl_reg = iow_read & 0xFF;
 #else
             opl_buffer.cmds[opl_buffer.head++] = {
-                OPL_REGISTER_PORT,
+                0,
                 (uint8_t)(iow_read & 0xFF)
             };
 #endif
@@ -394,7 +396,7 @@ __force_inline void handle_iow(void) {
             OPL3_WriteRegBuffered(&nuked_chip, opl_reg, iow_read & 0xFF);
 #else
             opl_buffer.cmds[opl_buffer.head++] = {
-                OPL_DATA_PORT,
+                1,
                 (uint8_t)(iow_read & 0xFF)
             };
 #endif
@@ -414,7 +416,7 @@ __force_inline void handle_iow(void) {
         opl_reg = iow_read & 0xFF;
 #else
         opl_buffer.cmds[opl_buffer.head++] = {
-            OPL_REGISTER_PORT,
+            0,
             (uint8_t)(iow_read & 0xFF)
         };
 #endif
@@ -429,7 +431,7 @@ __force_inline void handle_iow(void) {
         OPL3_WriteRegBuffered(&nuked_chip, opl_reg, iow_read & 0xFF);
 #else
         opl_buffer.cmds[opl_buffer.head++] = {
-            OPL_DATA_PORT,
+            1,
             (uint8_t)(iow_read & 0xFF)
         };
 #endif
@@ -562,7 +564,11 @@ __force_inline void handle_ior(void) {
             while (opl_buffer.tail != opl_buffer.head) {
                 tight_loop_contents();
             }
+#ifdef OPL_YMFM
+            pio_sm_put(pio0, IOR_PIO_SM, IOR_SET_VALUE | 0x0);
+#else
             pio_sm_put(pio0, IOR_PIO_SM, IOR_SET_VALUE | OPL_Pico_PortRead(OPL_REGISTER_PORT));
+#endif
 #endif
         } else {
             pio_sm_put(pio0, IOR_PIO_SM, IO_WAIT);
@@ -583,7 +589,11 @@ __force_inline void handle_ior(void) {
         while (opl_buffer.tail != opl_buffer.head) {
             tight_loop_contents();
         }
+#ifdef OPL_YMFM
+        pio_sm_put(pio0, IOR_PIO_SM, IOR_SET_VALUE | 0x0);
+#else
         pio_sm_put(pio0, IOR_PIO_SM, IOR_SET_VALUE | OPL_Pico_PortRead(OPL_REGISTER_PORT));
+#endif
 #endif
     } else // if follows down below
 #elif defined(SOUND_MPU)
@@ -676,7 +686,7 @@ void err_blink(void) {
 #include "pico_pic.h"
 #endif
 
-constexpr uint32_t rp2_clock = 360000;
+constexpr uint32_t rp2_clock = 366000;
 constexpr float psram_clkdiv = (float)rp2_clock / 200000.0;
 constexpr float pwm_clkdiv = (float)rp2_clock / 22727.27;
 constexpr float iow_clkdiv = (float)rp2_clock / 183000.0;
@@ -857,7 +867,7 @@ int main()
     puts("Initializing SoundBlaster DSP");
     sbdsp_init();
     puts("Creating OPL");
-#ifndef OPL_NUKED
+#ifdef USE_EMU8950_OPL
     OPL_Pico_Init(basePort);
 #endif
     multicore_launch_core1(&play_adlib);

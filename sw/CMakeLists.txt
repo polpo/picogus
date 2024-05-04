@@ -126,7 +126,9 @@ if(PROJECT_TYPE STREQUAL "SB")
     target_link_libraries(
         picogus        
         # opl        
+        # ymfm
     )
+    # add_subdirectory(ymfm)
     target_compile_definitions(picogus PRIVATE
         SOUND_SB=1
         # SOUND_OPL=1
@@ -136,6 +138,7 @@ if(PROJECT_TYPE STREQUAL "SB")
         # EMU8950_ASM=1
         # PICOW=1
         OPL_NUKED=1
+        # OPL_YMFM=1
     )
     # add_subdirectory(opl)
     pico_enable_stdio_uart(picogus 1)

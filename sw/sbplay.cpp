@@ -22,12 +22,17 @@
 #include "Nuked-OPL3/opl3.h"
 extern opl3_chip nuked_chip;
 #else
+#include "cmd_buffers.h"
+extern cms_buffer_t opl_buffer;
+#ifdef OPL_YMFM
+#include "ymfm_opl.h"
+ymfm::ymfm_interface* myYMFM;
+ymfm::ymf262* myOPL;
+#else
 #include "opl.h"
 extern "C" void OPL_Pico_simple(int16_t *buffer, uint32_t nsamples);
 extern "C" void OPL_Pico_PortWrite(opl_port_t, unsigned int);
-
-#include "cmd_buffers.h"
-extern cms_buffer_t opl_buffer;
+#endif
 #endif
 
 extern int16_t sbdsp_sample();
@@ -87,7 +92,7 @@ struct audio_buffer_pool *init_audio() {
     }
 
     //ok = audio_i2s_connect(producer_pool);
-    ok = audio_i2s_connect_extra(producer_pool, false, 0, 0, NULL);
+    ok = audio_i2s_connect_extra(producer_pool, false, 1, 256, NULL);
     assert(ok);
     audio_i2s_set_enabled(true);
     return producer_pool;
@@ -112,6 +117,10 @@ void play_adlib() {
 
 #ifdef OPL_NUKED
     OPL3_Reset(&nuked_chip, 49716);
+#elif defined(OPL_YMFM)
+    myYMFM = new ymfm::ymfm_interface();
+    myOPL = new ymfm::ymf262(*myYMFM);
+    ymfm::ymf262::output_data output;
 #endif
 
     struct audio_buffer_pool *ap = init_audio();
@@ -128,7 +137,15 @@ void play_adlib() {
                 notfirst = true;
             }
             auto cmd = opl_buffer.cmds[opl_buffer.tail];
+#ifdef OPL_YMFM
+            if (cmd.addr & 1) {
+                myOPL->write_data(cmd.data);
+            } else {
+                myOPL->write_address_hi(cmd.data);
+            }
+#else
             OPL_Pico_PortWrite((opl_port_t)cmd.addr, cmd.data);
+#endif
             // putchar('.');
             ++opl_buffer.tail;
         }
@@ -140,6 +157,10 @@ void play_adlib() {
         OPL3_Generate(&nuked_chip, opl_samples);
         samples[0] = clamp16((int32_t)sbdsp_sample() + (int32_t)opl_samples[0]);
         samples[1] = clamp16((int32_t)sbdsp_sample() + (int32_t)opl_samples[1]);
+#elif defined(OPL_YMFM)
+        myOPL->generate(&output);
+        samples[0] = output.data[0];
+        samples[1] = output.data[1];
 #else
         int16_t opl_sample;
         OPL_Pico_simple(&opl_sample, 1);
