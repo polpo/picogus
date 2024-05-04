@@ -9,3 +9,6 @@ build/
 *.kicad_prl
 fp-info-cache
 .vscode
+
+firmware.ld
+flash_firmware.h
