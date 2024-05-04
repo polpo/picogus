@@ -56,42 +56,42 @@ cd -
 # Build picogus releases
 BOOTLOADER_SIZE=16384
 build GUS "" "--fresh" "--clean-first"
-FW_1_SIZE=$(($(wc -c <"$BUILD_DIR"/picogus.bin) + 1024))
+FW_1_SIZE=$((($(wc -c <"$BUILD_DIR"/picogus.bin) / 1024) * 1024 + 1024))
 export FW_1_ORIGIN=$BOOTLOADER_SIZE
-FW_SIZE=$FW_1_SIZE FW_ORIGIN=$FW_1_ORIGIN envsubst <../firmware.in >../firmware.ld
+FW_SIZE=$FW_1_SIZE FW_ORIGIN=$FW_1_ORIGIN envsubst <../firmware.ld.in >../firmware.ld
 build GUS "gus" "-D MULTIFW=1"
 
 build SB "" "--fresh" "--clean-first"
-FW_2_SIZE=$(($(wc -c <"$BUILD_DIR"/picogus.bin) + 1024))
+FW_2_SIZE=$((($(wc -c <"$BUILD_DIR"/picogus.bin) / 1024) * 1024 + 1024))
 export FW_2_ORIGIN=$(($FW_1_ORIGIN + $FW_1_SIZE))
-FW_SIZE=$FW_2_SIZE FW_ORIGIN=$fw_2_origin envsubst <../firmware.in >../firmware.ld
+FW_SIZE=$FW_2_SIZE FW_ORIGIN=$FW_2_ORIGIN envsubst <../firmware.ld.in >../firmware.ld
 build SB "sb" "-D MULTIFW=1"
 
 build MPU "" "--fresh" "--clean-first"
-FW_3_SIZE=$(($(wc -c <"$BUILD_DIR"/picogus.bin) + 1024))
+FW_3_SIZE=$((($(wc -c <"$BUILD_DIR"/picogus.bin) / 1024) * 1024 + 1024))
 export FW_3_ORIGIN=$(($FW_2_ORIGIN + $FW_2_SIZE))
-FW_SIZE=$FW_3_SIZE FW_ORIGIN=$FW_3_ORIGIN envsubst <../firmware.in >../firmware.ld
+FW_SIZE=$FW_3_SIZE FW_ORIGIN=$FW_3_ORIGIN envsubst <../firmware.ld.in >../firmware.ld
 build MPU "mpu" "-D MULTIFW=1"
 
 build TANDY "" "--fresh" "--clean-first"
-FW_4_SIZE=$(($(wc -c <"$BUILD_DIR"/picogus.bin) + 1024))
+FW_4_SIZE=$((($(wc -c <"$BUILD_DIR"/picogus.bin) / 1024) * 1024 + 1024))
 export FW_4_ORIGIN=$(($FW_3_ORIGIN + $FW_3_SIZE))
-FW_SIZE=$FW_4_SIZE FW_ORIGIN=$FW_4_ORIGIN envsubst <../firmware.in >../firmware.ld
+FW_SIZE=$FW_4_SIZE FW_ORIGIN=$FW_4_ORIGIN envsubst <../firmware.ld.in >../firmware.ld
 build TANDY "tandy" "-D MULTIFW=1"
 
 build CMS "" "--fresh" "--clean-first"
-FW_5_SIZE=$(($(wc -c <"$BUILD_DIR"/picogus.bin) + 1024))
+FW_5_SIZE=$((($(wc -c <"$BUILD_DIR"/picogus.bin) / 1024) * 1024 + 1024))
 export FW_5_ORIGIN=$(($FW_4_ORIGIN + $FW_4_SIZE))
-FW_SIZE=$FW_5_SIZE FW_ORIGIN=$FW_5_ORIGIN envsubst <../firmware.in >../firmware.ld
+FW_SIZE=$FW_5_SIZE FW_ORIGIN=$FW_5_ORIGIN envsubst <../firmware.ld.in >../firmware.ld
 build CMS "cms" "-D MULTIFW=1"
 
 build JOY "" "--fresh" "--clean-first"
-FW_6_SIZE=$(($(wc -c <"$BUILD_DIR"/picogus.bin) + 1024))
+FW_6_SIZE=$((($(wc -c <"$BUILD_DIR"/picogus.bin) / 1024) * 1024 + 1024))
 export FW_6_ORIGIN=$(($FW_5_ORIGIN + $FW_5_SIZE))
-FW_SIZE=$FW_6_SIZE FW_ORIGIN=$FW_6_ORIGIN envsubst <../firmware.in >../firmware.ld
+FW_SIZE=$FW_6_SIZE FW_ORIGIN=$FW_6_ORIGIN envsubst <../firmware.ld.in >../firmware.ld
 build JOY "joy" "-D MULTIFW=1"
 
-envsubst < ../flash_firmware.in > ../flash_firmware.h
+envsubst < ../flash_firmware.h.in > ../flash_firmware.h
 build BOOT "BOOT" # BOOTLOADER for multifw
 
 # Get release version
