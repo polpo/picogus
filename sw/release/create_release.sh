@@ -16,25 +16,28 @@ build () {
     local PROJECT_TYPE=$1
     local FW_SUFFIX=$2
     local EXTRA_CMAKE="$3"
+    local EXTRA_BUILD="$4"
 
     cd "$BUILD_DIR"
 #    cmake .. --fresh -DPROJECT_TYPE=$PROJECT_TYPE $EXTRA_CMAKE
-    cmake --clean-first .. -DPROJECT_TYPE=$PROJECT_TYPE $EXTRA_CMAKE
-    make clean && make -j
+    cmake .. -DPROJECT_TYPE=$PROJECT_TYPE $EXTRA_CMAKE
+    cmake --build . -j $(nproc) $EXTRA_BUILD
     if [[ ! $2 == 'BOOT' ]]; then
-        cp picogus.bin "$STAGING_DIR"/pg-$FW_SUFFIX.bin
-        cp picogus.uf2 "$STAGING_DIR"/pg-$FW_SUFFIX.uf2
-        cd -
+        if [[ $FW_SUFFIX ]]; then
+            cp picogus.bin "$STAGING_DIR"/pg-$FW_SUFFIX.bin
+            cp picogus.uf2 "$STAGING_DIR"/pg-$FW_SUFFIX.uf2
+        fi
     else
         cp bootloader.bin "$STAGING_DIR"/bootloader.bin 
         gcc ../uf2create.c -o uf2create
     fi
+    cd -
 }
 
 # Build pgusinit
 cd "$SW_HOME"/../pgusinit
-#export WATCOM="$(readlink -f "$SW_HOME"/../../watcom)"
-export WATCOM="/usr/bin/watcom"
+export WATCOM="$(readlink -f "$SW_HOME"/../../watcom)"
+# export WATCOM="/usr/bin/watcom"
 if [[ $OSTYPE == 'darwin'* ]]; then
     # Assuming Apple ARM 
     BINDIR="$WATCOM"/armo64
@@ -51,13 +54,45 @@ cp README.md "$STAGING_DIR"
 cd -
 
 # Build picogus releases
-build BOOT "BOOT"  # BOOTLOADER for multifw
-build GUS "gus" "-DGUS_DEFAULT_PORT=0x240"
-build SB "sb"
-build MPU "mpu"
-build TANDY "tandy"
-build CMS "cms"
-build JOY "joy"
+BOOTLOADER_SIZE=16384
+build GUS "" "--fresh" "--clean-first"
+FW_1_SIZE=$(($(wc -c <"$BUILD_DIR"/picogus.bin) + 1024))
+export FW_1_ORIGIN=$BOOTLOADER_SIZE
+FW_SIZE=$FW_1_SIZE FW_ORIGIN=$FW_1_ORIGIN envsubst <../firmware.in >../firmware.ld
+build GUS "gus" "-D MULTIFW=1"
+
+build SB "" "--fresh" "--clean-first"
+FW_2_SIZE=$(($(wc -c <"$BUILD_DIR"/picogus.bin) + 1024))
+export FW_2_ORIGIN=$(($FW_1_ORIGIN + $FW_1_SIZE))
+FW_SIZE=$FW_2_SIZE FW_ORIGIN=$fw_2_origin envsubst <../firmware.in >../firmware.ld
+build SB "sb" "-D MULTIFW=1"
+
+build MPU "" "--fresh" "--clean-first"
+FW_3_SIZE=$(($(wc -c <"$BUILD_DIR"/picogus.bin) + 1024))
+export FW_3_ORIGIN=$(($FW_2_ORIGIN + $FW_2_SIZE))
+FW_SIZE=$FW_3_SIZE FW_ORIGIN=$FW_3_ORIGIN envsubst <../firmware.in >../firmware.ld
+build MPU "mpu" "-D MULTIFW=1"
+
+build TANDY "" "--fresh" "--clean-first"
+FW_4_SIZE=$(($(wc -c <"$BUILD_DIR"/picogus.bin) + 1024))
+export FW_4_ORIGIN=$(($FW_3_ORIGIN + $FW_3_SIZE))
+FW_SIZE=$FW_4_SIZE FW_ORIGIN=$FW_4_ORIGIN envsubst <../firmware.in >../firmware.ld
+build TANDY "tandy" "-D MULTIFW=1"
+
+build CMS "" "--fresh" "--clean-first"
+FW_5_SIZE=$(($(wc -c <"$BUILD_DIR"/picogus.bin) + 1024))
+export FW_5_ORIGIN=$(($FW_4_ORIGIN + $FW_4_SIZE))
+FW_SIZE=$FW_5_SIZE FW_ORIGIN=$FW_5_ORIGIN envsubst <../firmware.in >../firmware.ld
+build CMS "cms" "-D MULTIFW=1"
+
+build JOY "" "--fresh" "--clean-first"
+FW_6_SIZE=$(($(wc -c <"$BUILD_DIR"/picogus.bin) + 1024))
+export FW_6_ORIGIN=$(($FW_5_ORIGIN + $FW_5_SIZE))
+FW_SIZE=$FW_6_SIZE FW_ORIGIN=$FW_6_ORIGIN envsubst <../firmware.in >../firmware.ld
+build JOY "joy" "-D MULTIFW=1"
+
+envsubst < ../flash_firmware.in > ../flash_firmware.h
+build BOOT "BOOT" # BOOTLOADER for multifw
 
 # Get release version
 cd "$BUILD_DIR"
