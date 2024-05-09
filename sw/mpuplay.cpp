@@ -1,5 +1,8 @@
 #include <stdio.h>
 
+#include "flash_settings.h"
+extern Settings settings;
+
 #ifdef USE_ALARM
 #include "pico_pic.h"
 #endif
@@ -23,7 +26,7 @@ void play_mpu() {
     PIC_Init();
     puts("pic inited on core 1");
 #endif
-    MPU401_Init(false, false);
+    MPU401_Init(settings.MPU.delaySysex, settings.MPU.fakeAllNotesOff);
 
     for (;;) {
         send_midi_byte();				// see if we need to send a byte	

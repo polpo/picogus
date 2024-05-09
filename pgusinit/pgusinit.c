@@ -197,11 +197,19 @@ int reboot_to_firmware(uint8_t value, int mode) {
     outp(CONTROL_PORT, 0xCC); // Knock on the door...
 
     outp(CONTROL_PORT, 0xE0); // Select firmware selection register
-    outpw(DATA_PORT_LOW, (0x0000 + value + (mode << 8))); // Send firmware number and permanent flag
+    outp(DATA_PORT_HIGH, value); // Send firmware number and permanent flag
+            delay(100);
 
     printf("\nMode change requested. Rebooting to fw: %d (%s)...\n", value, fwnames[value-1]);
-    if (mode)
-            printf("%s mode selected as permanent on system boot.\n", fwnames[value-1]);
+    if (mode) {
+        outp(CONTROL_PORT, 0xE1); // Select save settings register
+        outp(DATA_PORT_HIGH, 0xff);
+        printf("%s mode selected as permanent on system boot.\n", fwnames[value-1]);
+            delay(100);
+    }
+    outp(CONTROL_PORT, 0xE2); // Select reboot register
+    outp(DATA_PORT_HIGH, 0xff);
+            delay(100);
 
     // Wait for card to reboot to new firmware
     if (!wait_for_read(0xDD)) {

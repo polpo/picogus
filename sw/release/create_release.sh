@@ -54,7 +54,7 @@ cp README.md "$STAGING_DIR"
 cd -
 
 # Build picogus releases
-BOOTLOADER_SIZE=16384
+BOOTLOADER_SIZE=32768
 build GUS "" "--fresh" "--clean-first"
 FW_1_SIZE=$((($(wc -c <"$BUILD_DIR"/picogus.bin) / 1024) * 1024 + 1024))
 export FW_1_ORIGIN=$BOOTLOADER_SIZE

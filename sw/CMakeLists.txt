@@ -65,11 +65,22 @@ endfunction()
 if(PROJECT_TYPE STREQUAL "BOOT")
 
 add_executable(bootloader)
-target_sources(bootloader PRIVATE bootloader.c)
+target_sources(bootloader PRIVATE bootloader.c flash_settings.c)
 target_link_libraries(bootloader PRIVATE pico_stdlib hardware_flash pico_multicore)
 pico_add_extra_outputs(bootloader)
 set_linker_script(bootloader bootloader.ld)
 
+        pico_enable_stdio_uart(bootloader 1)
+    pico_enable_stdio_usb(bootloader 0)
+    pico_enable_stdio_semihosting(bootloader 0)
+
+set(PICO_COPY_TO_RAM 1)
+target_compile_definitions(
+    bootloader PRIVATE
+        PICO_DEFAULT_UART=0
+        PICO_DEFAULT_UART_TX_PIN=28
+        PICO_DEFAULT_UART_RX_PIN=-1
+    )
 else()
 ################################################################################
 
@@ -100,21 +111,16 @@ add_compile_definitions(
         M62429_PIO=1
 )
 
-target_sources(picogus PRIVATE pico_reflash.c)
+target_sources(picogus PRIVATE pico_reflash.c flash_settings.c)
 
 target_compile_definitions(picogus PRIVATE PICO_FLASH_SPI_CLKDIV=4)
 
 if(PROJECT_TYPE STREQUAL "GUS")
     # target_compile_options(picogus PRIVATE -save-temps -fverbose-asm)
-    if(NOT GUS_DEFAULT_PORT)
-        set(GUS_DEFAULT_PORT "0x240")
-        message("GUS_DEFAULT_PORT not set, defaulting to ${GUS_DEFAULT_PORT}")
-    endif()
     pico_set_program_name(picogus "picogus-gus")
     target_sources(picogus PRIVATE gusplay.cpp pico_pic.c isa_dma.c)
     target_compile_definitions(picogus PRIVATE
         SOUND_GUS=1
-        GUS_DEFAULT_PORT=${GUS_DEFAULT_PORT}
         PSRAM=1
         TEST_PSRAM=1
         PSRAM_ASYNC=1
