@@ -15,10 +15,12 @@ ISA sound card emulation on the Raspberry Pi Pico's RP2040 microcontroller. Pico
 
 Current status: perpetual beta! See the [main wiki page](https://github.com/polpo/picogus/wiki) for current status and the [compatibility list](https://github.com/polpo/picogus/wiki/Compatibility-list) for support status of various DOS programs and other system compatibility notes. This project has a heavy demoscene focus due to the GUS's history so that's what I've concentrated on, but GUS support in games is very good to excellent.
 
-Want to buy a PicoGUS? Fully assembled PicoGUS 2.0 sound cards are available from these sources:
+Want to buy a PicoGUS? Fully assembled PicoGUS 2.0 sound cards are available from these sources, all of whom ship worldwide:
 
-* [Joe's Computer Museum Shop](https://jcm-1.com/product/picogus-v2/)
-* [Ian Scott's Tindie store](https://www.tindie.com/products/polpo/picogus-sound-card-emulator-for-isa-retro-pcs/)
+* [Joe's Computer Museum Shop](https://jcm-1.com/product/picogus-v2/) - in US 🇺🇸
+* [Ian Scott's Tindie store](https://www.tindie.com/products/polpo/picogus-sound-card-emulator-for-isa-retro-pcs/) - in US 🇺🇸
+* [Serdashop](https://www.serdashop.com/PicoGUS) - in EU 🇪🇺
+* [Flamelily IT](https://shop.flamelily.co.uk/picogus) - in UK 🇬🇧
 
 Want to make your own PicoGUS? See the [build guide](https://github.com/polpo/picogus/wiki/Building-your-PicoGUS). Note that the more DIY friendly v1.1.1 hardware has some documented issues with reset – a forthcoming v1.2 revision will fix these issues. **Important caveat**: due to the specs of the Pico, assumptions made by programs written to use the GUS, the imprecise nature of emulation, and the varying specs of retro DOS PC hardware, some things will likely never be perfect. **This is still a work in progress.**
 
@@ -31,8 +33,6 @@ You can donate via [PayPal](https://paypal.me/ianpolpo) or Ko-Fi: [![ko-fi](http
 ![PicoGUS 2.0 PCB](https://github.com/polpo/picogus/assets/1544908/821f109e-6e85-4230-8ad6-4359dd04f539)
 
 ![PicoGUS v1.1 beta PCB](https://user-images.githubusercontent.com/1544908/215666529-fc694b8f-aec3-4679-87df-b53d0c406c99.jpg)
-
-Looking for the original project, using Raspberry Pi 3/4? See the [pigus repo](https://github.com/polpo/pigus).
 
 See/hear PicoGUS in action on YouTube:
 
