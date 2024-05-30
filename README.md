@@ -18,7 +18,6 @@ Current status: perpetual beta! See the [main wiki page](https://github.com/polp
 Want to buy a PicoGUS? Fully assembled PicoGUS 2.0 sound cards are available from these sources, all of whom ship worldwide:
 
 * [Joe's Computer Museum Shop](https://jcm-1.com/product/picogus-v2/) - in US 🇺🇸
-* [Ian Scott's Tindie store](https://www.tindie.com/products/polpo/picogus-sound-card-emulator-for-isa-retro-pcs/) - in US 🇺🇸
 * [Serdashop](https://www.serdashop.com/PicoGUS) - in EU 🇪🇺
 * [Flamelily IT](https://shop.flamelily.co.uk/picogus) - in UK 🇬🇧
 
