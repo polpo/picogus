@@ -1513,8 +1513,8 @@ uint32_t __not_in_flash_func(slot_car_linear_alg1)(OPL *opl, OPL_SLOT *slot, uin
 
             uint16_t mask = (1 << slot->eg_shift) - 1;
             if (0 < slot->eg_out && slot->eg_rate_h > 0 && (eg_counter & mask) == 0) {
-                uint8_t step = lookup_attack_step(slot, eg_counter);                
-                slot->eg_out += (~slot->eg_out * step) >> 3;                
+                uint8_t step = lookup_attack_step(slot, eg_counter);
+                slot->eg_out += (~slot->eg_out * step) >> 3;
             }
             if (slot->eg_out == 0) {
                 slot->eg_state = DECAY;
