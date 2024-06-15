@@ -632,6 +632,7 @@ static void reset_slot(OPL_SLOT *slot, int number) {
 #endif
 static INLINE void slotOn(OPL *opl, int i) {
     OPL_SLOT *slot = &opl->slot[i];
+    slot->rks = rks_table[opl->notesel][slot->blk_fnum >> 8][slot->patch->KR];
     if (min(15, slot->patch->AR + (slot->rks >> 2)) == 15) {
         slot->eg_state = DECAY;
         slot->eg_out = 0;
@@ -868,10 +869,7 @@ static INLINE void calc_envelope(OPL_SLOT *slot, uint16_t eg_counter, uint8_t te
     if (slot->eg_state == ATTACK) {
         if (0 < slot->eg_out && slot->eg_rate_h > 0 && (eg_counter & mask) == 0) {
             step = lookup_attack_step(slot, eg_counter);
-            if(step)
-                slot->eg_out += (~slot->eg_out * step) >> 3;
-            else
-                slot->eg_out = 0;     // Switch immediately to decay for eg rate 0
+            slot->eg_out += (~slot->eg_out * step) >> 3;
         }
     } else {
         if (slot->eg_rate_h > 0 && (eg_counter & mask) == 0) {
@@ -1414,10 +1412,7 @@ uint32_t __not_in_flash_func(slot_mod_linear)(OPL *opl, OPL_SLOT *slot, uint32_t
             uint16_t mask = (1 << slot->eg_shift) - 1;
             if (0 < slot->eg_out && slot->eg_rate_h > 0 && (eg_counter & mask) == 0) {
                 uint8_t step = lookup_attack_step(slot, eg_counter);
-                if (step) 
-                    slot->eg_out += (~slot->eg_out * step) >> 3;
-                else
-                    slot->eg_out = 0;
+                slot->eg_out += (~slot->eg_out * step) >> 3;
             }
             if (slot->eg_out == 0) {
                 slot->eg_state = DECAY;
@@ -1518,11 +1513,8 @@ uint32_t __not_in_flash_func(slot_car_linear_alg1)(OPL *opl, OPL_SLOT *slot, uin
 
             uint16_t mask = (1 << slot->eg_shift) - 1;
             if (0 < slot->eg_out && slot->eg_rate_h > 0 && (eg_counter & mask) == 0) {
-                uint8_t step = lookup_attack_step(slot, eg_counter);
-                if (step)
-                    slot->eg_out += (~slot->eg_out * step) >> 3;
-                else
-                    slot->eg_out = 0;
+                uint8_t step = lookup_attack_step(slot, eg_counter);                
+                slot->eg_out += (~slot->eg_out * step) >> 3;                
             }
             if (slot->eg_out == 0) {
                 slot->eg_state = DECAY;
@@ -1621,10 +1613,7 @@ uint32_t __not_in_flash_func(slot_car_linear_alg0)(OPL *opl, OPL_SLOT *slot, uin
             uint16_t mask = (1 << slot->eg_shift) - 1;
             if (0 < slot->eg_out && slot->eg_rate_h > 0 && (eg_counter & mask) == 0) {
                 uint8_t step = lookup_attack_step(slot, eg_counter);
-                if (step)
-                    slot->eg_out += (~slot->eg_out * step) >> 3;
-                else
-                    slot->eg_out = 0;
+                slot->eg_out += (~slot->eg_out * step) >> 3;
             }
             if (slot->eg_out == 0) {
                 slot->eg_state = DECAY;
