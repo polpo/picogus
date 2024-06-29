@@ -3,6 +3,8 @@
 #include "flash_settings.h"
 #include "hardware/flash.h"
 #include "hardware/sync.h"
+/* #include "pico/multicore.h" */
+#include "pico/stdlib.h"
 
 static const Settings defaultSettings = {
     .magic = SETTINGS_MAGIC,
@@ -39,21 +41,35 @@ static const Settings defaultSettings = {
 };
 
 
-#define SETTINGS_SECTOR ((2048 * 1024) - FLASH_SECTOR_SIZE)   //  last sector of a 2M flash (adjust for other flash sizes if needed)
-Settings loadSettings(void)
+#define SETTINGS_SECTOR (PICO_FLASH_SIZE_BYTES - FLASH_SECTOR_SIZE)   //  last sector of a 2M flash (adjust for other flash sizes if needed)
+void loadSettings(Settings* settings)
 {
-    putchar('l');
-    Settings settings;
-    memcpy(&settings, (uint8_t*)(XIP_BASE + SETTINGS_SECTOR), sizeof(Settings));
-    putchar('o');
+    stdio_flush();
+    // printf("copying settings to %u from %u with size %u", settings, XIP_BASE + SETTINGS_SECTOR, sizeof(Settings));
+    stdio_flush();
+    memcpy(settings, XIP_BASE + SETTINGS_SECTOR, sizeof(Settings));
+    stdio_flush();
 
-    if (settings.magic != SETTINGS_MAGIC || settings.version != SETTINGS_VERSION) {
+    if (settings->magic != SETTINGS_MAGIC || settings->version != SETTINGS_VERSION) {
         // Initialize settings to default
-        putchar('!');
-        return defaultSettings;
+        stdio_flush();
+        memcpy(settings, &defaultSettings, sizeof(Settings));
+        return;
     }
-    putchar('.');
-    return settings;
+    stdio_flush();
+}
+
+
+static void saveSettingsSafe(void* data)
+{
+    putchar('-');
+    // Clock down the RP2040 so the flash at its default 1/2 clock divider is within spec (<=133MHz)
+    set_sys_clock_khz(240000, true);
+    flash_range_erase(SETTINGS_SECTOR, FLASH_SECTOR_SIZE);    // last sector
+    putchar('-');
+    flash_range_program(SETTINGS_SECTOR, data, FLASH_PAGE_SIZE);
+    set_sys_clock_khz(RP2_CLOCK_SPEED, true);
+    printf("settings saved");
 }
 
 void saveSettings(const Settings* settings)
@@ -61,10 +77,26 @@ void saveSettings(const Settings* settings)
     uint8_t data[FLASH_PAGE_SIZE] = {0};
     static_assert(sizeof(Settings) < FLASH_PAGE_SIZE, "Settings struct doesn't fit inside one flash page");
     memcpy(data, settings, sizeof(Settings));
+    printf("doing settings save: ");
+    int result = flash_safe_execute(saveSettingsSafe, data, 100);
+    if (!result) {
+        printf("uh oh... %d", result);
+    }
+    /*
+    // Stop second core
+    multicore_reset_core1();
+    // Clock down the RP2040 so the flash at its default 1/2 clock divider is within spec (<=133MHz)
+    set_sys_clock_khz(240000, true);
+
+    putchar('/');
     uint32_t ints = save_and_disable_interrupts();
     flash_range_erase(SETTINGS_SECTOR, FLASH_SECTOR_SIZE);    // last sector
+    putchar('/');
     flash_range_program(SETTINGS_SECTOR, data, FLASH_PAGE_SIZE);
+    set_sys_clock_khz(RP2_CLOCK_SPEED, true);
     restore_interrupts(ints);
+    printf("settings saved");
+    */
 }
 
 void resetSettings(void)

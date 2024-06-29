@@ -59,40 +59,40 @@ build GUS "" "--fresh" "--clean-first"
 FW_1_SIZE=$((($(wc -c <"$BUILD_DIR"/picogus.bin) / 1024) * 1024 + 1024))
 export FW_1_ORIGIN=$BOOTLOADER_SIZE
 FW_SIZE=$FW_1_SIZE FW_ORIGIN=$FW_1_ORIGIN envsubst <../firmware.ld.in >../firmware.ld
-build GUS "gus" "-D MULTIFW=1"
+build GUS "gus" "--fresh -D MULTIFW=1" "--clean-first"
 
 build SB "" "--fresh" "--clean-first"
 FW_2_SIZE=$((($(wc -c <"$BUILD_DIR"/picogus.bin) / 1024) * 1024 + 1024))
 export FW_2_ORIGIN=$(($FW_1_ORIGIN + $FW_1_SIZE))
 FW_SIZE=$FW_2_SIZE FW_ORIGIN=$FW_2_ORIGIN envsubst <../firmware.ld.in >../firmware.ld
-build SB "sb" "-D MULTIFW=1"
+build SB "sb" "--fresh -D MULTIFW=1" "--clean-first"
 
 build MPU "" "--fresh" "--clean-first"
 FW_3_SIZE=$((($(wc -c <"$BUILD_DIR"/picogus.bin) / 1024) * 1024 + 1024))
 export FW_3_ORIGIN=$(($FW_2_ORIGIN + $FW_2_SIZE))
 FW_SIZE=$FW_3_SIZE FW_ORIGIN=$FW_3_ORIGIN envsubst <../firmware.ld.in >../firmware.ld
-build MPU "mpu" "-D MULTIFW=1"
+build MPU "mpu" "--fresh -D MULTIFW=1" "--clean-first"
 
 build TANDY "" "--fresh" "--clean-first"
 FW_4_SIZE=$((($(wc -c <"$BUILD_DIR"/picogus.bin) / 1024) * 1024 + 1024))
 export FW_4_ORIGIN=$(($FW_3_ORIGIN + $FW_3_SIZE))
 FW_SIZE=$FW_4_SIZE FW_ORIGIN=$FW_4_ORIGIN envsubst <../firmware.ld.in >../firmware.ld
-build TANDY "tandy" "-D MULTIFW=1"
+build TANDY "tandy" "--fresh -D MULTIFW=1" "--clean-first"
 
 build CMS "" "--fresh" "--clean-first"
 FW_5_SIZE=$((($(wc -c <"$BUILD_DIR"/picogus.bin) / 1024) * 1024 + 1024))
 export FW_5_ORIGIN=$(($FW_4_ORIGIN + $FW_4_SIZE))
 FW_SIZE=$FW_5_SIZE FW_ORIGIN=$FW_5_ORIGIN envsubst <../firmware.ld.in >../firmware.ld
-build CMS "cms" "-D MULTIFW=1"
+build CMS "cms" "--fresh -D MULTIFW=1" "--clean-first"
 
 build JOY "" "--fresh" "--clean-first"
 FW_6_SIZE=$((($(wc -c <"$BUILD_DIR"/picogus.bin) / 1024) * 1024 + 1024))
 export FW_6_ORIGIN=$(($FW_5_ORIGIN + $FW_5_SIZE))
 FW_SIZE=$FW_6_SIZE FW_ORIGIN=$FW_6_ORIGIN envsubst <../firmware.ld.in >../firmware.ld
-build JOY "joy" "-D MULTIFW=1"
+build JOY "joy" "--fresh -D MULTIFW=1" "--clean-first"
 
 envsubst < ../flash_firmware.h.in > ../flash_firmware.h
-build BOOT "BOOT" # BOOTLOADER for multifw
+build BOOT "BOOT" "--fresh" "--clean-first" # BOOTLOADER for multifw
 
 # Get release version
 cd "$BUILD_DIR"
@@ -102,7 +102,7 @@ cd -
 #bin files for multi-firmware
 cd "$STAGING_DIR"
 "$BUILD_DIR"/uf2create bootloader.bin pg-gus.bin pg-sb.bin pg-mpu.bin pg-tandy.bin pg-cms.bin pg-joy.bin pg-multi.uf2
-rm *.bin
+# rm *.bin
 cd -
 
 # Create zip file

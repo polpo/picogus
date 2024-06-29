@@ -3,7 +3,6 @@
 cmake_minimum_required(VERSION 3.13)
 
 
-
 # Initialise pico_sdk from installed location
 # (note this can come from environment, CMake cache etc)
 # to manually set Pico SDK path, uncomment this with your path.
@@ -38,6 +37,7 @@ endif() #NOT BOOT
 
 #set(PICO_DEOPTIMIZED_DEBUG "1")
 #set(CMAKE_BUILD_TYPE "Debug")
+# set(CMAKE_BUILD_TYPE "Release")
 set(CMAKE_BUILD_TYPE "Release")
 #set(SKIP_PICO_MALLOC 1)
 
@@ -70,11 +70,12 @@ target_link_libraries(bootloader PRIVATE pico_stdlib hardware_flash pico_multico
 pico_add_extra_outputs(bootloader)
 set_linker_script(bootloader bootloader.ld)
 
-        pico_enable_stdio_uart(bootloader 1)
-    pico_enable_stdio_usb(bootloader 0)
-    pico_enable_stdio_semihosting(bootloader 0)
 
-set(PICO_COPY_TO_RAM 1)
+pico_enable_stdio_uart(bootloader 1)
+pico_enable_stdio_usb(bootloader 0)
+pico_enable_stdio_semihosting(bootloader 0)
+
+# set(PICO_COPY_TO_RAM 1)
 target_compile_definitions(
     bootloader PRIVATE
         PICO_DEFAULT_UART=0
@@ -83,8 +84,6 @@ target_compile_definitions(
     )
 else()
 ################################################################################
-
-set(USB_JOYSTICK 1) 
 
 if(USE_LTO)
     # Pico SDK must be patched to allow for LTO so it is not enabled by default.
@@ -109,11 +108,12 @@ add_compile_definitions(
         USE_ALARM=1
         PICO_STDIO_USB_CONNECT_WAIT_TIMEOUT_MS=250
         M62429_PIO=1
+        RP2_CLOCK_SPEED=366000
 )
 
 target_sources(picogus PRIVATE pico_reflash.c flash_settings.c)
 
-target_compile_definitions(picogus PRIVATE PICO_FLASH_SPI_CLKDIV=4)
+# target_compile_definitions(picogus PRIVATE PICO_FLASH_SPI_CLKDIV=4)
 
 if(PROJECT_TYPE STREQUAL "GUS")
     # target_compile_options(picogus PRIVATE -save-temps -fverbose-asm)
@@ -294,10 +294,12 @@ target_link_libraries(
     pico_stdlib
     pico_multicore
     pico_audio_i2s
+    pico_flash
     hardware_pio
     hardware_pll
     hardware_flash
     hardware_adc
+    hardware_exception
 )
 
 if(ASYNC_UART)
@@ -316,7 +318,8 @@ add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
 add_custom_target(
     program
     DEPENDS picogus
-    COMMAND openocd -f interface/cmsis-dap.cfg -f target/rp2040.cfg -c "adapter speed 5000\; program picogus.elf verify reset exit"
+    # COMMAND openocd -f interface/cmsis-dap.cfg -f target/rp2040.cfg -c "adapter speed 5000\; program picogus.elf verify reset exit"
+    COMMAND openocd -f interface/cmsis-dap.cfg -f target/rp2040.cfg -c "adapter speed 5000\; program picogus.bin verify reset exit 0x10000000"
 )
 
 endif()  # endif BOOTLOADER

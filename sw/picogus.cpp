@@ -714,7 +714,7 @@ void err_blink(void) {
 #include "pico_pic.h"
 #endif
 
-constexpr uint32_t rp2_clock = 366000;
+constexpr uint32_t rp2_clock = RP2_CLOCK_SPEED;
 constexpr float psram_clkdiv = (float)rp2_clock / 200000.0;
 constexpr float pwm_clkdiv = (float)rp2_clock / 22727.27;
 constexpr float iow_clkdiv = (float)rp2_clock / 183000.0;
@@ -749,7 +749,7 @@ int main()
     }
 
     // Load settings from flash
-    settings = loadSettings();
+    loadSettings(&settings);
     processSettings();
 
     // Determine board type. GPIO 29 is grounded on PicoGUS v2.0, and on a Pico, it's VSYS/3 (~1.666V)

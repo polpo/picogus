@@ -15,12 +15,15 @@
 
 #include "pico/stdlib.h"
 #include "pico/audio_i2s.h"
+#include "pico/flash.h"
 
 #ifdef USE_ALARM
 #include "pico_pic.h"
 #endif
 
+#ifdef USB_JOYSTICK
 #include "tusb.h"
+#endif
 
 #ifdef PSRAM
 #include "psram_spi.h"
@@ -80,6 +83,7 @@ struct audio_buffer_pool *init_audio() {
 // void __xip_cache("my_sub_section") (play_gus)(void) {
 void play_gus() {
     puts("starting core 1");
+    flash_safe_execute_core_init();
     uint32_t start, end;
 
 #ifdef USE_ALARM
@@ -117,8 +121,10 @@ void play_gus() {
 #endif
 #endif
     GUS_Setup();
+#ifdef USB_JOYSTICK
     // Init TinyUSB for joystick support
     tuh_init(BOARD_TUH_RHPORT);
+#endif
 
     struct audio_buffer_pool *ap = init_audio();
     for (;;) {
@@ -150,7 +156,9 @@ void play_gus() {
         */
         // gpio_xor_mask(1u << PICO_DEFAULT_LED_PIN);
         give_audio_buffer(ap, buffer);
+#ifdef USB_JOYSTICK
         // Service TinyUSB events
         tuh_task();
+#endif
     }
 }
