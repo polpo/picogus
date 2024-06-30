@@ -1,10 +1,11 @@
 #include <string.h>
+#include <stdio.h>
 
 #include "flash_settings.h"
 #include "hardware/flash.h"
 #include "hardware/sync.h"
-/* #include "pico/multicore.h" */
 #include "pico/stdlib.h"
+#include "pico/flash.h"
 
 static const Settings defaultSettings = {
     .magic = SETTINGS_MAGIC,
@@ -47,7 +48,7 @@ void loadSettings(Settings* settings)
     stdio_flush();
     // printf("copying settings to %u from %u with size %u", settings, XIP_BASE + SETTINGS_SECTOR, sizeof(Settings));
     stdio_flush();
-    memcpy(settings, XIP_BASE + SETTINGS_SECTOR, sizeof(Settings));
+    memcpy(settings, (void *)(XIP_BASE + SETTINGS_SECTOR), sizeof(Settings));
     stdio_flush();
 
     if (settings->magic != SETTINGS_MAGIC || settings->version != SETTINGS_VERSION) {

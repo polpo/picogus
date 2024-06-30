@@ -6,7 +6,7 @@
 #include <hardware/flash.h>
 #include "pico/multicore.h"
 #include "flash_firmware.h"
-#include "flash_settings.h"
+#include "../flash_settings.h"
 #include <stdio.h>
 
 static uint32_t sStart = 0;
