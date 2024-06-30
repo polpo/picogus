@@ -56,7 +56,18 @@
           "width": 0.0
         }
       ],
-      "drc_exclusions": [],
+      "drc_exclusions": [
+        "copper_sliver|194859574|44068458|00000000-0000-0000-0000-000000000000|F.Cu",
+        "copper_sliver|206786135|42504635|00000000-0000-0000-0000-000000000000|F.Cu",
+        "solder_mask_bridge|186490940|41377824|960dbca9-c01a-45ba-80f5-7cf1eb97f713|4fa7407d-4a82-4119-bf30-a3c14aa76f45",
+        "solder_mask_bridge|188873203|45111460|603c035e-4612-4849-bd08-77591c680632|6e629551-e402-4226-b782-bbd5f5455aa8",
+        "solder_mask_bridge|189756921|41876880|96e623b0-543d-4bfe-aaab-a68e1063923d|2c45273b-009c-4792-83c8-2f209a414d45",
+        "solder_mask_bridge|194671594|42788721|c6f9bd3d-6fa3-4c82-a770-26ada2db4049|cf9cdeed-9dbb-4972-b6d8-3f2286ffc95c",
+        "solder_mask_bridge|199164253|42289902|899dbe4e-3dae-4f46-9cff-d66c711c8266|8f78bba6-0a2e-4f35-a60f-0a4a0c0c1ce9",
+        "solder_mask_bridge|206290415|41875928|07e3dfaf-b371-4223-85bd-fe1890982e30|381feccd-b842-4b89-9950-d0912fdb16ce",
+        "solder_mask_bridge|208611725|41378776|8d05edc7-4fb8-42b7-8e1a-0c9e3989df06|4f0e2ac7-08a1-4725-b237-164114622128",
+        "solder_mask_bridge|216619520|41374963|bfeab6bc-5629-47cb-a739-419a14a3ec59|221d34ab-1fd1-4476-8c95-80f67dd68f05"
+      ],
       "meta": {
         "filename": "board_design_settings.json",
         "version": 2
@@ -510,6 +521,10 @@
       {
         "netclass": "pwr",
         "pattern": "GNDS"
+      },
+      {
+        "netclass": "USB",
+        "pattern": "/RP2040/RV_Data"
       }
     ]
   },
