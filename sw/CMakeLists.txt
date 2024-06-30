@@ -55,13 +55,6 @@ function(set_linker_script TARGET script)
 endfunction()
 
 
-if(USE_LTO)
-    # Pico SDK must be patched to allow for LTO so it is not enabled by default.
-    # To patch to Pico SDK, run:
-    # sed -i 's/WRAPPER_FUNC(x) __wrap_/WRAPPER_FUNC(x) __attribute__((used)) __wrap_/' "$PICO_SDK_PATH"/src/rp2_common/pico_platform/include/pico/platform.h
-    add_compile_options(-flto=jobserver)
-endif()
-
 # Global definitions across all targets
 add_compile_definitions(
     RP2_CLOCK_SPEED=366000
@@ -86,6 +79,13 @@ function(config_target TARGET_NAME MULTIFW)
         USE_ALARM=1
         M62429_PIO=1
     )
+
+    if(USE_LTO)
+        # Pico SDK must be patched to allow for LTO so it is not enabled by default.
+        # To patch to Pico SDK, run:
+        # sed -i 's/WRAPPER_FUNC(x) __wrap_/WRAPPER_FUNC(x) __attribute__((used)) __wrap_/' "$PICO_SDK_PATH"/src/rp2_common/pico_platform/include/pico/platform.h
+        target_compile_options(${TARGET_NAME} PRIVATE -flto=jobserver)
+    endif()
 
     target_sources(${TARGET_NAME} PRIVATE pico_reflash.c flash_settings.c)
     # target_compile_options(${TARGET_NAME} PRIVATE -save-temps -fverbose-asm)
