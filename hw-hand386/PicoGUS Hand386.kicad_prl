@@ -68,6 +68,12 @@
     "visible_layers": "fffffff_ffffffff",
     "zone_display_mode": 1
   },
+  "git": {
+    "repo_password": "",
+    "repo_type": "",
+    "repo_username": "",
+    "ssh_key": ""
+  },
   "meta": {
     "filename": "PicoGUS Hand386.kicad_prl",
     "version": 3

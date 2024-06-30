@@ -23,10 +23,3 @@ AudioJack3,J5,PJ-231F-4A,C707219
 AudioJack3,J1,PJ-321A,C879743
 47uF,"C1,C2",C_1206_3216Metric,C96123
 Bus_ISA_8bit,J3,EDGE-60,
-UART_TX,J6,PinHeader_1x02_P2.54mm_Vertical,
-Pico,U1,RPi_Pico_SMD_TH,
-Jumper_2_Bridged,JP1,PinHeader_1x02_P2.54mm_Vertical,
-SolderJumper_2_Closed,JP4,SolderJumper-2_P1.3mm_Bridged_RoundedPad1.0x1.5mm-nomask,
-SolderJumper_2_Closed,JP3,SolderJumper-2_P1.3mm_Bridged_RoundedPad1.0x1.5mm-nomask,
-SolderJumper_2_Closed,JP2,SolderJumper-2_P1.3mm_Bridged_RoundedPad1.0x1.5mm-nomask,
-Jumper_2_Open,JP5,PinHeader_1x02_P2.54mm_Vertical,
