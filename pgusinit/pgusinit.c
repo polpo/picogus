@@ -31,8 +31,18 @@ typedef enum {
     JOYSTICK_ONLY_MODE = 0x0f
 } card_mode_t;
 
+static const char *fwnames[8] = {
+    "INVALID",
+    "GUS",
+    "SB",
+    "MPU",
+    "TANDY",
+    "CMS",
+    "JOY"
+};
+
 void banner(void) {
-    printf("PicoGUSinit v2.1.6 (c) 2024 Ian Scott - licensed under the GNU GPL v2\n\n");
+    printf("PicoGUSinit v3.0.0 (c) 2024 Ian Scott - licensed under the GNU GPL v2\n\n");
 }
 
 const char* usage_by_card[] = {
@@ -60,9 +70,8 @@ void usage(char *argv0, card_mode_t mode) {
     fprintf(stderr, "    /j        - enable USB joystick support\n");
     fprintf(stderr, "    /v x      - set volume of the wavetable header. Scale 0-100, Default: 100\n");
     fprintf(stderr, "                (for PicoGUS v2.0 boards only)\n");
-    fprintf(stderr, "    /m x [d]  - change card mode to x (1=gus,2=sb,3=mpu,4=tandy,5=cms,6=joy)\n");
-    fprintf(stderr, "                the optional parameter 'd' makes the mode permanent at boot\n");
-    fprintf(stderr, "                (Only if pg-multi.uf2 is flashed)\n");
+    fprintf(stderr, "    /m x      - change card mode to x (gus, sb, mpu, tandy, cms, joy)\n");
+    fprintf(stderr, "    /s        - save settings to the card to persist on system boot\n");
     if (mode > GUS_MODE && mode < JOYSTICK_ONLY_MODE) {
         fprintf(stderr, "Sound Blaster/AdLib, MPU-401, Tandy, CMS modes only:\n");
         fprintf(stderr, "    /p x - set the (hex) base port address of the emulated card. Defaults:\n");
@@ -76,7 +85,7 @@ void usage(char *argv0, card_mode_t mode) {
     }
     if (mode == MPU_MODE) {
         fprintf(stderr, "MPU-401 mode only:\n");
-        fprintf(stderr, "    /s   - delay SYSEX (for rev.0 Roland MT-32)\n");
+        fprintf(stderr, "    /x   - delay SYSEX (for rev.0 Roland MT-32)\n");
         fprintf(stderr, "    /n   - fake all notes off (for Roland RA-50)\n");
         //              "................................................................................\n"
     }
@@ -174,7 +183,7 @@ void print_firmware_string(void) {
 }
 
 
-bool wait_for_read(uint8_t value) {
+bool wait_for_read(const uint8_t value) {
     for (uint32_t i = 0; i < 6000000; ++i) {    // Up to 6000000, for bigger fws like pg-multi.uf2, waiting for flash erase. If not, timeout and error.
         if (inp(DATA_PORT_HIGH) == value) {
             return true;
@@ -183,25 +192,29 @@ bool wait_for_read(uint8_t value) {
     return false;
 }
 
+void write_settings(void) {
+    outp(CONTROL_PORT, 0xE1); // Select save settings register
+    outp(DATA_PORT_HIGH, 0xff);
+    printf("Settings saved to flash.\n");
+    delay(100);
+}
+
 // For multifw
-int reboot_to_firmware(uint8_t value, int mode) {
-
-    const char *fwnames[6];
-    fwnames[0] = "GUS";
-    fwnames[1] = "SB";
-    fwnames[2] = "MPU";
-    fwnames[3] = "TANDY";
-    fwnames[4] = "CMS";
-    fwnames[5] = "JOY";
-
+int reboot_to_firmware(const uint8_t value, const bool permanent) {
     outp(CONTROL_PORT, 0xCC); // Knock on the door...
 
     outp(CONTROL_PORT, 0xE0); // Select firmware selection register
-    outpw(DATA_PORT_LOW, (0x0000 + value + (mode << 8))); // Send firmware number and permanent flag
+    outp(DATA_PORT_HIGH, value); // Send firmware number and permanent flag
+            delay(100);
 
-    printf("\nMode change requested. Rebooting to fw: %d (%s)...\n", value, fwnames[value-1]);
-    if (mode)
-            printf("%s mode selected as permanent on system boot.\n", fwnames[value-1]);
+    printf("\nMode change requested.\n");
+    if (permanent) {
+        write_settings();
+    }
+    printf("Rebooting to fw: %s...\n", fwnames[value]);
+    outp(CONTROL_PORT, 0xE2); // Select reboot register
+    outp(DATA_PORT_HIGH, 0xff);
+    delay(100);
 
     // Wait for card to reboot to new firmware
     if (!wait_for_read(0xDD)) {
@@ -327,8 +340,9 @@ int main(int argc, char* argv[]) {
     uint8_t mpu_fakeallnotesoff = 0;
     uint8_t enable_joystick = 0;
     uint8_t adlib_wait = 0;
-    uint8_t fwnum = 7;
-    int pMode = 0;
+    char mode_name[8] = {0};
+    int fw_num = 8;
+    bool permanent = false;
 
     banner();
     // Get magic value from port on PicoGUS that is not on real GUS
@@ -359,15 +373,10 @@ int main(int argc, char* argv[]) {
                 usage(argv[0], mode);
                 return 255;
             }
-            e = sscanf(argv[++i], "%hu", &fwnum);
-            if (e != 1 || fwnum < 1 || fwnum> 6) {
+            e = sscanf(argv[++i], "%7s", mode_name);
+            if (e != 1) {
                 usage(argv[0], mode);
                 return 5;
-            }
-            if (argc >= i + 2) {
-                if (!stricmp(argv[++i], "d")) {
-                    pMode = 1;
-                }               
             }
         } else if (stricmp(argv[i], "/4") == 0) {
             force_44k = 1;
@@ -423,7 +432,7 @@ int main(int argc, char* argv[]) {
                 usage(argv[0], mode);
                 return 4;
             }
-        } else if (stricmp(argv[i], "/s") == 0) {
+        } else if (stricmp(argv[i], "/x") == 0) {
             mpu_delaysysex = 1;
         } else if (stricmp(argv[i], "/n") == 0) {
             mpu_fakeallnotesoff = 1;
@@ -437,6 +446,8 @@ int main(int argc, char* argv[]) {
                 usage(argv[0], mode);
                 return 5;
             }
+        } else if (stricmp(argv[i], "/s") == 0) {
+            permanent = true;
         }
         ++i;
     }
@@ -456,8 +467,19 @@ int main(int argc, char* argv[]) {
         return write_firmware(fw_filename, protocol_got);
     }
 
-    if (fwnum < 7) {
-        return reboot_to_firmware(fwnum, pMode);
+    if (mode_name[0]) {
+        int i;
+        for (i = 1; i < 8; ++i) {
+            if (strnicmp(fwnames[i], mode_name, 7) == 0) {
+                fw_num = i;
+                break;
+            }
+        }
+        if (i == 8) {
+            usage(argv[0], mode);
+            return 255;
+        }
+        return reboot_to_firmware(fw_num, permanent);
     }
 
     outp(CONTROL_PORT, 0xf0); // Select hardware type register
@@ -557,6 +579,10 @@ int main(int argc, char* argv[]) {
         break;
     }
     printf("PicoGUS initialized!\n");
+
+    if (permanent) {
+        write_settings();
+    }
 
     return 0;
 }

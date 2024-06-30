@@ -16,8 +16,8 @@
 #endif
 
 #include "pico/stdlib.h"
-
 #include "pico/audio_i2s.h"
+#include "pico/flash.h"
 
 #ifdef USB_JOYSTICK
 #include "tusb.h"
@@ -78,6 +78,7 @@ struct audio_buffer_pool *init_audio() {
 
 void play_cms() {
     puts("starting core 1 CMS");
+    flash_safe_execute_core_init();
 
 #ifdef USB_JOYSTICK
     // Init TinyUSB for joystick support

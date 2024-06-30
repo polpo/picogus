@@ -9,6 +9,7 @@
 #include "hardware/clocks.h"
 
 #include "pico_reflash.h"
+#include "flash_settings.h"
 
 // For multifw
 #include "hardware/watchdog.h"
@@ -48,8 +49,8 @@ M62429* m62429;
 
 #ifdef SOUND_SB
 #include "opl.h"
-static uint16_t basePort = 0x220u;
-static uint16_t sb_port_test = basePort >> 4;
+static uint16_t basePort;
+static uint16_t sb_port_test;
 
 void play_adlib(void);
 extern "C" int OPL_Pico_Init(unsigned int);
@@ -61,8 +62,8 @@ extern void sbdsp_write(uint8_t address, uint8_t value);
 extern uint8_t sbdsp_read(uint8_t address);
 extern void sbdsp_init();
 extern void sbdsp_process();
-static uint16_t adlib_basePort = 0x388u;
-static bool adlib_wait = false;
+static uint16_t adlib_basePort;
+static bool adlib_wait;
 #endif
 
 #ifdef SOUND_GUS
@@ -70,21 +71,21 @@ static bool adlib_wait = false;
 
 #include "isa_dma.h"
 dma_inst_t dma_config;
-static uint16_t basePort = GUS_DEFAULT_PORT;
-static uint16_t gus_port_test = basePort >> 4 | 0x10;
+static uint16_t basePort;
+static uint16_t gus_port_test;
 void play_gus(void);
 #endif
 
 
 #ifdef SOUND_MPU
 #include "mpu401/export.h"
-static uint16_t basePort = 0x330u;
+static uint16_t basePort;
 void play_mpu(void);
 #endif
 
 #ifdef SOUND_TANDY
 #include "square/square.h"
-static uint16_t basePort = 0x2c0u;
+static uint16_t basePort;
 void play_tandy(void);
 
 #include "cmd_buffers.h"
@@ -92,7 +93,7 @@ tandy_buffer_t tandy_buffer = { {0}, 0, 0 };
 #endif
 
 #ifdef SOUND_CMS
-static uint16_t basePort = 0x220u;
+static uint16_t basePort;
 void play_cms(void);
 static uint8_t cms_detect = 0xFF;
 
@@ -101,7 +102,7 @@ cms_buffer_t cms_buffer = { {0}, 0, 0 };
 #endif
 
 #ifdef USB_JOYSTICK
-static uint16_t joyPort = 0xffffu;
+static uint16_t joyPort;
 #ifdef USB_JOYSTICK_ONLY
 void play_usb(void);
 #endif
@@ -121,6 +122,10 @@ static bool control_active = false;
 static uint8_t sel_reg = 0;
 static uint16_t cur_data = 0;
 static uint32_t cur_read = 0;
+static bool queueSaveSettings = false;
+static bool queueReboot = false;
+
+Settings settings;
 
 #define IOW_PIO_SM 0
 #define IOR_PIO_SM 1
@@ -165,6 +170,8 @@ __force_inline void select_picogus(uint8_t value) {
         break;
 #endif
     case 0xE0: // Select firmware boot mode register
+    case 0xE1: // Select save settings register
+    case 0xE2: // Select reboot register
         break;
     case 0xF0: // Hardware version
         break;
@@ -183,11 +190,6 @@ __force_inline void write_picogus_low(uint8_t value) {
     case 0x05: // Adlib Base port
         basePort_tmp = value;
         break;
-    // For multifw
-    case 0xE0:
-        // set firmware num and perm flag
-        multifw_tmp = value;
-        break;
     }
 }
 
@@ -198,43 +200,62 @@ __force_inline void write_picogus_high(uint8_t value) {
         basePort = (value << 8) | basePort_tmp;
 #endif
 #ifdef SOUND_GUS
+        settings.GUS.basePort = basePort;
         gus_port_test = basePort >> 4 | 0x10;
         // GUS_SetPort(basePort);
 #endif
 #ifdef SOUND_SB
+        settings.SB.basePort = basePort;
         sb_port_test = basePort >> 4;
+#endif
+#ifdef SOUND_MPU
+        settings.MPU.basePort = basePort;
+#endif
+#ifdef SOUND_TANDY
+        settings.Tandy.basePort = basePort;
+#endif
+#ifdef SOUND_CMS
+        settings.CMS.basePort = basePort;
 #endif
         break;
     case 0x05: // Adlib Base port
 #ifdef SOUND_SB
         adlib_basePort = (value << 8) | basePort_tmp;
+        settings.SB.oplBasePort = adlib_basePort;
 #endif
         break;
     case 0x0f: // enable joystick
 #ifdef USB_JOYSTICK
         joyPort = value ? 0x201u : 0xffff;
+        settings.Joy.basePort = joyPort;
 #endif
         break;
 #ifdef SOUND_GUS
     case 0x10: // Audio buffer size
         // Value is sent by pgusinit as the size - 1, so we need to add 1 back to it
         GUS_SetAudioBuffer(value + 1);
+        settings.GUS.audioBuffer = value + 1;
         break;
     case 0x11: // DMA interval
         GUS_SetDMAInterval(value);
+        settings.GUS.dmaInterval = value;
         break;
     case 0x12: // Force 44k output
         GUS_SetFixed44k(value);
+        settings.GUS.force44k = value;
         break;
 #endif
     case 0x20: // Wavetable mixer volume
         if (BOARD_TYPE == PICOGUS_2) {
             m62429->setVolume(M62429_BOTH, value);
+            settings.Global.waveTableVolume = value;
         }
         break;
 #ifdef SOUND_MPU
     case 0x21: // MIDI emulation flags
         MPU401_Init(value & 0x1 /* delaysysex */, value & 0x2 /* fakeallnotesoff */);
+        settings.MPU.delaySysex = value & 0x1;
+        settings.MPU.fakeAllNotesOff = value & 0x2;
         break;
 #endif
 #ifdef SOUND_SB
@@ -244,10 +265,17 @@ __force_inline void write_picogus_high(uint8_t value) {
 #endif
     // For multifw
     case 0xE0:
-            // set firmware num, perm flag and reboot
-	        watchdog_hw->scratch[3] = ((value << 8) | multifw_tmp);
-	        watchdog_reboot(0, 0, 0);
-            break;
+        // set firmware num, perm flag and reboot
+        settings.startupMode = value;
+        printf("requesting startup mode: %u\n", value);
+        break;
+    case 0xE1:
+        queueSaveSettings = true;
+        break;
+    case 0xE2:
+        watchdog_hw->scratch[3] = settings.startupMode;
+        printf("rebooting into mode: %u\n", settings.startupMode);
+        watchdog_reboot(0, 0, 0);
     case 0xff: // Firmware write
         pico_firmware_write(value);
         break;
@@ -345,6 +373,30 @@ __force_inline uint8_t read_picogus_high(void) {
         break;
     }
 }
+
+
+void processSettings(void) {
+#ifdef SOUND_SB
+    basePort = settings.SB.basePort;
+    sb_port_test = basePort >> 4;
+    adlib_basePort = settings.SB.oplBasePort;
+    adlib_wait = settings.SB.oplSpeedSensitive;
+#endif
+#ifdef SOUND_GUS
+    basePort = settings.GUS.basePort;
+    gus_port_test = basePort >> 4 | 0x10;
+#endif
+#ifdef SOUND_MPU
+    basePort = settings.MPU.basePort;
+#endif
+#ifdef SOUND_CMS
+    basePort = settings.CMS.basePort;
+#endif
+#ifdef SOUND_TANDY
+    basePort = settings.Tandy.basePort;
+#endif
+}
+
 
 static constexpr uint32_t IO_WAIT = 0xffffffffu;
 static constexpr uint32_t IO_END = 0x0u;
@@ -530,6 +582,10 @@ __force_inline void handle_iow(void) {
     }
     // Fallthrough if no match, or for slow write, reset PIO
     pio_sm_put(pio0, IOW_PIO_SM, IO_END);
+    if (queueSaveSettings) {
+        saveSettings(&settings);
+        queueSaveSettings = false;
+    }
 }
 
 __force_inline void handle_ior(void) {
@@ -658,7 +714,7 @@ void err_blink(void) {
 #include "pico_pic.h"
 #endif
 
-constexpr uint32_t rp2_clock = 366000;
+constexpr uint32_t rp2_clock = RP2_CLOCK_SPEED;
 constexpr float psram_clkdiv = (float)rp2_clock / 200000.0;
 constexpr float pwm_clkdiv = (float)rp2_clock / 22727.27;
 constexpr float iow_clkdiv = (float)rp2_clock / 183000.0;
@@ -691,6 +747,10 @@ int main()
     } else if(*reset_reason & VREG_AND_CHIP_RESET_CHIP_RESET_HAD_PSM_RESTART_BITS) {
         puts("I was reset due the debug port");
     }
+
+    // Load settings from flash
+    loadSettings(&settings);
+    processSettings();
 
     // Determine board type. GPIO 29 is grounded on PicoGUS v2.0, and on a Pico, it's VSYS/3 (~1.666V)
     // GPIO 25 must be high to read GPIO 29 on the Pico W
@@ -760,11 +820,7 @@ int main()
         m62429->begin(24, 25, pio1, -1);
 #else
         m62429->begin(24, 25);
-#endif
-#ifdef SOUND_MPU
-        m62429->setVolume(M62429_BOTH, 100);
-#else // SOUND_MPU
-        m62429->setVolume(M62429_BOTH, 0);
+        m62429->setVolume(M62429_BOTH, settings.Global.waveTableVolume);
 #endif // SOUND_MPU
     }
 
@@ -831,6 +887,9 @@ int main()
 #ifdef SOUND_GUS
     puts("Creating GUS");
     GUS_OnReset();
+    GUS_SetAudioBuffer(settings.GUS.audioBuffer);
+    GUS_SetDMAInterval(settings.GUS.dmaInterval);
+    GUS_SetFixed44k(settings.GUS.force44k);
     multicore_launch_core1(&play_gus);
 #endif // SOUND_GUS
 

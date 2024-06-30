@@ -1,0 +1,6 @@
+MEMORY
+{
+    FLASH(rx) : ORIGIN = 0x10000000 + ${FW_ORIGIN}, LENGTH = ${FW_SIZE_ALIGNED}
+}
+
+INCLUDE fw_memmap_c2ram.ld
