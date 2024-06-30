@@ -26,7 +26,7 @@ jobs:
       # If this were to reference changing branches (like "master"), this caching step must be removed!!!
       - name: Cache Pico-SDK and Extras 
         id: cache-sdk
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: ${{github.workspace}}/pico/
           key: ${{ env.PICOSDK_VER }}-${{ env.PICOEXTRA_VER }}          
