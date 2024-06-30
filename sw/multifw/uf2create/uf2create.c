@@ -84,8 +84,8 @@ int main(int argc, char *argv[])
 
 	fclose(f_output);
 
-        printf("Creating all.bin");
-        f_output = fopen("all.bin", "wb");
+        printf("Creating picogus.bin\n");
+        f_output = fopen("picogus.bin", "wb");
         fwrite(flashbuffer, total_size, 1, f_output);
         fclose(f_output);
 

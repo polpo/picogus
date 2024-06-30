@@ -13,17 +13,14 @@ cmake_minimum_required(VERSION 3.13)
 include(pico_sdk_import.cmake)
 
 project(picogus
-    VERSION "1.2.6"
+    VERSION "2.0.0"
     LANGUAGES C CXX ASM
 )
-
-if( NOT (PROJECT_TYPE STREQUAL "BOOT"))
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
 
 include(pico_extras_import.cmake)
-
 
 set(PICO_BOARD_HEADER_DIRS ${CMAKE_CURRENT_LIST_DIR})
 set(PICO_BOARD picogus2)
@@ -33,15 +30,10 @@ set(PICO_COPY_TO_RAM 1)
 # This is needed to support tusb_xinput
 set(PICO_TINYUSB_PATH ${CMAKE_CURRENT_LIST_DIR}/tinyusb)
 
-endif() #NOT BOOT
-
 #set(PICO_DEOPTIMIZED_DEBUG "1")
 #set(CMAKE_BUILD_TYPE "Debug")
-# set(CMAKE_BUILD_TYPE "Release")
 set(CMAKE_BUILD_TYPE "Release")
 #set(SKIP_PICO_MALLOC 1)
-
-
 
 if(NOT PROJECT_TYPE)
     set(PROJECT_TYPE "GUS")
@@ -52,7 +44,7 @@ endif()
 pico_sdk_init()
 
 ################################################################################
-# Helper function
+# Helper function for setting linker script
 function(set_linker_script TARGET script)
     target_link_directories(${TARGET} PRIVATE ${CMAKE_SOURCE_DIR}/multifw)
     pico_set_linker_script(${TARGET} ${script})
@@ -62,10 +54,6 @@ function(set_linker_script TARGET script)
     pico_add_link_depend(${TARGET} ${script})
 endfunction()
 
-# if(PROJECT_TYPE STREQUAL "BOOT")
-
-# else()
-################################################################################
 
 if(USE_LTO)
     # Pico SDK must be patched to allow for LTO so it is not enabled by default.
@@ -83,6 +71,8 @@ add_compile_definitions(
     PICO_STDIO_USB_CONNECT_WAIT_TIMEOUT_MS=250
 )
 
+################################################################################
+# Helper function for common firmware build
 function(config_target TARGET_NAME MULTIFW)
     # Add executable. Default name is the project name, version 0.1
     add_executable(${TARGET_NAME} picogus.cpp)
@@ -116,7 +106,6 @@ function(config_target TARGET_NAME MULTIFW)
     target_sources(${TARGET_NAME} PRIVATE M62429/M62429.cpp)
     pico_generate_pio_header(${TARGET_NAME} ${CMAKE_CURRENT_LIST_DIR}/M62429/M62429.pio)
     pico_generate_pio_header(${TARGET_NAME} ${CMAKE_CURRENT_LIST_DIR}/isa_io.pio)
-    pico_generate_pio_header(${TARGET_NAME} ${CMAKE_CURRENT_LIST_DIR}/isa_dma.pio)
 
     target_link_libraries(
         ${TARGET_NAME}
@@ -137,56 +126,12 @@ if(USB_JOYSTICK)
     # Joystick stuff
     add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/tusb_xinput)
 endif()
-
 add_subdirectory(rp2040-psram)
 add_subdirectory(opl)
 
-add_custom_command(
-    OUTPUT
-        "${CMAKE_BINARY_DIR}/generated/multifw/flash_firmware.h"
-        "${CMAKE_BINARY_DIR}/pg-gus-multifw.ld"
-        "${CMAKE_BINARY_DIR}/pg-sb-multifw.ld"
-        "${CMAKE_BINARY_DIR}/pg-mpu-multifw.ld"
-        "${CMAKE_BINARY_DIR}/pg-tandy-multifw.ld"
-        "${CMAKE_BINARY_DIR}/pg-cms-multifw.ld"
-        "${CMAKE_BINARY_DIR}/pg-joy-multifw.ld"
-    COMMAND
-        ${CMAKE_COMMAND}
-        -DFLASH_FIRMWARE_H_IN="${CMAKE_SOURCE_DIR}/multifw/flash_firmware.h.in"
-        -DFLASH_FIRMWARE_H="${CMAKE_BINARY_DIR}/generated/multifw/flash_firmware.h"
-        -DFW_LD_IN="${CMAKE_SOURCE_DIR}/multifw/firmware.ld.in"
-        -DFW_1_BIN="${CMAKE_BINARY_DIR}/pg-gus.bin"
-        -DFW_1_LD="${CMAKE_BINARY_DIR}/pg-gus-multifw.ld"
-        -DFW_2_BIN="${CMAKE_BINARY_DIR}/pg-sb.bin"
-        -DFW_2_LD="${CMAKE_BINARY_DIR}/pg-sb-multifw.ld"
-        -DFW_3_BIN="${CMAKE_BINARY_DIR}/pg-mpu.bin"
-        -DFW_3_LD="${CMAKE_BINARY_DIR}/pg-mpu-multifw.ld"
-        -DFW_4_BIN="${CMAKE_BINARY_DIR}/pg-tandy.bin"
-        -DFW_4_LD="${CMAKE_BINARY_DIR}/pg-tandy-multifw.ld"
-        -DFW_5_BIN="${CMAKE_BINARY_DIR}/pg-cms.bin"
-        -DFW_5_LD="${CMAKE_BINARY_DIR}/pg-cms-multifw.ld"
-        -DFW_6_BIN="${CMAKE_BINARY_DIR}/pg-joy.bin"
-        -DFW_6_LD="${CMAKE_BINARY_DIR}/pg-joy-multifw.ld"
-        -P ${CMAKE_SOURCE_DIR}/multifw/generate_ld.cmake
-    DEPENDS
-        "${CMAKE_SOURCE_DIR}/multifw/firmware.ld.in"
-        pg-gus
-        pg-sb
-        pg-mpu
-        pg-tandy
-        pg-cms
-        pg-joy
-)
-add_custom_target(generate_flash_firmware_h DEPENDS
-    "${CMAKE_BINARY_DIR}/generated/multifw/flash_firmware.h"
-    "${CMAKE_BINARY_DIR}/pg-gus-multifw.ld"
-    "${CMAKE_BINARY_DIR}/pg-sb-multifw.ld"
-    "${CMAKE_BINARY_DIR}/pg-mpu-multifw.ld"
-    "${CMAKE_BINARY_DIR}/pg-tandy-multifw.ld"
-    "${CMAKE_BINARY_DIR}/pg-cms-multifw.ld"
-    "${CMAKE_BINARY_DIR}/pg-joy-multifw.ld"
-)
 
+################################################################################
+# Build GUS firmware
 function(build_gus TARGET_NAME MULTIFW)
     config_target(${TARGET_NAME} ${MULTIFW})
     pico_set_program_name(${TARGET_NAME} "picogus-gus")
@@ -211,16 +156,15 @@ function(build_gus TARGET_NAME MULTIFW)
         SCALE_22K_TO_44K=1
         # FORCE_28CH_27CH=1
     )
+    pico_generate_pio_header(${TARGET_NAME} ${CMAKE_CURRENT_LIST_DIR}/isa_dma.pio)
     target_link_libraries(${TARGET_NAME} rp2040-psram hardware_interp)
     pico_enable_stdio_uart(${TARGET_NAME} 1)
     pico_enable_stdio_usb(${TARGET_NAME} 0)
     pico_enable_stdio_semihosting(${TARGET_NAME} 0)
 endfunction()
-build_gus(pg-gus FALSE)
-build_gus(pg-gus-multifw TRUE)
-add_dependencies(pg-gus-multifw pg-gus generate_flash_firmware_h)
 
-
+################################################################################
+# Build SB firmware
 function(build_sb TARGET_NAME MULTIFW)
     config_target(${TARGET_NAME} ${MULTIFW})
     pico_set_program_name(${TARGET_NAME} "picogus-sb")
@@ -235,14 +179,14 @@ function(build_sb TARGET_NAME MULTIFW)
         EMU8950_ASM=1
         # PICOW=1
     )
+    pico_generate_pio_header(${TARGET_NAME} ${CMAKE_CURRENT_LIST_DIR}/isa_dma.pio)
     pico_enable_stdio_uart(${TARGET_NAME} 1)
     pico_enable_stdio_usb(${TARGET_NAME} 0)
     pico_enable_stdio_semihosting(${TARGET_NAME} 0)
 endfunction()
-build_sb(pg-sb FALSE)
-build_sb(pg-sb-multifw TRUE)
-add_dependencies(pg-sb-multifw pg-sb generate_flash_firmware_h)
 
+################################################################################
+# Build MPU firmware
 function(build_mpu TARGET_NAME MULTIFW)
     config_target(${TARGET_NAME} ${MULTIFW})
     pico_set_program_name(${TARGET_NAME} "picogus-mpu401")
@@ -264,11 +208,9 @@ function(build_mpu TARGET_NAME MULTIFW)
     endif()
     pico_enable_stdio_semihosting(${TARGET_NAME} 0)
 endfunction()
-build_mpu(pg-mpu FALSE)
-build_mpu(pg-mpu-multifw TRUE)
-add_dependencies(pg-mpu-multifw pg-mpu generate_flash_firmware_h)
 
-
+################################################################################
+# Build Tandy firmware
 function(build_tandy TARGET_NAME MULTIFW)
     config_target(${TARGET_NAME} ${MULTIFW})
     pico_set_program_name(${TARGET_NAME} "picogus-tandy")
@@ -285,11 +227,9 @@ function(build_tandy TARGET_NAME MULTIFW)
     pico_enable_stdio_usb(${TARGET_NAME} 0)
     pico_enable_stdio_semihosting(${TARGET_NAME} 0)
 endfunction()
-build_tandy(pg-tandy FALSE)
-build_tandy(pg-tandy-multifw TRUE)
-add_dependencies(pg-tandy-multifw pg-tandy generate_flash_firmware_h)
 
-
+################################################################################
+# Build CMS firmware
 function(build_cms TARGET_NAME MULTIFW)
     config_target(${TARGET_NAME} ${MULTIFW})
     pico_set_program_name(${TARGET_NAME} "picogus-cms")
@@ -305,11 +245,9 @@ function(build_cms TARGET_NAME MULTIFW)
     pico_enable_stdio_usb(${TARGET_NAME} 0)
     pico_enable_stdio_semihosting(${TARGET_NAME} 0)
 endfunction()
-build_cms(pg-cms FALSE)
-build_cms(pg-cms-multifw TRUE)
-add_dependencies(pg-cms-multifw pg-cms generate_flash_firmware_h)
 
-
+################################################################################
+# Build joystick-only firmware
 function(build_joy TARGET_NAME MULTIFW)
     config_target(${TARGET_NAME} ${MULTIFW})
     pico_set_program_name(${TARGET_NAME} "picogus-joy")
@@ -325,58 +263,128 @@ function(build_joy TARGET_NAME MULTIFW)
      pico_enable_stdio_usb(${TARGET_NAME} 0)
      pico_enable_stdio_semihosting(${TARGET_NAME} 0)
 endfunction()
-build_joy(pg-joy FALSE)
-build_joy(pg-joy-multifw TRUE)
-add_dependencies(pg-joy-multifw pg-joy generate_flash_firmware_h)
 
 
-add_executable(bootloader)
-target_sources(bootloader PRIVATE multifw/bootloader.c flash_settings.c)
-target_link_libraries(bootloader PRIVATE pico_stdlib hardware_flash pico_flash hardware_exception)
-pico_add_extra_outputs(bootloader)
-# set_linker_script(bootloader ${CMAKE_SOURCE_DIR}/multifw/bootloader.ld)
-target_include_directories(bootloader PRIVATE ${CMAKE_BINARY_DIR}/generated/multifw)
-pico_enable_stdio_uart(bootloader 1)
-pico_enable_stdio_usb(bootloader 0)
-pico_enable_stdio_semihosting(bootloader 0)
-add_dependencies(bootloader generate_flash_firmware_h)
+################################################################################
+# Build "multifw" - all firmwares in one UF2
+if(PROJECT_TYPE STREQUAL "MULTIFW")
+    set(FW_TARGET picogus)
+    add_custom_command(
+        OUTPUT
+            "${CMAKE_BINARY_DIR}/generated/multifw/flash_firmware.h"
+            "${CMAKE_BINARY_DIR}/pg-gus-multifw.ld"
+            "${CMAKE_BINARY_DIR}/pg-sb-multifw.ld"
+            "${CMAKE_BINARY_DIR}/pg-mpu-multifw.ld"
+            "${CMAKE_BINARY_DIR}/pg-tandy-multifw.ld"
+            "${CMAKE_BINARY_DIR}/pg-cms-multifw.ld"
+            "${CMAKE_BINARY_DIR}/pg-joy-multifw.ld"
+        COMMAND
+            ${CMAKE_COMMAND}
+            -DFLASH_FIRMWARE_H_IN="${CMAKE_SOURCE_DIR}/multifw/flash_firmware.h.in"
+            -DFLASH_FIRMWARE_H="${CMAKE_BINARY_DIR}/generated/multifw/flash_firmware.h"
+            -DFW_LD_IN="${CMAKE_SOURCE_DIR}/multifw/firmware.ld.in"
+            -DFW_1_BIN="${CMAKE_BINARY_DIR}/pg-gus.bin"
+            -DFW_1_LD="${CMAKE_BINARY_DIR}/pg-gus-multifw.ld"
+            -DFW_2_BIN="${CMAKE_BINARY_DIR}/pg-sb.bin"
+            -DFW_2_LD="${CMAKE_BINARY_DIR}/pg-sb-multifw.ld"
+            -DFW_3_BIN="${CMAKE_BINARY_DIR}/pg-mpu.bin"
+            -DFW_3_LD="${CMAKE_BINARY_DIR}/pg-mpu-multifw.ld"
+            -DFW_4_BIN="${CMAKE_BINARY_DIR}/pg-tandy.bin"
+            -DFW_4_LD="${CMAKE_BINARY_DIR}/pg-tandy-multifw.ld"
+            -DFW_5_BIN="${CMAKE_BINARY_DIR}/pg-cms.bin"
+            -DFW_5_LD="${CMAKE_BINARY_DIR}/pg-cms-multifw.ld"
+            -DFW_6_BIN="${CMAKE_BINARY_DIR}/pg-joy.bin"
+            -DFW_6_LD="${CMAKE_BINARY_DIR}/pg-joy-multifw.ld"
+            -P ${CMAKE_SOURCE_DIR}/multifw/generate_ld.cmake
+        DEPENDS
+            "${CMAKE_SOURCE_DIR}/multifw/firmware.ld.in"
+            pg-gus
+            pg-sb
+            pg-mpu
+            pg-tandy
+            pg-cms
+            pg-joy
+    )
+    add_custom_target(generate_flash_firmware_h DEPENDS
+        "${CMAKE_BINARY_DIR}/generated/multifw/flash_firmware.h"
+        "${CMAKE_BINARY_DIR}/pg-gus-multifw.ld"
+        "${CMAKE_BINARY_DIR}/pg-sb-multifw.ld"
+        "${CMAKE_BINARY_DIR}/pg-mpu-multifw.ld"
+        "${CMAKE_BINARY_DIR}/pg-tandy-multifw.ld"
+        "${CMAKE_BINARY_DIR}/pg-cms-multifw.ld"
+        "${CMAKE_BINARY_DIR}/pg-joy-multifw.ld"
+    )
 
-if (NOT UF2CREATE_FOUND)
-    set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_SOURCE_DIR}/multifw)
-    # Needs to be an external project so it can be built as a native binary outside of the Pico SDK
-    find_package(UF2CREATE)
-    # Rebuild uf2create if flash_firmware.h is regenerated
-    ExternalProject_Add_StepDependencies(UF2CREATEBuild build generate_flash_firmware_h)
+    build_gus(pg-gus FALSE)
+    build_gus(pg-gus-multifw TRUE)
+    add_dependencies(pg-gus-multifw pg-gus generate_flash_firmware_h)
+    build_sb(pg-sb FALSE)
+    build_sb(pg-sb-multifw TRUE)
+    add_dependencies(pg-sb-multifw pg-sb generate_flash_firmware_h)
+    build_mpu(pg-mpu FALSE)
+    build_mpu(pg-mpu-multifw TRUE)
+    add_dependencies(pg-mpu-multifw pg-mpu generate_flash_firmware_h)
+    build_tandy(pg-tandy FALSE)
+    build_tandy(pg-tandy-multifw TRUE)
+    add_dependencies(pg-tandy-multifw pg-tandy generate_flash_firmware_h)
+    build_cms(pg-cms FALSE)
+    build_cms(pg-cms-multifw TRUE)
+    add_dependencies(pg-cms-multifw pg-cms generate_flash_firmware_h)
+    build_joy(pg-joy FALSE)
+    build_joy(pg-joy-multifw TRUE)
+    add_dependencies(pg-joy-multifw pg-joy generate_flash_firmware_h)
+
+    add_executable(bootloader)
+    target_sources(bootloader PRIVATE multifw/bootloader.c flash_settings.c)
+    target_link_libraries(bootloader PRIVATE pico_stdlib hardware_flash pico_flash hardware_exception)
+    pico_add_extra_outputs(bootloader)
+    # set_linker_script(bootloader ${CMAKE_SOURCE_DIR}/multifw/bootloader.ld)
+    target_include_directories(bootloader PRIVATE ${CMAKE_BINARY_DIR}/generated/multifw)
+    pico_enable_stdio_uart(bootloader 1)
+    pico_enable_stdio_usb(bootloader 0)
+    pico_enable_stdio_semihosting(bootloader 0)
+    add_dependencies(bootloader generate_flash_firmware_h)
+
+    if (NOT UF2CREATE_FOUND)
+        set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_SOURCE_DIR}/multifw)
+        # Needs to be an external project so it can be built as a native binary outside of the Pico SDK
+        find_package(UF2CREATE)
+        # Rebuild uf2create if flash_firmware.h is regenerated
+        ExternalProject_Add_StepDependencies(UF2CREATEBuild build generate_flash_firmware_h)
+    endif()
+    add_custom_command(
+        OUTPUT picogus.uf2
+        DEPENDS bootloader pg-gus-multifw pg-sb-multifw pg-mpu-multifw pg-tandy-multifw pg-cms-multifw pg-joy-multifw
+        COMMAND UF2CREATE bootloader.bin pg-gus-multifw.bin pg-sb-multifw.bin pg-mpu-multifw.bin pg-tandy-multifw.bin pg-cms-multifw.bin pg-joy-multifw.bin picogus.uf2
+    )
+    add_custom_target(picogus ALL DEPENDS picogus.uf2)
+
+################################################################################
+# Builds for individual "legacy" firmware modes
+elseif(PROJECT_TYPE STREQUAL "GUS")
+    set(FW_TARGET pg-gus)
+    build_gus(pg-gus FALSE)
+elseif(PROJECT_TYPE STREQUAL "SB")
+    set(FW_TARGET pg-sb)
+    build_sb(pg-sb FALSE)
+elseif(PROJECT_TYPE STREQUAL "MPU")
+    set(FW_TARGET pg-mpu)
+    build_mpu(pg-mpu FALSE)
+elseif(PROJECT_TYPE STREQUAL "TANDY")
+    set(FW_TARGET pg-tandy)
+    build_tandy(pg-tandy FALSE)
+elseif(PROJECT_TYPE STREQUAL "CMS")
+    set(FW_TARGET pg-cms)
+    build_cms(pg-cms FALSE)
+elseif(PROJECT_TYPE STREQUAL "JOY")
+    set(FW_TARGET pg-joyex)
+    build_joy(pg-joyex FALSE)
 endif()
-# add_custom_command(TARGET bootloader POST_BUILD
-#     COMMAND UF2CREATE bootloader.bin pg-gus-multifw.bin pg-sb-multifw.bin pg-mpu-multifw.bin pg-tandy-multifw.bin pg-cms-multifw.bin pg-joy-multifw.bin pg-multi.uf2
-# )
-add_custom_command(
-    OUTPUT picogus.uf2
-    DEPENDS bootloader pg-gus-multifw pg-sb-multifw pg-mpu-multifw pg-tandy-multifw pg-cms-multifw pg-joy-multifw
-    COMMAND UF2CREATE bootloader.bin pg-gus-multifw.bin pg-sb-multifw.bin pg-mpu-multifw.bin pg-tandy-multifw.bin pg-cms-multifw.bin pg-joy-multifw.bin picogus.ufw
-)
-add_custom_target(multifw ALL DEPENDS picogus.uf2)
 
-# print size
-# add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-#     COMMAND arm-none-eabi-size --format=berkeley "${PROJECT_NAME}.elf")
-
+################################################################################
+# Optional target to program built firmware via openocd
 add_custom_target(
     program
-    DEPENDS picogus
-    # COMMAND openocd -f interface/cmsis-dap.cfg -f target/rp2040.cfg -c "adapter speed 5000\; program picogus.elf verify reset exit"
-    COMMAND openocd -f interface/cmsis-dap.cfg -f target/rp2040.cfg -c "adapter speed 5000\; program picogus.bin verify reset exit 0x10000000"
+    DEPENDS ${FW_TARGET}
+    COMMAND openocd -f interface/cmsis-dap.cfg -f target/rp2040.cfg -c "adapter speed 5000\; program ${FW_TARGET}.bin verify reset exit 0x10000000"
 )
-
-# endif()  # endif BOOTLOADER
-
-# add_custom_command(
-#     OUTPUT pg-multi.uf2
-#     COMMAND uf2create picogus.bin pg-multi.uf2
-#     DEPENDS picogus
-# )
-# add_custom_target(pg-multi
-#     DEPENDS pg-multi.uf2
-# )
-

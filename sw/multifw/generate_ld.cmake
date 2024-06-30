@@ -1,3 +1,7 @@
+# Script to generate the linker scripts for each firmware with the firmware size and offset (aligned to 1024 bytes)
+# As well as the flash_firmware.h file used by the bootloader and uf2create utility
+
+# Initial fixed offset of 32768 for the bootloader
 set(FW_ORIGIN "32768")
 
 macro(generate_ld_file FW_FILE FW_LD_FILE)

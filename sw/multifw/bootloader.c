@@ -4,7 +4,6 @@
 #include "pico/stdlib.h"
 #include "hardware/structs/watchdog.h"
 #include <hardware/flash.h>
-#include "pico/multicore.h"
 #include "flash_firmware.h"
 #include "../flash_settings.h"
 #include <stdio.h>

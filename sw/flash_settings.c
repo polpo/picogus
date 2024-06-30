@@ -45,14 +45,13 @@ static const Settings defaultSettings = {
 #define SETTINGS_SECTOR (PICO_FLASH_SIZE_BYTES - FLASH_SECTOR_SIZE)   //  last sector of a 2M flash (adjust for other flash sizes if needed)
 void loadSettings(Settings* settings)
 {
-    stdio_flush();
-    // printf("copying settings to %u from %u with size %u", settings, XIP_BASE + SETTINGS_SECTOR, sizeof(Settings));
-    stdio_flush();
+    printf("copying settings to %u from %u with size %u\n", settings, XIP_BASE + SETTINGS_SECTOR, sizeof(Settings));
     memcpy(settings, (void *)(XIP_BASE + SETTINGS_SECTOR), sizeof(Settings));
-    stdio_flush();
+    /* stdio_flush(); */
 
     if (settings->magic != SETTINGS_MAGIC || settings->version != SETTINGS_VERSION) {
         // Initialize settings to default
+        puts("default settings");
         stdio_flush();
         memcpy(settings, &defaultSettings, sizeof(Settings));
         return;
@@ -80,7 +79,7 @@ void saveSettings(const Settings* settings)
     memcpy(data, settings, sizeof(Settings));
     printf("doing settings save: ");
     int result = flash_safe_execute(saveSettingsSafe, data, 100);
-    if (!result) {
+    if (result) {
         printf("uh oh... %d", result);
     }
     /*
