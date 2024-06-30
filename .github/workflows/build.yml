@@ -20,7 +20,7 @@ jobs:
       - name: Install Arm GNU Toolchain (arm-none-eabi-gcc)
         uses: carlosperate/arm-none-eabi-gcc-action@v1
         with:
-          release: '12.3.Rel1'
+          release: '13.2.Rel1'
 
       # Since we reference stable versions of Pico-SDK and pico-extras, we can cache their downloads.
       # If this were to reference changing branches (like "master"), this caching step must be removed!!!
@@ -52,58 +52,18 @@ jobs:
       - name: Patch Pico SDK to allow LTO
         run: sed -i 's/WRAPPER_FUNC(x) __wrap_/WRAPPER_FUNC(x) __attribute__((used)) __wrap_/' ${{env.PICO_SDK_PATH}}/src/rp2_common/pico_platform/include/pico/platform.h
 
-      - name: Build GUS Firmware
+      - name: Build Mega Firmware
         shell: bash
         working-directory: ${{github.workspace}}/build
         run: |
           mkdir -p $OUTPUT_DIR
-          cmake $GITHUB_WORKSPACE/sw -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DPROJECT_TYPE="GUS" -DUSE_LTO=1 -DUSB_JOYSTICK=1
+          cmake $GITHUB_WORKSPACE/sw -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DPROJECT_TYPE="MULTIFW" -DUSE_LTO=1 -DUSB_JOYSTICK=1
           cmake --build . --config $BUILD_TYPE --parallel $(nproc)
-          cp picogus.uf2 $OUTPUT_DIR/pg-gus.uf2
-
-      - name: Build SB Firmware
-        working-directory: ${{github.workspace}}/build
-        shell: bash
-        run: |
-          cmake $GITHUB_WORKSPACE/sw -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DPROJECT_TYPE="SB" -DUSE_LTO=1 -DUSB_JOYSTICK=1
-          cmake --build . --config $BUILD_TYPE --parallel $(nproc)
-          cp picogus.uf2 $OUTPUT_DIR/pg-sb.uf2
-
-      - name: Build MPU401 Firmware
-        working-directory: ${{github.workspace}}/build
-        shell: bash
-        run: |
-          cmake $GITHUB_WORKSPACE/sw -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DPROJECT_TYPE="MPU" -DUSE_LTO=1 -DUSB_JOYSTICK=1
-          cmake --build . --config $BUILD_TYPE --parallel $(nproc)
-          cp picogus.uf2 $OUTPUT_DIR/pg-mpu.uf2
-
-      - name: Build Tandy Firmware
-        working-directory: ${{github.workspace}}/build
-        shell: bash
-        run: |
-          cmake $GITHUB_WORKSPACE/sw -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DPROJECT_TYPE="TANDY" -DUSE_LTO=1 -DUSB_JOYSTICK=1
-          cmake --build . --config $BUILD_TYPE --parallel $(nproc)
-          cp picogus.uf2 $OUTPUT_DIR/pg-tandy.uf2
-
-      - name: Build CMS Firmware
-        working-directory: ${{github.workspace}}/build
-        shell: bash
-        run: |
-          cmake $GITHUB_WORKSPACE/sw -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DPROJECT_TYPE="CMS" -DUSE_LTO=1 -DUSB_JOYSTICK=1
-          cmake --build . --config $BUILD_TYPE --parallel $(nproc)
-          cp picogus.uf2 $OUTPUT_DIR/pg-cms.uf2
-
-      - name: Build Joystick Only Firmware
-        working-directory: ${{github.workspace}}/build
-        shell: bash
-        run: |
-          cmake $GITHUB_WORKSPACE/sw -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DPROJECT_TYPE="JOY" -DUSE_LTO=1
-          cmake --build . --config $BUILD_TYPE --parallel $(nproc)
-          cp picogus.uf2 $OUTPUT_DIR/pg-joyex.uf2
+          cp picogus.uf2 $OUTPUT_DIR/picogus.uf2
 
       # will generate PicoGUS Firmwares.zip as downloadable artifact with all .uf2 files
       - name: Upload All Firmwares
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: PicoGUS Firmwares
           path: ${{env.OUTPUT_DIR}}
@@ -134,7 +94,7 @@ jobs:
 
       # will generate pgusinit.zip as downloadable artifact with pgusinit.exe
       - name: Upload pgusinit
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: pgusinit
           path: ${{env.OUTPUT_DIR}}/pgusinit.exe
@@ -159,12 +119,12 @@ jobs:
         run: |
           awk '/^# v${{ steps.tag.outputs.version }}/{a=1;next}/^# /{a=0}a' sw/CHANGELOG.md > release-body.md
       - name: Download firmware artifact
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: PicoGUS Firmwares
           path: ${{env.STAGING_DIR}}
       - name: Download pgusinit artifact
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: pgusinit
           path: ${{env.STAGING_DIR}}
