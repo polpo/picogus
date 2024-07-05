@@ -21,7 +21,7 @@
 #include "pico_pic.h"
 #endif
 
-#ifdef USB_JOYSTICK
+#ifdef USB_STACK
 #include "tusb.h"
 #endif
 
@@ -121,7 +121,7 @@ void play_gus() {
 #endif
 #endif
     GUS_Setup();
-#ifdef USB_JOYSTICK
+#ifdef USB_STACK
     // Init TinyUSB for joystick support
     tuh_init(BOARD_TUH_RHPORT);
 #endif
@@ -156,7 +156,7 @@ void play_gus() {
         */
         // gpio_xor_mask(1u << PICO_DEFAULT_LED_PIN);
         give_audio_buffer(ap, buffer);
-#ifdef USB_JOYSTICK
+#ifdef USB_STACK
         // Service TinyUSB events
         tuh_task();
 #endif

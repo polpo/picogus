@@ -12,7 +12,7 @@ extern "C" {
 
 // Settings struct has generous padding for future settings by aligning to 4 bytes
 typedef struct Settings {
-    uint32_t magic;  // should be "pgus" in ascii (0x7069636F)
+    uint32_t magic;  // should be "pgus" in ascii (0x70677573)
     uint8_t version;
     uint8_t startupMode;
     struct {
@@ -43,12 +43,18 @@ typedef struct Settings {
     struct {
         uint16_t basePort;
     } Tandy;
+    struct {
+        uint16_t basePort;
+        uint8_t protocol;
+        uint8_t reportRate;
+        int16_t sensitivity;
+    } Mouse;
 } Settings;
 
 
 void loadSettings(Settings* settings);
 void saveSettings(const Settings* settings);
-void resetSettings(void);
+void getDefaultSettings(Settings* settings);
 
 #ifdef __cplusplus
 }

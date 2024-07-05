@@ -95,7 +95,7 @@ static void sermouse_send_id() {
 // --------------------------
 
 // inititalization
-uint32_t sermouse_init() {
+uint32_t sermouse_init(uint8_t protocol, uint8_t report_rate_hz, int16_t sensitivity) {
     // clear mouse state
     mouse_state.state = SERMOUSE_STATE_RESET;
     mouse_state.next_state = SERMOUSE_STATE_NULL;
@@ -107,11 +107,10 @@ uint32_t sermouse_init() {
     mouse_state.report_interval_us = 0;
     mouse_state.rx_interval_us = 0;
 
-    // set default internal values
-    // TODO: load from persistent storage (like Flash ROM)
-    sermouse_set_protocol(SERMOUSE_PROTOCOL_INTELLIMOUSE);
-    sermouse_set_report_rate_hz(SERMOUSE_REPORTRATE_DEFAULT);
-    sermouse_set_sensitivity(0x100);
+    // set internal values
+    sermouse_set_protocol(protocol);
+    sermouse_set_report_rate_hz(report_rate_hz);
+    sermouse_set_sensitivity(sensitivity);
 
     // set initialized flag
     mouse_state.initialized = 1;

@@ -22,22 +22,28 @@
 extern "C" void OPL_Pico_simple(int16_t *buffer, uint32_t nsamples);
 extern "C" void OPL_Pico_PortWrite(opl_port_t, unsigned int);
 
+#ifdef SOUND_SB
 extern int16_t sbdsp_sample();
+#ifdef USE_ALARM
+#include "pico_pic.h"
+#endif
+#endif
 
 #include "clamp.h"
 
 #include "cmd_buffers.h"
 extern cms_buffer_t opl_buffer;
 
-#ifdef USB_JOYSTICK
+#ifdef USB_STACK
 #include "tusb.h"
+#endif
+#ifdef USB_MOUSE
+#include "mouse/8250uart.h"
+#include "mouse/sermouse.h"
 #endif
 
 extern uint LED_PIN;
 
-#ifdef USE_ALARM
-#include "pico_pic.h"
-#endif
 
 #if PICO_ON_DEVICE
 #include "pico/binary_info.h"
@@ -93,12 +99,14 @@ void play_adlib() {
     flash_safe_execute_core_init();
     uint32_t start, end;
 
+#ifdef SOUND_SB
 #ifdef USE_ALARM
     // Init PIC on this core so it handles timers
     PIC_Init();
 #endif
+#endif
 
-#ifdef USB_JOYSTICK
+#ifdef USB_STACK
     // Init TinyUSB for joystick support
     tuh_init(BOARD_TUH_RHPORT);
 #endif
@@ -125,13 +133,24 @@ void play_adlib() {
         int16_t *samples = (int16_t *) buffer->buffer->bytes;
         int16_t opl_sample;
         OPL_Pico_simple(&opl_sample, 1);
+#ifdef SOUND_SB
         samples[0] = samples[1] = clamp16((int32_t)sbdsp_sample() + (int32_t)opl_sample);
+#else
+        samples[0] = samples[1] = opl_sample;
+#endif
         buffer->sample_count=1;
         // putchar((unsigned char)buffer->buffer->bytes[1]);
         give_audio_buffer(ap, buffer);
-#ifdef USB_JOYSTICK
+#ifdef USB_STACK
         // Service TinyUSB events
         tuh_task();
+#endif
+#ifdef USB_MOUSE
+        // mouse task
+        sermouse_core1_task();
+
+        // uart emulation task
+        uartemu_core1_task();
 #endif
     }
 }

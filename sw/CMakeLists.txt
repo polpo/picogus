@@ -93,9 +93,13 @@ function(config_target TARGET_NAME MULTIFW)
         set_linker_script(${TARGET_NAME} ${CMAKE_BINARY_DIR}/${TARGET_NAME}.ld)
     endif()
 
+    if(USB_JOYSTICK OR USB_MOUSE)
+        set(USB_STACK TRUE)
+    endif()
     if (USB_STACK)
         # USB stack common stuff
-        target_link_libraries(picogus tinyusb_host)
+        target_link_libraries(${TARGET_NAME} tinyusb_host)
+        target_compile_definitions(${TARGET_NAME} PRIVATE USB_STACK=1)
     endif()
     if(USB_JOYSTICK)
         # Joystick stuff
@@ -107,9 +111,9 @@ function(config_target TARGET_NAME MULTIFW)
     endif()
     if (USB_MOUSE) 
         # USB Mouse stuff
-        target_sources(picogus PRIVATE mouse/mouse_hid.c)
-        target_include_directories(picogus PUBLIC ${CMAKE_CURRENT_LIST_DIR}/mouse)
-        target_compile_definitions(picogus PRIVATE USB_MOUSE=1)
+        target_sources(${TARGET_NAME} PRIVATE mouse/mouse_hid.c)
+        target_include_directories(${TARGET_NAME} PUBLIC ${CMAKE_CURRENT_LIST_DIR}/mouse)
+        target_compile_definitions(${TARGET_NAME} PRIVATE USB_MOUSE=1)
     endif()
 
     target_sources(${TARGET_NAME} PRIVATE M62429/M62429.cpp)
@@ -131,10 +135,7 @@ function(config_target TARGET_NAME MULTIFW)
     pico_add_extra_outputs(${TARGET_NAME})
 endfunction()
 
-if(USB_JOYSTICK)
-    # Joystick stuff
-    add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/tusb_xinput)
-endif()
+add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/tusb_xinput)
 add_subdirectory(rp2040-psram)
 add_subdirectory(opl)
 
@@ -142,6 +143,7 @@ add_subdirectory(opl)
 ################################################################################
 # Build GUS firmware
 function(build_gus TARGET_NAME MULTIFW)
+    set(USB_JOYSTICK 1)
     config_target(${TARGET_NAME} ${MULTIFW})
     pico_set_program_name(${TARGET_NAME} "picogus-gus")
     target_sources(${TARGET_NAME} PRIVATE gusplay.cpp pico_pic.c isa_dma.c)
@@ -175,13 +177,14 @@ endfunction()
 ################################################################################
 # Build SB firmware
 function(build_sb TARGET_NAME MULTIFW)
+    set(USB_JOYSTICK 1)
     config_target(${TARGET_NAME} ${MULTIFW})
     pico_set_program_name(${TARGET_NAME} "picogus-sb")
     target_sources(${TARGET_NAME} PRIVATE sbdsp.cpp sbplay.cpp pico_pic.c isa_dma.c)    
     target_link_libraries(${TARGET_NAME} opl)
     target_compile_definitions(${TARGET_NAME} PRIVATE
         SOUND_SB=1
-        # SOUND_OPL=1
+        SOUND_OPL=1
         SOUND_DSP=1
         USE_ALARM=1
         USE_EMU8950_OPL=1        
@@ -195,8 +198,30 @@ function(build_sb TARGET_NAME MULTIFW)
 endfunction()
 
 ################################################################################
+# Build AdLib firmware
+function(build_adlib TARGET_NAME MULTIFW)
+    set(USB_JOYSTICK 1)
+    set(USB_MOUSE 1)
+    config_target(${TARGET_NAME} ${MULTIFW})
+    pico_set_program_name(${TARGET_NAME} "picogus-sb")
+    target_sources(${TARGET_NAME} PRIVATE sbplay.cpp)    
+    target_link_libraries(${TARGET_NAME} opl)
+    target_compile_definitions(${TARGET_NAME} PRIVATE
+        SOUND_OPL=1
+        USE_ALARM=1
+        USE_EMU8950_OPL=1        
+        EMU8950_ASM=1
+        # PICOW=1
+    )
+    pico_enable_stdio_uart(${TARGET_NAME} 1)
+    pico_enable_stdio_usb(${TARGET_NAME} 0)
+    pico_enable_stdio_semihosting(${TARGET_NAME} 0)
+endfunction()
+
+################################################################################
 # Build MPU firmware
 function(build_mpu TARGET_NAME MULTIFW)
+    set(USB_JOYSTICK 1)
     config_target(${TARGET_NAME} ${MULTIFW})
     pico_set_program_name(${TARGET_NAME} "picogus-mpu401")
     target_compile_definitions(${TARGET_NAME} PRIVATE
@@ -221,6 +246,8 @@ endfunction()
 ################################################################################
 # Build Tandy firmware
 function(build_tandy TARGET_NAME MULTIFW)
+    set(USB_JOYSTICK 1)
+    set(USB_MOUSE 1)
     config_target(${TARGET_NAME} ${MULTIFW})
     pico_set_program_name(${TARGET_NAME} "picogus-tandy")
     target_compile_definitions(${TARGET_NAME} PRIVATE
@@ -240,6 +267,8 @@ endfunction()
 ################################################################################
 # Build CMS firmware
 function(build_cms TARGET_NAME MULTIFW)
+    set(USB_JOYSTICK 1)
+    set(USB_MOUSE 1)
     config_target(${TARGET_NAME} ${MULTIFW})
     pico_set_program_name(${TARGET_NAME} "picogus-cms")
     target_compile_definitions(${TARGET_NAME} PRIVATE
@@ -258,20 +287,16 @@ endfunction()
 ################################################################################
 # Build USB-only firmware (joystick + mouse support)
 function(build_usb TARGET_NAME MULTIFW)
-    config_target(${TARGET_NAME} ${MULTIFW})
-    pico_set_program_name(${TARGET_NAME} "picogus-usb")
-    set(USB_STACK 1)
     set(USB_JOYSTICK 1)
     set(USB_MOUSE 1)
+    config_target(${TARGET_NAME} ${MULTIFW})
+    pico_set_program_name(${TARGET_NAME} "picogus-usb")
     target_compile_definitions(${TARGET_NAME} PRIVATE
-        USB_JOYSTICK_ONLY=1
-        USB_MOUSE_ONLY=1
+        USB_ONLY=1
     )
- 
     target_sources(${TARGET_NAME} PRIVATE
         usbplay.cpp
         pico_pic.c
-        mouseplay.cpp
         mouse/8250uart.cpp
         mouse/sermouse.cpp
     )
@@ -337,6 +362,9 @@ if(PROJECT_TYPE STREQUAL "MULTIFW")
     build_sb(pg-sb FALSE)
     build_sb(pg-sb-multifw TRUE)
     add_dependencies(pg-sb-multifw pg-sb generate_flash_firmware_h)
+    build_adlib(pg-adlib FALSE)
+    build_adlib(pg-adlib-multifw TRUE)
+    add_dependencies(pg-adlib-multifw pg-adlib generate_flash_firmware_h)
     build_mpu(pg-mpu FALSE)
     build_mpu(pg-mpu-multifw TRUE)
     add_dependencies(pg-mpu-multifw pg-mpu generate_flash_firmware_h)
@@ -383,6 +411,9 @@ elseif(PROJECT_TYPE STREQUAL "GUS")
 elseif(PROJECT_TYPE STREQUAL "SB")
     set(FW_TARGET pg-sb)
     build_sb(pg-sb FALSE)
+elseif(PROJECT_TYPE STREQUAL "ADLIB")
+    set(FW_TARGET pg-adlib)
+    build_sb(pg-adlib FALSE)
 elseif(PROJECT_TYPE STREQUAL "MPU")
     set(FW_TARGET pg-mpu)
     build_mpu(pg-mpu FALSE)

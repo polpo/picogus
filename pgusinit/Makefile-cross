@@ -1,5 +1,5 @@
 CC = wcl
-CFLAGS = -bcl=dos -za99
+CFLAGS = -bcl=dos -za99 -os
 
 pgusinit.exe: pgusinit.c
 	$(CC) $(CFLAGS) $<

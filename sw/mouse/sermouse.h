@@ -111,7 +111,7 @@ struct sermouse_state_t {
 
 // --------------------------
 // any core
-uint32_t sermouse_init();
+uint32_t sermouse_init(uint8_t protocol, uint8_t report_rate_hz, int16_t sensitivity);
 uint32_t sermouse_attach_uart();
 uint32_t sermouse_done();
 

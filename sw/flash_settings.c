@@ -38,6 +38,12 @@ static const Settings defaultSettings = {
     },
     .Tandy = {
         .basePort = 0x2c0
+    },
+    .Mouse = {
+        .basePort = 0xffff,
+        .protocol = 0,
+        .reportRate = 60,
+        .sensitivity = 0x100
     }
 };
 
@@ -99,7 +105,7 @@ void saveSettings(const Settings* settings)
     */
 }
 
-void resetSettings(void)
+void getDefaultSettings(Settings* settings)
 {
-    saveSettings(&defaultSettings);
+    memcpy(settings, &defaultSettings, sizeof(Settings));
 }

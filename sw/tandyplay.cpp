@@ -25,8 +25,12 @@ extern tandy_buffer_t tandy_buffer;
 
 extern uint LED_PIN;
 
-#ifdef USB_JOYSTICK
+#ifdef USB_STACK
 #include "tusb.h"
+#endif
+#ifdef USB_MOUSE
+#include "mouse/8250uart.h"
+#include "mouse/sermouse.h"
 #endif
 
 #include <string.h>
@@ -76,7 +80,7 @@ struct audio_buffer_pool *init_audio() {
 void play_tandy() {
     puts("starting core 1 tandy");
     flash_safe_execute_core_init();
-#ifdef USB_JOYSTICK
+#ifdef USB_STACK
     // Init TinyUSB for joystick support
     tuh_init(BOARD_TUH_RHPORT);
 #endif
@@ -119,9 +123,16 @@ void play_tandy() {
         buffer->sample_count = SAMPLES_PER_BUFFER;
 
         give_audio_buffer(ap, buffer);
-#ifdef USB_JOYSTICK
+#ifdef USB_STACK
         // Service TinyUSB events
         tuh_task();
+#endif
+#ifdef USB_MOUSE
+        // mouse task
+        sermouse_core1_task();
+
+        // uart emulation task
+        uartemu_core1_task();
 #endif
     }
 }

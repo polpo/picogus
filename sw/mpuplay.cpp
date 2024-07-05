@@ -9,7 +9,7 @@ extern Settings settings;
 #include "pico_pic.h"
 #endif
 
-#ifdef USB_JOYSTICK
+#ifdef USB_STACK
 #include "tusb.h"
 #endif
 
@@ -19,7 +19,7 @@ void play_mpu() {
     puts("starting core 1 MPU");
     flash_safe_execute_core_init();
 
-#ifdef USB_JOYSTICK
+#ifdef USB_STACK
     // Init TinyUSB for joystick support
     tuh_init(BOARD_TUH_RHPORT);
 #endif
@@ -33,7 +33,7 @@ void play_mpu() {
 
     for (;;) {
         send_midi_byte();				// see if we need to send a byte	
-#ifdef USB_JOYSTICK
+#ifdef USB_STACK
         // Service TinyUSB events
         tuh_task();
 #endif

@@ -19,8 +19,12 @@
 #include "pico/audio_i2s.h"
 #include "pico/flash.h"
 
-#ifdef USB_JOYSTICK
+#ifdef USB_STACK
 #include "tusb.h"
+#endif
+#ifdef USB_MOUSE
+#include "mouse/8250uart.h"
+#include "mouse/sermouse.h"
 #endif
 
 #ifdef MAME_CMS
@@ -80,7 +84,7 @@ void play_cms() {
     puts("starting core 1 CMS");
     flash_safe_execute_core_init();
 
-#ifdef USB_JOYSTICK
+#ifdef USB_STACK
     // Init TinyUSB for joystick support
     tuh_init(BOARD_TUH_RHPORT);
 #endif
@@ -172,9 +176,16 @@ void play_cms() {
         buffer->sample_count = buffer->max_sample_count;
 
         give_audio_buffer(ap, buffer);
-#ifdef USB_JOYSTICK
+#ifdef USB_STACK
         // Service TinyUSB events
         tuh_task();
+#endif
+#ifdef USB_MOUSE
+        // mouse task
+        sermouse_core1_task();
+
+        // uart emulation task
+        uartemu_core1_task();
 #endif
     }
 }
