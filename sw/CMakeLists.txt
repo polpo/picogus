@@ -113,6 +113,11 @@ function(config_target TARGET_NAME MULTIFW)
         # USB Mouse stuff
         target_include_directories(${TARGET_NAME} PUBLIC ${CMAKE_CURRENT_LIST_DIR}/mouse)
         target_compile_definitions(${TARGET_NAME} PRIVATE USB_MOUSE=1)
+        target_sources(${TARGET_NAME} PRIVATE
+            mouse/8250uart.cpp
+            mouse/sermouse.cpp
+            pico_pic.c
+        )
     endif()
 
     target_sources(${TARGET_NAME} PRIVATE M62429/M62429.cpp)
@@ -296,8 +301,6 @@ function(build_usb TARGET_NAME MULTIFW)
     target_sources(${TARGET_NAME} PRIVATE
         usbplay.cpp
         pico_pic.c
-        mouse/8250uart.cpp
-        mouse/sermouse.cpp
     )
     pico_enable_stdio_uart(${TARGET_NAME} 1)
     pico_enable_stdio_usb(${TARGET_NAME} 0)
@@ -412,7 +415,7 @@ elseif(PROJECT_TYPE STREQUAL "SB")
     build_sb(pg-sb FALSE)
 elseif(PROJECT_TYPE STREQUAL "ADLIB")
     set(FW_TARGET pg-adlib)
-    build_sb(pg-adlib FALSE)
+    build_adlib(pg-adlib FALSE)
 elseif(PROJECT_TYPE STREQUAL "MPU")
     set(FW_TARGET pg-mpu)
     build_mpu(pg-mpu FALSE)

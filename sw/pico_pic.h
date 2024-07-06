@@ -30,7 +30,8 @@ typedef struct {
 #endif
 } PIC_TimerEvent;
 
-extern PIC_TimerEvent timerEvents[4];
+#define PIC_MAX_TIMERS 8
+extern PIC_TimerEvent timerEvents[PIC_MAX_TIMERS];
 
 extern alarm_pool_t* alarm_pool;
 
@@ -52,15 +53,28 @@ static __force_inline void PIC_DeActivateIRQ(void) {
 
 static __force_inline void PIC_AddEvent(PIC_EventHandler handler, uint32_t delay, Bitu val) {
     // printf("add event: %x %x %d\n", handler, val, delay);
-    timerEvents[val].handler = handler;
-    timerEvents[val].value = val;
+    // find free slot - TBD if this is too jittery
+    int i;
+    for (i = 0; i < PIC_MAX_TIMERS; ++i) {
+        if (
+#ifdef USE_ALARM
+            !timerEvents[i].alarm_id
+#else
+            !timerEvents[i].active
+#endif
+        ) {
+            break;
+        }
+    }
+    timerEvents[i].handler = handler;
+    timerEvents[i].value = val;
 #ifdef USE_ALARM
     // timerEvents[val].alarm_id = add_alarm_in_us(delay, PIC_HandleEvent, timerEvents + val, true);
     // alarm_pool_cancel_alarm(alarm_pool, timerEvents[val].alarm_id);
-    timerEvents[val].alarm_id = alarm_pool_add_alarm_in_us(alarm_pool, delay, PIC_HandleEvent, timerEvents + val, true);
+    timerEvents[i].alarm_id = alarm_pool_add_alarm_in_us(alarm_pool, delay, PIC_HandleEvent, timerEvents + i, true);
 #else
-    timerEvents[val].deadline = time_us_32() + delay;
-    timerEvents[val].active = true;
+    timerEvents[i].deadline = time_us_32() + delay;
+    timerEvents[i].active = true;
 #endif
     // gpio_put(PICO_DEFAULT_LED_PIN, 1);
 }
@@ -71,7 +85,7 @@ void PIC_Init(void);
 
 #ifndef USE_ALARM
 static __force_inline void PIC_HandleEvents() {
-    for (int i = 0; i < 4; ++i) {
+    for (int i = 0; i < PIC_MAX_TIMERS; ++i) {
         if (timerEvents[i].active && timerEvents[i].deadline <= time_us_32()) {
             PIC_HandleEvent(0, &timerEvents[i]);
         }
