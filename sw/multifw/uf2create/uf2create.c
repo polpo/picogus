@@ -16,7 +16,7 @@ int main(int argc, char *argv[])
 {
 	int total_size = 0;
 	static uint8_t flashbuffer[FLASH_SIZE];
-	uint32_t offset[INPUT_FILES] = {0, FLASH_FIRMWARE1, FLASH_FIRMWARE2, FLASH_FIRMWARE3, FLASH_FIRMWARE4, FLASH_FIRMWARE5, FLASH_FIRMWARE6};
+	uint32_t offset[INPUT_FILES] = {0, FLASH_FIRMWARE1, FLASH_FIRMWARE2, FLASH_FIRMWARE3, FLASH_FIRMWARE4, FLASH_FIRMWARE5, FLASH_FIRMWARE6, FLASH_FIRMWARE7};
 	struct uf2_block uf2;
 
 	FILE *f_input, *f_output;

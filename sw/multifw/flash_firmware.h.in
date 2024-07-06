@@ -6,10 +6,11 @@
 // Make sure the FLASH addresses match the .ld files!!!
 // ld files for picogus firmwares/modes are based on memmap_copy_to_ram.ld as they run with set(PICO_COPY_TO_RAM 1)
 
-#define NR_OF_FIRMWARES 6
+#define NR_OF_FIRMWARES 7
 #define FLASH_FIRMWARE1 ${FW_1_ORIGIN}
 #define FLASH_FIRMWARE2 ${FW_2_ORIGIN}
 #define FLASH_FIRMWARE3 ${FW_3_ORIGIN}
 #define FLASH_FIRMWARE4 ${FW_4_ORIGIN}
 #define FLASH_FIRMWARE5 ${FW_5_ORIGIN}
 #define FLASH_FIRMWARE6 ${FW_6_ORIGIN}
+#define FLASH_FIRMWARE7 ${FW_7_ORIGIN}
