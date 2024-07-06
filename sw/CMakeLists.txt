@@ -100,18 +100,17 @@ function(config_target TARGET_NAME MULTIFW)
         # USB stack common stuff
         target_link_libraries(${TARGET_NAME} tinyusb_host)
         target_compile_definitions(${TARGET_NAME} PRIVATE USB_STACK=1)
+        target_sources(${TARGET_NAME} PRIVATE usb_hid/hid_app.c)
     endif()
     if(USB_JOYSTICK)
         # Joystick stuff
-        target_sources(${TARGET_NAME} PRIVATE joy_hid/joy_hid.c)
         target_link_libraries(${TARGET_NAME} hardware_pwm)
-        target_include_directories(${TARGET_NAME} PUBLIC ${CMAKE_CURRENT_LIST_DIR}/joy_hid)
-        target_link_libraries(${TARGET_NAME} xinput_host_app_driver)
+        target_include_directories(${TARGET_NAME} PUBLIC ${CMAKE_CURRENT_LIST_DIR}/usb_hid)
+        target_link_libraries(${TARGET_NAME} xinput_host)
         target_compile_definitions(${TARGET_NAME} PRIVATE USB_JOYSTICK=1)
     endif()
     if (USB_MOUSE) 
         # USB Mouse stuff
-        target_sources(${TARGET_NAME} PRIVATE mouse/mouse_hid.c)
         target_include_directories(${TARGET_NAME} PUBLIC ${CMAKE_CURRENT_LIST_DIR}/mouse)
         target_compile_definitions(${TARGET_NAME} PRIVATE USB_MOUSE=1)
     endif()
@@ -143,7 +142,7 @@ add_subdirectory(opl)
 ################################################################################
 # Build GUS firmware
 function(build_gus TARGET_NAME MULTIFW)
-    set(USB_JOYSTICK 1)
+    set(USB_JOYSTICK TRUE)
     config_target(${TARGET_NAME} ${MULTIFW})
     pico_set_program_name(${TARGET_NAME} "picogus-gus")
     target_sources(${TARGET_NAME} PRIVATE gusplay.cpp pico_pic.c isa_dma.c)
@@ -177,7 +176,7 @@ endfunction()
 ################################################################################
 # Build SB firmware
 function(build_sb TARGET_NAME MULTIFW)
-    set(USB_JOYSTICK 1)
+    set(USB_JOYSTICK TRUE)
     config_target(${TARGET_NAME} ${MULTIFW})
     pico_set_program_name(${TARGET_NAME} "picogus-sb")
     target_sources(${TARGET_NAME} PRIVATE sbdsp.cpp sbplay.cpp pico_pic.c isa_dma.c)    
@@ -200,8 +199,8 @@ endfunction()
 ################################################################################
 # Build AdLib firmware
 function(build_adlib TARGET_NAME MULTIFW)
-    set(USB_JOYSTICK 1)
-    set(USB_MOUSE 1)
+    set(USB_JOYSTICK TRUE)
+    set(USB_MOUSE TRUE)
     config_target(${TARGET_NAME} ${MULTIFW})
     pico_set_program_name(${TARGET_NAME} "picogus-sb")
     target_sources(${TARGET_NAME} PRIVATE sbplay.cpp)    
@@ -221,7 +220,7 @@ endfunction()
 ################################################################################
 # Build MPU firmware
 function(build_mpu TARGET_NAME MULTIFW)
-    set(USB_JOYSTICK 1)
+    set(USB_JOYSTICK TRUE)
     config_target(${TARGET_NAME} ${MULTIFW})
     pico_set_program_name(${TARGET_NAME} "picogus-mpu401")
     target_compile_definitions(${TARGET_NAME} PRIVATE
@@ -246,8 +245,8 @@ endfunction()
 ################################################################################
 # Build Tandy firmware
 function(build_tandy TARGET_NAME MULTIFW)
-    set(USB_JOYSTICK 1)
-    set(USB_MOUSE 1)
+    set(USB_JOYSTICK TRUE)
+    set(USB_MOUSE TRUE)
     config_target(${TARGET_NAME} ${MULTIFW})
     pico_set_program_name(${TARGET_NAME} "picogus-tandy")
     target_compile_definitions(${TARGET_NAME} PRIVATE
@@ -267,8 +266,8 @@ endfunction()
 ################################################################################
 # Build CMS firmware
 function(build_cms TARGET_NAME MULTIFW)
-    set(USB_JOYSTICK 1)
-    set(USB_MOUSE 1)
+    set(USB_JOYSTICK TRUE)
+    set(USB_MOUSE TRUE)
     config_target(${TARGET_NAME} ${MULTIFW})
     pico_set_program_name(${TARGET_NAME} "picogus-cms")
     target_compile_definitions(${TARGET_NAME} PRIVATE
@@ -287,8 +286,8 @@ endfunction()
 ################################################################################
 # Build USB-only firmware (joystick + mouse support)
 function(build_usb TARGET_NAME MULTIFW)
-    set(USB_JOYSTICK 1)
-    set(USB_MOUSE 1)
+    set(USB_JOYSTICK TRUE)
+    set(USB_MOUSE TRUE)
     config_target(${TARGET_NAME} ${MULTIFW})
     pico_set_program_name(${TARGET_NAME} "picogus-usb")
     target_compile_definitions(${TARGET_NAME} PRIVATE

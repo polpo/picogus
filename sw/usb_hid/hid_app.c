@@ -25,10 +25,22 @@
  *
  */
 
-/* #include "bsp/board_api.h" */
 #include "tusb.h"
+#ifdef USB_JOYSTICK
 #include "xinput_host.h"
+#endif
+#ifdef USB_MOUSE
+#include "sermouse.h"
+#endif
 
+#define MAX_REPORT 4
+static struct
+{
+  uint8_t report_count;
+  tuh_hid_report_info_t report_info[MAX_REPORT];
+} hid_info[CFG_TUH_HID];
+
+#ifdef USB_JOYSTICK
 #include "joy.h"
 joystate_struct_t joystate_struct;
 
@@ -97,48 +109,7 @@ static inline bool is_ps_classic(uint8_t dev_addr)
          );
 }
 
-//--------------------------------------------------------------------+
-// TinyUSB Callbacks
-//--------------------------------------------------------------------+
-
-// Invoked when device with hid interface is mounted
-// Report descriptor is also available for use. tuh_hid_parse_report_descriptor()
-// can be used to parse common/simple enough descriptor.
-// Note: if report descriptor length > CFG_TUH_ENUMERATION_BUFSIZE, it will be skipped
-// therefore report_desc = NULL, desc_len = 0
-#define MAX_REPORT 4
-void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const* desc_report, uint16_t desc_len)
-{
-    uint16_t vid, pid;
-    tuh_vid_pid_get(dev_addr, &vid, &pid);
-
-    printf("HID device address = %d, instance = %d is mounted\r\n", dev_addr, instance);
-    printf("VID = %04x, PID = %04x\r\n", vid, pid);
-
-    tuh_hid_report_info_t report_info[MAX_REPORT];
-    uint8_t report_count = tuh_hid_parse_report_descriptor(report_info, MAX_REPORT, desc_report, desc_len);
-
-    for (int i = 0; i < report_count; ++i) {
-        printf("HID device report id: %u usage: %u usage page: %u\n",
-               report_info[i].report_id, report_info[i].usage, report_info[i].usage_page);
-        if (report_info[i].usage == HID_USAGE_DESKTOP_JOYSTICK || report_info[i].usage == HID_USAGE_DESKTOP_GAMEPAD) {
-            printf("joystick connected - requesting reports from it\n");
-            if ( !tuh_hid_receive_report(dev_addr, instance) )
-            {
-                printf("Error: cannot request to receive report\r\n");
-            }
-            return;
-        }
-    }
-}
-
-// Invoked when device with hid interface is un-mounted
-void tuh_hid_umount_cb(uint8_t dev_addr, uint8_t instance)
-{
-    printf("HID device address = %d, instance = %d is unmounted\r\n", dev_addr, instance);
-}
-
-void update_joystate(uint8_t dpad, uint8_t x, uint8_t y, uint8_t z, uint8_t rz, uint8_t b1, uint8_t b2, uint8_t b3, uint8_t b4) {
+static inline void update_joystate(uint8_t dpad, uint8_t x, uint8_t y, uint8_t z, uint8_t rz, uint8_t b1, uint8_t b2, uint8_t b3, uint8_t b4) {
     joystate_struct.button_mask = (!b1 << 4) | (!b2 << 5) | (!b3 << 6) | (!b4 << 7);
     switch (dpad) {
     case 0: // N
@@ -182,7 +153,7 @@ void update_joystate(uint8_t dpad, uint8_t x, uint8_t y, uint8_t z, uint8_t rz, 
     joystate_struct.joy2_y = rz;
 }
 
-inline void process_sony_ds4(uint8_t const* report, uint16_t len)
+static inline void process_sony_ds4(uint8_t const* report, uint16_t len)
 {
     uint8_t const report_id = report[0];
     report++;
@@ -224,27 +195,147 @@ inline void process_sony_ds4(uint8_t const* report, uint16_t len)
         */
     }
 }
+#endif
+
+//--------------------------------------------------------------------+
+// TinyUSB Callbacks
+//--------------------------------------------------------------------+
+
+// Invoked when device with hid interface is mounted
+// Report descriptor is also available for use. tuh_hid_parse_report_descriptor()
+// can be used to parse common/simple enough descriptor.
+// Note: if report descriptor length > CFG_TUH_ENUMERATION_BUFSIZE, it will be skipped
+// therefore report_desc = NULL, desc_len = 0
+void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const* desc_report, uint16_t desc_len)
+{
+    printf("HID dev:%d inst:%d mounted\r\n", dev_addr, instance);
+
+    // Interface protocol (hid_interface_protocol_enum_t)
+    const char* protocol_str[] = { "n/a", "kbd", "mouse" };
+    uint8_t const itf_protocol = tuh_hid_interface_protocol(dev_addr, instance);
+
+    printf("HID protocol=%s\r\n", protocol_str[itf_protocol]);
+
+    // By default host stack will use activate boot protocol on supported interface.
+    // Therefore for this simple example, we only need to parse generic report descriptor (with built-in parser)
+    if (itf_protocol == HID_ITF_PROTOCOL_NONE) {
+        hid_info[instance].report_count = tuh_hid_parse_report_descriptor(hid_info[instance].report_info, MAX_REPORT, desc_report, desc_len);
+        printf("HID has %u reports \r\n", hid_info[instance].report_count);
+    } else {
+        // force boot protocol
+        tuh_hid_set_protocol(dev_addr, instance, HID_PROTOCOL_BOOT);
+    }
+
+    // request to receive report
+    // tuh_hid_report_received_cb() will be invoked when report is available
+    if (!tuh_hid_receive_report(dev_addr, instance)) {
+        printf("err(%d:%d) can't recv HID report\r\n", dev_addr, instance);
+    }
+}
+
+// Invoked when device with hid interface is un-mounted
+void tuh_hid_umount_cb(uint8_t dev_addr, uint8_t instance)
+{
+    printf("HID dev:%d inst:%d unmounted\r\n", dev_addr, instance);
+}
+
+//--------------------------------------------------------------------+
+// Generic Report
+//--------------------------------------------------------------------+
+static inline void process_generic_report(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len)
+{
+    (void) dev_addr;
+
+    uint8_t const rpt_count = hid_info[instance].report_count;
+    tuh_hid_report_info_t* rpt_info_arr = hid_info[instance].report_info;
+    tuh_hid_report_info_t* rpt_info = NULL;
+
+    if (rpt_count == 1 && rpt_info_arr[0].report_id == 0) {
+        // Simple report without report ID as 1st byte
+        rpt_info = &rpt_info_arr[0];
+    } else {
+        // Composite report, 1st byte is report ID, data starts from 2nd byte
+        uint8_t const rpt_id = report[0];
+
+        // Find report id in the array
+        for (uint8_t i=0; i<rpt_count; i++) {
+            if (rpt_id == rpt_info_arr[i].report_id) {
+                rpt_info = &rpt_info_arr[i];
+                break;
+            }
+        }
+        report++;
+        len--;
+    }
+
+    if (!rpt_info) {
+        printf("Couldn't find the report info for this report !\r\n");
+        return;
+    }
+
+    // For complete list of Usage Page & Usage checkout src/class/hid/hid.h. For examples:
+    // - Keyboard                     : Desktop, Keyboard
+    // - Mouse                        : Desktop, Mouse
+    // - Gamepad                      : Desktop, Gamepad
+    // - Consumer Control (Media Key) : Consumer, Consumer Control
+    // - System Control (Power key)   : Desktop, System Control
+    // - Generic (vendor)             : 0xFFxx, xx
+    if (rpt_info->usage_page == HID_USAGE_PAGE_DESKTOP) {
+        switch (rpt_info->usage) {
+        case HID_USAGE_DESKTOP_MOUSE:
+            TU_LOG1("HID receive mouse report\r\n");
+            // Assume mouse follow boot report layout
+#ifdef USB_MOUSE
+            sermouse_process_report((hid_mouse_report_t const*) report);
+#endif
+            break;
+        case HID_USAGE_DESKTOP_JOYSTICK:
+            TU_LOG1("HID receive joystick report\r\n");
+#ifdef USB_JOYSTICK
+            if (is_sony_ds4(dev_addr)) {
+                process_sony_ds4(report, len);
+            }
+#endif
+            break;
+        case HID_USAGE_DESKTOP_GAMEPAD:
+            TU_LOG1("HID receive gamepad report\r\n");
+            break;
+
+        default: break;
+        }
+    }
+}
 
 // Invoked when received report from device via interrupt endpoint
 void tuh_hid_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len)
 {
-    /*
-    for (uint16_t i = 0; i < len; ++i) {
-        printf("%02x ", report[i]);
-    }
-    putchar('\n');
-    */
-    if (is_sony_ds4(dev_addr)) {
-        process_sony_ds4(report, len);
+    uint8_t const itf_protocol = tuh_hid_interface_protocol(dev_addr, instance);
+
+    switch (itf_protocol) {
+    case HID_ITF_PROTOCOL_MOUSE:
+#ifdef USB_MOUSE
+        sermouse_process_report((hid_mouse_report_t const*) report);
+#endif
+        break;
+
+    case HID_ITF_PROTOCOL_KEYBOARD:
+        // skip keyboard reports
+        break;
+
+    default:
+        // Generic report requires matching ReportID and contents with previous parsed report info
+        process_generic_report(dev_addr, instance, report, len);
+        break;
     }
 
     // continue to request to receive report
     if (!tuh_hid_receive_report(dev_addr, instance)) {
-        printf("Error: cannot request to receive report\r\n");
+        printf("err(%d:%d) can't recv HID report\r\n", dev_addr, instance);
     }
 }
 
-inline void update_joystate_xinput(uint16_t wButtons, int16_t sThumbLX, int16_t sThumbLY, int16_t sThumbRX, int16_t sThumbRY, uint8_t bLeftTrigger, uint8_t bRightTrigger) {
+#ifdef USB_JOYSTICK
+static inline void update_joystate_xinput(uint16_t wButtons, int16_t sThumbLX, int16_t sThumbLY, int16_t sThumbRX, int16_t sThumbRY, uint8_t bLeftTrigger, uint8_t bRightTrigger) {
     uint8_t dpad = wButtons & 0xf;
     if (!dpad) {
         joystate_struct.joy1_x = ((int32_t)sThumbLX + 32768) >> 8;
@@ -253,6 +344,7 @@ inline void update_joystate_xinput(uint16_t wButtons, int16_t sThumbLX, int16_t 
         joystate_struct.joy1_x = (dpad & XINPUT_GAMEPAD_DPAD_RIGHT) ? 255 : ((dpad & XINPUT_GAMEPAD_DPAD_LEFT) ? 0 : 127);
         joystate_struct.joy1_y = (dpad & XINPUT_GAMEPAD_DPAD_DOWN) ? 255 : ((dpad & XINPUT_GAMEPAD_DPAD_UP) ? 0 : 127);
     }
+    // Analog triggers are mapped to up/down on joystick 1 to emulate throttle/brake for driving games
     if (bLeftTrigger) {
         joystate_struct.joy1_y = 127u + (bLeftTrigger >> 1);
     } else if (bRightTrigger) {
@@ -264,10 +356,9 @@ inline void update_joystate_xinput(uint16_t wButtons, int16_t sThumbLX, int16_t 
     /* printf("%04x %04x\n", wButtons, joystate_struct.button_mask); */
 }
 
-void tuh_xinput_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t const *report, uint16_t len)
+void tuh_xinput_report_received_cb(uint8_t dev_addr, uint8_t instance, xinputh_interface_t const* xid_itf, uint16_t len)
 {
-    xinputh_interface_t *xid_itf = (xinputh_interface_t *)report;
-    xinput_gamepad_t *p = &xid_itf->pad;
+    const xinput_gamepad_t *p = &xid_itf->pad;
     /*
     const char* type_str;
     switch (xid_itf->type)
@@ -338,3 +429,4 @@ void tuh_xinput_umount_cb(uint8_t dev_addr, uint8_t instance)
 {
     printf("XINPUT UNMOUNTED %02x %d\n", dev_addr, instance);
 }
+#endif

@@ -87,7 +87,7 @@ cms_buffer_t cms_buffer = { {0}, 0, 0 };
 #endif
 
 #ifdef USB_JOYSTICK
-#include "joy_hid/joy.h"
+#include "usb_hid/joy.h"
 extern "C" joystate_struct_t joystate_struct;
 uint8_t joystate_bin;
 #include "hardware/pwm.h"

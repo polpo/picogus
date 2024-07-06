@@ -6,4 +6,4 @@
 	url = https://github.com/hathach/tinyusb
 [submodule "sw/tusb_xinput"]
 	path = sw/tusb_xinput
-	url = https://github.com/RobertDaleSmith/tusb_xinput
+	url = https://github.com/Ryzee119/tusb_xinput
