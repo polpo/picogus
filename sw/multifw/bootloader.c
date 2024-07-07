@@ -13,10 +13,8 @@ static const uint32_t offset[NR_OF_FIRMWARES] = {FLASH_FIRMWARE1, FLASH_FIRMWARE
 
 uint8_t read_permMode(void)
 {
-    printf("getsettings... \n");
     Settings settings;
     loadSettings(&settings);
-    printf("gotsettings\n");
     uint8_t pModeByte = settings.startupMode;
 
     if (pModeByte >= 1 && pModeByte <= NR_OF_FIRMWARES)
@@ -30,9 +28,8 @@ int main(void)
 {
     stdio_init_all();
     printf("picogus bootloader\n");
-    uint8_t firmware_nr = (uint8_t) (0x000000FF & watchdog_hw->scratch[3]);
-    printf("firmware_nr: %u\n", firmware_nr);
     stdio_flush();
+    uint8_t firmware_nr = (uint8_t) (0x000000FF & watchdog_hw->scratch[3]);
 
     if (firmware_nr > NR_OF_FIRMWARES) {
         firmware_nr = 0;
@@ -44,8 +41,6 @@ int main(void)
     } else {    // Mode change requested by pgusinit
     	sStart = offset[firmware_nr-1] + XIP_BASE;
     }
-    printf("sStart: %x\n", sStart);
-    stdio_flush();
 
     // Jump to application
     asm volatile

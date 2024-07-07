@@ -210,7 +210,7 @@ int reboot_to_firmware(const uint8_t value, const bool permanent) {
 
     outp(CONTROL_PORT, MODE_BOOTMODE); // Select firmware selection register
     outp(DATA_PORT_HIGH, value); // Send firmware number and permanent flag
-            delay(100);
+    delay(100);
 
     printf("\nMode change requested.\n");
     if (permanent) {
@@ -385,7 +385,7 @@ int main(int argc, char* argv[]) {
     int i = 1;
     // /flash option is special and can work across protocol versions, so if it's specified, that's all we do
     while (i < argc) {
-	if (stricmp(argv[i], "/flash") == 0) {
+        if (stricmp(argv[i], "/flash") == 0) {
             if (i + 1 >= argc) {
                 usage(argv[0], INVALID_MODE, false);
                 return 255;
@@ -407,7 +407,7 @@ int main(int argc, char* argv[]) {
       return 97;
     }
 
-    outp(CONTROL_PORT, MODE_MODE); // Select mode register
+    outp(CONTROL_PORT, MODE_BOOTMODE); // Select mode register
     mode = inp(DATA_PORT_HIGH);
 
     char tmp_arg[2];
@@ -452,7 +452,7 @@ int main(int argc, char* argv[]) {
             permanent = true;
         } else if (stricmp(argv[i], "/defaults") == 0) {
             outp(CONTROL_PORT, MODE_DEFAULTS); // Select defaults register
-            outp(DATA_PORT_HIGH, 0xff); // Write volume
+            outp(DATA_PORT_HIGH, 0xff);
         // GUS options /////////////////////////////////////////////////////////////////
         } else if (stricmp(argv[i], "/gus44k") == 0) {
             process_bool_opt(tmp_uint8);
@@ -596,7 +596,7 @@ int main(int argc, char* argv[]) {
 
     if (board_type == PICOGUS_2) {
         outp(CONTROL_PORT, MODE_WTVOL); // Select wavetable volume register
-        wtvol = inp(DATA_PORT_HIGH); // Write volume
+        wtvol = inp(DATA_PORT_HIGH); // Read volume
         printf("Wavetable volume set to %u\n", wtvol);
     }
 
@@ -697,4 +697,4 @@ int main(int argc, char* argv[]) {
 
     return 0;
 }
-
+

@@ -43,7 +43,7 @@ static const char *modenames[8] = {
 #define MODE_MAGIC      0x00 // Magic string
 #define MODE_PROTOCOL   0x01 // Protocol version
 #define MODE_FWSTRING   0x02 // Firmware string
-#define MODE_MODE       0x03 // Mode (GUS, OPL, MPU, etc...)
+#define MODE_BOOTMODE   0x03 // Mode (GUS, OPL, MPU, etc...)
 #define MODE_GUSPORT    0x04 // GUS Base port
 #define MODE_OPLPORT    0x05 // Adlib Base port
 #define MODE_SBPORT     0x06 // SB Base port
@@ -62,9 +62,8 @@ static const char *modenames[8] = {
 #define MODE_MOUSEPROTO 0x41 // Mouse protocol
 #define MODE_MOUSERATE  0x42 // Mouse report rate
 #define MODE_MOUSESEN   0x43 // Mouse sensitivity
-#define MODE_BOOTMODE   0xE0 // Select firmware boot mode register
+#define MODE_DEFAULTS   0xE0 // Select reset to defaults register
 #define MODE_SAVE       0xE1 // Select save settings register
 #define MODE_REBOOT     0xE2 // Select reboot register
-#define MODE_DEFAULTS   0xE3 // Select reset to defaults register
 #define MODE_HWTYPE     0xF0 // Hardware type 
 #define MODE_FLASH      0xFF // Firmware write mode

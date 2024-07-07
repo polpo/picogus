@@ -129,7 +129,7 @@ __force_inline void select_picogus(uint8_t value) {
     case MODE_FWSTRING: // Firmware string
         cur_read = 0;
         break;
-    case MODE_MODE: // Mode (GUS, OPL, MPU, etc...)
+    case MODE_BOOTMODE: // Mode (GUS, OPL, MPU, etc...)
         break;
     case MODE_GUSPORT: // GUS Base port
     case MODE_OPLPORT: // Adlib Base port
@@ -159,7 +159,6 @@ __force_inline void select_picogus(uint8_t value) {
     case MODE_MOUSERATE:
     case MODE_MOUSESEN:
         break;
-    case MODE_BOOTMODE: // Select firmware boot mode register
     case MODE_SAVE: // Select save settings register
     case MODE_REBOOT: // Select reboot register
     case MODE_DEFAULTS: // Select reset to defaults register
@@ -341,24 +340,8 @@ __force_inline uint8_t read_picogus_high(void) {
             cur_read = 0;
         }
         return ret;
-    case MODE_MODE: // Mode (GUS, OPL, MPU, etc...)
-#if defined(SOUND_GUS)
-        return GUS_MODE;
-#elif defined(SOUND_MPU)
-        return MPU_MODE;
-#elif defined(SOUND_TANDY)
-        return TANDY_MODE;
-#elif defined(SOUND_CMS)
-        return CMS_MODE;
-#elif defined(SOUND_SB)
-        return SB_MODE;
-#elif defined(SOUND_OPL)
-        return ADLIB_MODE;
-#elif defined(USB_ONLY)
-        return USB_MODE;
-#else
-        return INVALID_MODE;
-#endif
+    case MODE_BOOTMODE: // Mode (GUS, OPL, MPU, etc...)
+	return settings.startupMode;
     case MODE_GUSPORT: // GUS Base port
         return settings.GUS.basePort >> 8;
     case MODE_OPLPORT: // Adlib Base port
@@ -801,6 +784,23 @@ int main()
 
     // Load settings from flash
     loadSettings(&settings);
+#if defined(SOUND_GUS)
+    settings.startupMode = GUS_MODE;
+#elif defined(SOUND_MPU)
+    settings.startupMode = MPU_MODE;
+#elif defined(SOUND_TANDY)
+    settings.startupMode = TANDY_MODE;
+#elif defined(SOUND_CMS)
+    settings.startupMode = CMS_MODE;
+#elif defined(SOUND_SB)
+    settings.startupMode = SB_MODE;
+#elif defined(SOUND_OPL)
+    settings.startupMode = ADLIB_MODE;
+#elif defined(USB_ONLY)
+    settings.startupMode = USB_MODE;
+#else
+    settings.startupMode = INVALID_MODE;
+#endif
     hw_clear_bits(&xip_ctrl_hw->ctrl, XIP_CTRL_EN_BITS);
 
     // Determine board type. GPIO 29 is grounded on PicoGUS v2.0, and on a Pico, it's VSYS/3 (~1.666V)
