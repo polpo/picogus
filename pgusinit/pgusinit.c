@@ -40,7 +40,7 @@ void usage(char *argv0, card_mode_t mode, bool print_all) {
     printf("\n");
     if (mode == GUS_MODE || print_all) {
         //     "................................................................................\n"
-        printf("GUS mode settings:\n");
+        printf("GUS settings:\n");
         printf("   /gusport x  - set the base port of the GUS. Default: 240\n");
         printf("   /gusbuf n   - set audio buffer to n samples. Default: 4, Min: 1, Max: 256\n");
         printf("                 (tweaking can help programs that hang or have audio glitches)\n");
@@ -52,15 +52,18 @@ void usage(char *argv0, card_mode_t mode, bool print_all) {
     }
     if (mode == SB_MODE || print_all) {
         //     "................................................................................\n"
-        printf("Sound Blaster/AdLib mode settings:\n");
+        printf("Sound Blaster settings:\n");
         printf("   /sbport x    - set the base port of the Sound Blaster. Default: 220\n");
+    }
+    if (mode == SB_MODE || mode == ADLIB_MODE || print_all) {
+        printf("AdLib settings:\n");
         printf("   /oplport x   - set the base port of the OPL2/AdLib on the SB. Default: 388\n");
         printf("   /oplwait 1|0 - wait on OPL2 write. Can fix speed-sensitive early AdLib games\n");
         printf("\n");
     }
     if (mode == MPU_MODE || print_all) {
         //     "................................................................................\n"
-        printf("MPU-401 mode settings:\n");
+        printf("MPU-401 settings:\n");
         printf("   /mpuport x    - set the base port of the MPU-401. Default: 330\n");
         printf("   /mpudelay 1|0 - delay SYSEX (for rev.0 Roland MT-32)\n");
         printf("   /mpufake 1|0  - fake all notes off (for Roland RA-50)\n");
@@ -68,19 +71,19 @@ void usage(char *argv0, card_mode_t mode, bool print_all) {
     }
     if (mode == TANDY_MODE || print_all) {
         //     "................................................................................\n"
-        printf("Tandy mode settings:\n");
+        printf("Tandy settings:\n");
         printf("   /tandyport x - set the base port of the Tandy 3-voice. Default: 2C0\n");
         printf("\n");
     }
     if (mode == CMS_MODE || print_all) {
         //     "................................................................................\n"
-        printf("CMS mode settings:\n");
+        printf("CMS settings:\n");
         printf("   /cmsport x - set the base port of the CMS. Default: 220\n");
         printf("\n");
     }
     if (mode == USB_MODE || print_all) {
         //     "................................................................................\n"
-        printf("Serial Mouse mode settings:\n");
+        printf("Serial Mouse settings:\n");
         printf("   /mouseport n  - set COM port of the mouse. Default: 2, Choices: 1, 2, 3, 4\n");
         printf("   /mouseproto n - set mouse protocol. Default: 2 (IntelliMouse)\n");
         printf("          0 - Microsoft Mouse 2-button,      1 - Logitech 3-button\n");
@@ -140,7 +143,11 @@ int init_gus(char *argv0) {
     }
 
     outp(CONTROL_PORT, MODE_GUSPORT); // Select port register
-    outpw(DATA_PORT_LOW, port); // Write port
+    uint16_t tmp_port = inpw(DATA_PORT_LOW); // Write port
+    if (port != tmp_port) {
+	err_ultrasnd(argv0);
+        return 2;
+    }
 
     // Detect if there's something GUS-like...
     // Set memory address to 0
@@ -378,7 +385,7 @@ int main(int argc, char* argv[]) {
     int i = 1;
     // /flash option is special and can work across protocol versions, so if it's specified, that's all we do
     while (i < argc) {
-        if (stricmp(argv[i], "/flash") == 0) {
+	if (stricmp(argv[i], "/flash") == 0) {
             if (i + 1 >= argc) {
                 usage(argv[0], INVALID_MODE, false);
                 return 255;
@@ -390,6 +397,7 @@ int main(int argc, char* argv[]) {
             }
             return write_firmware(fw_filename);
         }
+        ++i;
     }
 
     outp(CONTROL_PORT, 0x01); // Select protocol version register
@@ -586,18 +594,16 @@ int main(int argc, char* argv[]) {
     tmp_uint8 = inp(DATA_PORT_HIGH);
     printf("USB joystick support %s\n", tmp_uint8 ? "enabled" : "disabled");
 
-    // Get joystick status (connected, joystick type, etc.)
-
     if (board_type == PICOGUS_2) {
         outp(CONTROL_PORT, MODE_WTVOL); // Select wavetable volume register
-        outp(DATA_PORT_HIGH, wtvol); // Write volume
+        wtvol = inp(DATA_PORT_HIGH); // Write volume
         printf("Wavetable volume set to %u\n", wtvol);
     }
 
     switch(mode) {
     case GUS_MODE:
         init_gus(argv[0]);
-        printf("GUS settings: ");
+        printf("GUS mode: ");
         outp(CONTROL_PORT, MODE_GUSBUF); // Select audio buffer register
         tmp_uint16 = inp(DATA_PORT_HIGH) + 1;
         printf("Audio buffer: %u samples; ", tmp_uint16);
@@ -613,26 +619,27 @@ int main(int argc, char* argv[]) {
         outp(CONTROL_PORT, MODE_GUS44K); // Select force 44k buffer
         tmp_uint8 = inp(DATA_PORT_HIGH);
         if (tmp_uint8) {
-            printf("Fixed 44.1kHz rate\n");
+            printf("Sample rate: fixed 44.1k\n");
         } else {
-            printf("Variable sample rate\n");
+            printf("Sample rate: variable\n");
         }
         
         outp(CONTROL_PORT, MODE_GUSPORT); // Select port register
         tmp_uint16 = inpw(DATA_PORT_LOW); // Get port
         printf("Running in GUS mode on port %x\n", tmp_uint16);
         break;
-    /* AdLib mode is coming back...
     case ADLIB_MODE:
         outp(CONTROL_PORT, MODE_OPLPORT); // Select port register
         tmp_uint16 = inpw(DATA_PORT_LOW); // Get port
-        printf("Running in AdLib/OPL2 mode on port %x\n", tmp_uint16);
+        printf("Running in AdLib/OPL2 mode on port %x", tmp_uint16);
+        outp(CONTROL_PORT, MODE_OPLWAIT); // Select Adlib wait register
+        tmp_uint8 = inp(DATA_PORT_HIGH);
+        printf("%s\n", tmp_uint8 ? ", wait on" : "");
         break;
-    */
     case MPU_MODE:
         outp(CONTROL_PORT, MODE_MPUDELAY); // Select force 44k buffer
         tmp_uint8 = inp(DATA_PORT_HIGH);
-        printf("MPU-401 sysex delay: %s, ", tmp_uint8 ? "on" : "off");
+        printf("MPU-401 sysex delay: %s; ", tmp_uint8 ? "on" : "off");
         outp(CONTROL_PORT, MODE_MPUFAKE); // Select force 44k buffer
         tmp_uint8 = inp(DATA_PORT_HIGH);
         printf("fake all notes off: %s\n", tmp_uint8 ? "on" : "off");
@@ -651,7 +658,7 @@ int main(int argc, char* argv[]) {
         printf("Running in CMS/Game Blaster mode on port %x\n", tmp_uint16);
         break;
     case SB_MODE:
-        outp(CONTROL_PORT, MODE_OPLPORT); // Select port register
+        outp(CONTROL_PORT, MODE_SBPORT); // Select port register
         tmp_uint16 = inpw(DATA_PORT_LOW); // Get port
         printf("Running in Sound Blaster 2.0 mode on port %x ", tmp_uint16);
         outp(CONTROL_PORT, MODE_OPLPORT); // Select port register
@@ -690,3 +697,4 @@ int main(int argc, char* argv[]) {
 
     return 0;
 }
+

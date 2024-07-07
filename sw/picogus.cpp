@@ -308,17 +308,17 @@ __force_inline void write_picogus_high(uint8_t value) {
 __force_inline uint8_t read_picogus_low(void) {
     switch (sel_reg) {
     case MODE_GUSPORT: // GUS Base port
-        return settings.GUS.basePort == 0xFFFF ? 0 : (settings.Mouse.basePort & 0xFF);
+        return settings.GUS.basePort == 0xFFFF ? 0 : (settings.GUS.basePort & 0xFF);
     case MODE_OPLPORT: // Adlib Base port
-        return settings.SB.oplBasePort == 0xFFFF ? 0 : (settings.Mouse.basePort & 0xFF);
+        return settings.SB.oplBasePort == 0xFFFF ? 0 : (settings.SB.oplBasePort & 0xFF);
     case MODE_SBPORT: // SB Base port
-        return settings.SB.basePort == 0xFFFF ? 0 : (settings.Mouse.basePort & 0xFF);
+        return settings.SB.basePort == 0xFFFF ? 0 : (settings.SB.basePort & 0xFF);
     case MODE_MPUPORT: // MPU Base port
-        return settings.MPU.basePort == 0xFFFF ? 0 : (settings.Mouse.basePort & 0xFF);
+        return settings.MPU.basePort == 0xFFFF ? 0 : (settings.MPU.basePort & 0xFF);
     case MODE_TANDYPORT: // Tandy Base port
-        return settings.Tandy.basePort == 0xFFFF ? 0 : (settings.Mouse.basePort & 0xFF);
+        return settings.Tandy.basePort == 0xFFFF ? 0 : (settings.Tandy.basePort & 0xFF);
     case MODE_CMSPORT: // CMS Base port
-        return settings.CMS.basePort == 0xFFFF ? 0 : (settings.Mouse.basePort & 0xFF);
+        return settings.CMS.basePort == 0xFFFF ? 0 : (settings.CMS.basePort & 0xFF);
     case MODE_MOUSEPORT:  // USB Mouse port (0 - disabled)
         return settings.Mouse.basePort == 0xFFFF ? 0 : (settings.Mouse.basePort & 0xFF);
     case MODE_MOUSESEN:  // USB Mouse Sensitivity (8.8 fixedpoint)

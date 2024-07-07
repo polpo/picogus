@@ -207,7 +207,7 @@ function(build_adlib TARGET_NAME MULTIFW)
     set(USB_JOYSTICK TRUE)
     set(USB_MOUSE TRUE)
     config_target(${TARGET_NAME} ${MULTIFW})
-    pico_set_program_name(${TARGET_NAME} "picogus-sb")
+    pico_set_program_name(${TARGET_NAME} "picogus-adlib")
     target_sources(${TARGET_NAME} PRIVATE sbplay.cpp)    
     target_link_libraries(${TARGET_NAME} opl)
     target_compile_definitions(${TARGET_NAME} PRIVATE
