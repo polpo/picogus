@@ -2,7 +2,7 @@ name: Build
 on: [push, pull_request]
 jobs:
     build-firmware:
-      runs-on: ubuntu-latest
+      runs-on: ubuntu-22.04
       env: 
         BUILD_TYPE: "Release"
         PICOSDK_VER: "1.5.1"
@@ -69,7 +69,7 @@ jobs:
           path: ${{env.OUTPUT_DIR}}
 
     build-pgusinit:
-      runs-on: ubuntu-latest
+      runs-on: ubuntu-22.04
       env: 
         BUILD_TYPE: "Release"
         OUTPUT_DIR: ${{github.workspace}}/binaries
@@ -101,7 +101,7 @@ jobs:
 
     create-release:
       if: github.ref_type == 'tag' && startsWith(github.ref_name, 'v')
-      runs-on: ubuntu-latest
+      runs-on: ubuntu-22.04
       needs: [build-firmware, build-pgusinit]
       env: 
         STAGING_DIR: ${{github.workspace}}/release-staging-dir
