@@ -13,17 +13,6 @@ void banner(void) {
     printf("PicoGUSinit v3.0.0 (c) 2024 Ian Scott - licensed under the GNU GPL v2\n\n");
 }
 
-const char* usage_by_card[] = {
-    "[/a n] [/d n] [/4]",       // GUS_MODE
-    "[/p x]",                   // ADLIB_MODE
-    "[/p x] [/v x] [/s] [/n]",  // MPU_MODE
-    "[/p x]",                   // TANDY_MODE
-    "[/p x]",                   // CMS_MODE
-    "[/p x] [/o x] [/w]",       // SB_MODE
-    "", "", "", "", "", "", "", "",
-    "[/p x] [/m n] [/r n] [/s n]", // MOUSE_ONLY_MODE
-    "",                         // JOYSTICK_ONLY_MODE
-};
 
 void usage(char *argv0, card_mode_t mode, bool print_all) {
     // Max line length @ 80 chars:
@@ -33,10 +22,10 @@ void usage(char *argv0, card_mode_t mode, bool print_all) {
     printf("   /flash fw.uf2 - program the PicoGUS with the firmware file fw.uf2\n");
     printf("   /wtvol x      - set volume of wavetable header. Scale 0-100, Default: 100\n");
     printf("                   (for PicoGUS v2.0 boards only)\n");
-    printf("   /mode x       - change card mode to x (gus, sb, mpu, tandy, cms, usb)\n");
+    printf("   /mode x       - change card mode to x (gus, sb, mpu, tandy, cms, adlib, usb)\n");
     printf("   /defaults     - set all settings for all modes to defaults\n");
     printf("   /save         - save settings to the card to persist on system boot\n");
-    printf("   /joy 1|0      - enable/disable USB joystick support\n");
+    printf("   /joy 1|0      - enable/disable USB joystick support, Default: 0\n");
     printf("\n");
     if (mode == GUS_MODE || print_all) {
         //     "................................................................................\n"
@@ -84,8 +73,8 @@ void usage(char *argv0, card_mode_t mode, bool print_all) {
     if (mode == USB_MODE || mode == CMS_MODE || mode == TANDY_MODE || mode == ADLIB_MODE || print_all) {
         //     "................................................................................\n"
         printf("Serial Mouse settings:\n");
-        printf("   /mouseport n  - set COM port of the mouse. Default: 2, Choices: 1, 2, 3, 4\n");
-        printf("   /mouseproto n - set mouse protocol. Default: 2 (IntelliMouse)\n");
+        printf("   /mousecom n - mouse COM port. Default: 0, Choices: 0 (disable), 1, 2, 3, 4\n");
+        printf("   /mouseproto n - set mouse protocol. Default: 0 (Microsoft)\n");
         printf("          0 - Microsoft Mouse 2-button,      1 - Logitech 3-button\n");
         printf("          2 - IntelliMouse 3-button + wheel, 3 - Mouse Systems 3-button\n");
         printf("   /mouserate n  - set report rate in Hz. Default: 60, Min: 20, Max: 200\n");
@@ -113,6 +102,12 @@ void err_ultrasnd(char *argv0) {
 }
 
 
+void err_blaster(char *argv0) {
+    fprintf(stderr, "ERROR: no BLASTER variable set or is malformed!\n");
+    usage(argv0, SB_MODE, false);
+}
+
+
 void err_pigus(void) {
     fprintf(stderr, "ERROR: no PicoGUS detected!\n");
 }
@@ -133,19 +128,17 @@ int init_gus(char *argv0) {
 
     // Parse ULTRASND
     uint16_t port;
-    uint8_t irq;
-    uint8_t dma;
     int e;
-    e = sscanf(ultrasnd, "%hx,%hhu,%*hhu,%hhu,%*hhu", &port, &irq, &dma);
-    if (e != 3) {
+    e = sscanf(ultrasnd, "%hx,%*hhu,%*hhu,%*hhu,%*hhu", &port);
+    if (e != 1) {
         err_ultrasnd(argv0);
         return 2;
     }
 
     outp(CONTROL_PORT, MODE_GUSPORT); // Select port register
-    uint16_t tmp_port = inpw(DATA_PORT_LOW); // Write port
+    uint16_t tmp_port = inpw(DATA_PORT_LOW);
     if (port != tmp_port) {
-	err_ultrasnd(argv0);
+        err_ultrasnd(argv0);
         return 2;
     }
 
@@ -172,6 +165,32 @@ int init_gus(char *argv0) {
     outp(port + 0x105, 0x1);
     return 0;
 }
+
+
+int init_sb(char *argv0) {
+    char* blaster = getenv("BLASTER");
+    if (blaster == NULL) {
+        err_blaster(argv0);
+        return 1;
+    }
+
+    // Parse BLASTER
+    uint16_t port;
+    int e;
+    e = sscanf(blaster, "A%hx I%*hhu D%*hhu T3", &port);
+    if (e != 1) {
+        err_blaster(argv0);
+        return 2;
+    }
+
+    outp(CONTROL_PORT, MODE_SBPORT); // Select port register
+    uint16_t tmp_port = inpw(DATA_PORT_LOW);
+    if (port != tmp_port) {
+        err_blaster(argv0);
+        return 2;
+    }
+}
+
 
 void print_firmware_string(void) {
     outp(CONTROL_PORT, 0xCC); // Knock on the door...
@@ -523,8 +542,36 @@ int main(int argc, char* argv[]) {
             outp(CONTROL_PORT, MODE_CMSPORT); // Select CMS port register
             outpw(DATA_PORT_LOW, tmp_uint16); // Write port
         // Mouse options /////////////////////////////////////////////////////////////////
-        } else if (stricmp(argv[i], "/mouseport") == 0) {
-            process_port_opt(tmp_uint16);
+        } else if (stricmp(argv[i], "/mousecom") == 0) {
+            if (i + 1 >= argc) {
+                usage(argv[0], mode, false);
+                return 255;
+            }
+            e = sscanf(argv[++i], "%hhu", &tmp_uint8);
+            if (e != 1 || tmp_uint8 > 3) {
+                usage(argv[0], mode, false);
+                return 4;
+            }
+            switch (tmp_uint8) {
+            case 0:
+                tmp_uint16 = 0;
+                break;
+            case 1:    
+                tmp_uint16 = 0x3f8;
+                break;
+            case 2:    
+                tmp_uint16 = 0x2f8;
+                break;
+            case 3:    
+                tmp_uint16 = 0x3e8;
+                break;
+            case 4:    
+                tmp_uint16 = 0x2e8;
+                break;
+            default:
+                usage(argv[0], mode, false);
+                return 4;
+            }
             outp(CONTROL_PORT, MODE_MOUSEPORT); // Select mouse port register
             outpw(DATA_PORT_LOW, tmp_uint16);
         } else if (stricmp(argv[i], "/mousesen") == 0) {
@@ -563,6 +610,10 @@ int main(int argc, char* argv[]) {
             }
             outp(CONTROL_PORT, MODE_MOUSERATE);
             outp(DATA_PORT_HIGH, tmp_uint8);
+        } else {
+            printf("Unknown option: %s\n", argv[i]);
+            usage(argv[0], mode, false);
+            return 255;
         }
         ++i;
     }
@@ -606,7 +657,9 @@ int main(int argc, char* argv[]) {
 
     switch(mode) {
     case GUS_MODE:
-        init_gus(argv[0]);
+        if (init_gus(argv[0])) {
+            return 1;
+        }
         printf("GUS mode: ");
         outp(CONTROL_PORT, MODE_GUSBUF); // Select audio buffer register
         tmp_uint16 = inp(DATA_PORT_HIGH) + 1;
@@ -662,6 +715,9 @@ int main(int argc, char* argv[]) {
         printf("Running in CMS/Game Blaster mode on port %x\n", tmp_uint16);
         break;
     case SB_MODE:
+        if (init_sb(argv[0])) {
+            return 1;
+        }
         outp(CONTROL_PORT, MODE_SBPORT); // Select port register
         tmp_uint16 = inpw(DATA_PORT_LOW); // Get port
         printf("Running in Sound Blaster 2.0 mode on port %x ", tmp_uint16);
@@ -672,26 +728,46 @@ int main(int argc, char* argv[]) {
         tmp_uint8 = inp(DATA_PORT_HIGH);
         printf("%s)\n", tmp_uint8 ? ", wait on" : "");
         break;
-    case USB_MODE:
-        outp(CONTROL_PORT, MODE_MOUSEPORT); // Select port register
-        tmp_uint16 = inpw(DATA_PORT_LOW); // Get port
-        printf("Running in Serial Mouse exclusive mode on port %x\n", tmp_uint16);
-
-        outp(CONTROL_PORT, MODE_MOUSERATE);
-        tmp_uint8 = inp(DATA_PORT_HIGH);
-        printf("Mouse report rate: %d Hz, ", tmp_uint8);
-
-        outp(CONTROL_PORT, MODE_MOUSEPROTO);
-        tmp_uint8 = inp(DATA_PORT_HIGH);
-        printf("protocol: %s\n", mouse_protocol_str[tmp_uint8]);
-
-        outp(CONTROL_PORT, MODE_MOUSESEN);
-        tmp_uint16 = inpw(DATA_PORT_LOW);
-        printf("Mouse sensitivity: %d (%d.%02d)\n", tmp_uint16, (tmp_uint16 >> 8), ((tmp_uint16 & 0xFF) * 100) >> 8);
-        break;
     default:
         printf("Running in unknown mode (maybe upgrade pgusinit?)\n");
         break;
+    }
+    if (mode == USB_MODE || mode == CMS_MODE || mode == TANDY_MODE || mode == ADLIB_MODE) {
+        outp(CONTROL_PORT, MODE_MOUSEPORT); // Select port register
+        tmp_uint16 = inpw(DATA_PORT_LOW); // Get port
+        printf("Serial Mouse ");
+        switch (tmp_uint16) {
+        case 0:
+            printf("disabled (enable with /mousecom n option)\n");
+            break;
+        case 0x3f8:
+            printf("enabled on COM1\n");
+            break;
+        case 0x2f8:
+            printf("enabled on COM2\n");
+            break;
+        case 0x3e8:
+            printf("enabled on COM3\n");
+            break;
+        case 0x2e8:
+            printf("enabled on COM4\n");
+            break;
+        default:
+            printf("enabled on IO port %x\n", tmp_uint16);
+        }
+        if (tmp_uint16 != 0) {
+            outp(CONTROL_PORT, MODE_MOUSERATE);
+            tmp_uint8 = inp(DATA_PORT_HIGH);
+            printf("Mouse report rate: %d Hz, ", tmp_uint8);
+
+            outp(CONTROL_PORT, MODE_MOUSEPROTO);
+            tmp_uint8 = inp(DATA_PORT_HIGH);
+            printf("protocol: %s\n", mouse_protocol_str[tmp_uint8]);
+
+            outp(CONTROL_PORT, MODE_MOUSESEN);
+            tmp_uint16 = inpw(DATA_PORT_LOW);
+            printf("Mouse sensitivity: %d (%d.%02d)\n", tmp_uint16, (tmp_uint16 >> 8), ((tmp_uint16 & 0xFF) * 100) >> 8);
+        }
     }
     printf("PicoGUS initialized!\n");
 
