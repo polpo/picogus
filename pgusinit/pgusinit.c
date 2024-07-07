@@ -366,7 +366,7 @@ if (e != 1) { \
     usage(argv[0], mode, false); \
     return 5; \
 } \
-option = (tmp_arg[0] == 1) ? 1 : 0;
+option = (tmp_arg[0] == '1') ? 1 : 0;
 
 
 #define process_port_opt(option) \
