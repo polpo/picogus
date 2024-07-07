@@ -81,7 +81,7 @@ void usage(char *argv0, card_mode_t mode, bool print_all) {
         printf("   /cmsport x - set the base port of the CMS. Default: 220\n");
         printf("\n");
     }
-    if (mode == USB_MODE || print_all) {
+    if (mode == USB_MODE || mode == CMS_MODE || mode == TANDY_MODE || mode == ADLIB_MODE || print_all) {
         //     "................................................................................\n"
         printf("Serial Mouse settings:\n");
         printf("   /mouseport n  - set COM port of the mouse. Default: 2, Choices: 1, 2, 3, 4\n");

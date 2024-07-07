@@ -23,6 +23,9 @@
 #include "tusb.h"
 #endif
 #ifdef USB_MOUSE
+#ifdef USE_ALARM
+#include "pico_pic.h"
+#endif
 #include "mouse/8250uart.h"
 #include "mouse/sermouse.h"
 #endif
@@ -84,6 +87,13 @@ void play_cms() {
     puts("starting core 1 CMS");
     flash_safe_execute_core_init();
 
+#ifdef USB_MOUSE
+#ifdef USE_ALARM
+    // Init PIC on this core so it handles timers
+    PIC_Init();
+    puts("pic inited on core 1");
+#endif
+#endif
 #ifdef USB_STACK
     // Init TinyUSB for joystick support
     tuh_init(BOARD_TUH_RHPORT);

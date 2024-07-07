@@ -24,6 +24,8 @@ extern "C" void OPL_Pico_PortWrite(opl_port_t, unsigned int);
 
 #ifdef SOUND_SB
 extern int16_t sbdsp_sample();
+#endif
+#if defined(SOUND_SB) || defined(USB_MOUSE)
 #ifdef USE_ALARM
 #include "pico_pic.h"
 #endif
@@ -99,7 +101,7 @@ void play_adlib() {
     flash_safe_execute_core_init();
     uint32_t start, end;
 
-#ifdef SOUND_SB
+#if defined(SOUND_SB) || defined(USB_MOUSE)
 #ifdef USE_ALARM
     // Init PIC on this core so it handles timers
     PIC_Init();
