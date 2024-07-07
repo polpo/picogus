@@ -523,6 +523,10 @@ int main(int argc, char* argv[]) {
             outp(CONTROL_PORT, MODE_CMSPORT); // Select CMS port register
             outpw(DATA_PORT_LOW, tmp_uint16); // Write port
         // Mouse options /////////////////////////////////////////////////////////////////
+        } else if (stricmp(argv[i], "/mouseport") == 0) {
+            process_port_opt(tmp_uint16);
+            outp(CONTROL_PORT, MODE_MOUSEPORT); // Select mouse port register
+            outpw(DATA_PORT_LOW, tmp_uint16);
         } else if (stricmp(argv[i], "/mousesen") == 0) {
             if (i + 1 >= argc) {
                 usage(argv[0], mode, false);

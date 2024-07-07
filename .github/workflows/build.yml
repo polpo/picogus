@@ -57,7 +57,7 @@ jobs:
         working-directory: ${{github.workspace}}/build
         run: |
           mkdir -p $OUTPUT_DIR
-          cmake $GITHUB_WORKSPACE/sw -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DPROJECT_TYPE="MULTIFW" -DUSE_LTO=1 -DUSB_JOYSTICK=1
+          cmake $GITHUB_WORKSPACE/sw -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DPROJECT_TYPE="MULTIFW" -DUSE_LTO=1
           cmake --build . --config $BUILD_TYPE --parallel $(nproc)
           cp picogus.uf2 $OUTPUT_DIR/picogus.uf2
 

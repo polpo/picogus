@@ -341,7 +341,7 @@ __force_inline uint8_t read_picogus_high(void) {
         }
         return ret;
     case MODE_BOOTMODE: // Mode (GUS, OPL, MPU, etc...)
-	return settings.startupMode;
+        return settings.startupMode;
     case MODE_GUSPORT: // GUS Base port
         return settings.GUS.basePort >> 8;
     case MODE_OPLPORT: // Adlib Base port

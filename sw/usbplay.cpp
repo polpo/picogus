@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include "pico/flash.h"
 
 #include "tusb.h"
 #include "mouse/8250uart.h"
@@ -12,6 +13,7 @@
 
 void play_usb() {
     puts("starting core 1 USB");
+    flash_safe_execute_core_init();
 
     // board_init();
 
