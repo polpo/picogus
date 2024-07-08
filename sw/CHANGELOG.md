@@ -1,3 +1,46 @@
+# v2.0.0
+
+## New features/changes
+
+### Serial mouse emulation
+
+Now you can use a USB mouse as a serial mouse on your PC. Features a configurable report rate defaulting to 60Hz so the emulated serial mouse is much smoother and more responsive than a real serial mouse. Also supports configurable sensitivity and protocol support, including Microsoft, Logitech, Mouse Systems, and Intellimouse with wheel support. Note that being a serial port, this does use an IRQ so the IRQ jumper on the PicoGUS must be set to IRQ 4 or 3 depending on which serial port is configured, or use a mouse driver like ctmouse that can use a custom IRQ. Serial mouse can be emulated simultaneously with sound card modes that do not require IRQ such as AdLib, CMS, and Tandy (MPU coming in future firmware for games that don't need MPU IRQ).
+
+Thanks to [Artem Vasilev (wbcbz7)](https://github.com/wbcbz7) for implementing mouse and 8250 UART emulation.
+
+### "Multifw" - all modes in one firmware
+
+All emulation modes (GUS, SB, MPU, etc.) are now contained within the same firmware. This means switching between modes is much faster than before, taking 1-2 seconds on average. Switching also no longer involves writing new firmware to the card's flash, alleviating flash wear concerns (each sector on the flash is rated for at least 100,000 cycles, so there wasn't not much to worry about, but it's still nice for peace of mind).
+
+Many thanks to [Jeroen Taverne](https://github.com/jeroentaverne) for developing [the original proof of concept](https://github.com/jeroentaverne/pico_multi_firmware) and [smymm](https://github.com/smymm) for implementing it within the PicoGUS codebase.
+
+### Card settings can now be saved in flash
+
+Once you're satisfied with your PicoGUS's settings, they can now be saved in the card's flash. Saved settings persist across reboots or power cycle without needing to run pgusinit each boot.
+
+For example, when using serial mouse emulation, some BIOSes like MRBIOS need to see the emulated serial port right at boot. Also as a bonus if you want to use emulation modes outside of DOS, settings will apply in those other operating systems. Want to use GUS in OS/2 or Linux, or serial mouse when setting up NeXTStep? This will help!
+
+### Overhaul of pgusinit
+
+To support the above new features, adding more options to pgusinit meant I ran out of single letters for its various switches that make mnemonic sense. I've moved to longer yet hopefully still fast to type names for each of the switches.
+
+Also, each pgusinit option now persists between invocations of pgusinit. Previously, most but not all options had to be given in the same invocation of pgusinit. Each option that would enable a feature (e.g. joystick support) has been turned into an on/off option so it can be turned off as well as on.
+
+Running pgusinit by itself will now show all the currently applied settings for the current firmware mode.
+
+See the [pgusinit README](https://github.com/polpo/picogus/blob/v2.0.0/pgusinit/README.md) for more details on running pgusinit.
+
+## Fixes
+
+### Sound Blaster 2.0:
+
+* Added speaker on/off commands
+* Greatly increased quality of output in "Direct DAC" mode
+
+### OPL2 emulation
+
+* Fixed "missing notes" issue, most commonly heard in Prince of Persia. Thank you to [TerryFi](https://github.com/TerryFi) for discovering the issue and coming up with a preliminary fix, then incorporating the final fix from the upstream emu8950 repository.
+
 # v1.2.0
 
 ## New features/fixes
