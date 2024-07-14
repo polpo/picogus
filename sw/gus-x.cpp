@@ -1251,7 +1251,7 @@ __force_inline static void ExecuteGlobRegister(void) {
     return;
 }
 
-__force_inline Bitu read_gus(Bitu port) {
+__force_inline uint8_t read_gus(Bitu port) {
     uint16_t reg16;
 
 //  LOG_MSG("read from gus port %x",port);
@@ -1306,7 +1306,7 @@ __force_inline Bitu read_gus(Bitu port) {
     case 0xa:
         return adlib_commandreg;
     case 0xf:
-        return ~0ul; // should not happen
+        return 0xff; // should not happen
     case 0x102:
         return myGUS.gRegSelectData;
     case 0x103:

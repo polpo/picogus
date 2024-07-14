@@ -27,7 +27,7 @@ extern "C" void OPL_Pico_stereo(int16_t *buffer_l, int16_t *buffer_r, uint32_t n
 #else
 extern "C" void OPL_Pico_simple(int16_t *buffer, uint32_t nsamples);
 #endif
-#if defined(SOUND_SB) || defined(USB_MOUSE)
+#if defined(SOUND_SB) || defined(USB_MOUSE) || defined(SOUND_MPU)
 #ifdef USE_ALARM
 #include "pico_pic.h"
 #endif
@@ -44,6 +44,12 @@ extern cms_buffer_t opl_buffer;
 #ifdef USB_MOUSE
 #include "mouse/8250uart.h"
 #include "mouse/sermouse.h"
+#endif
+
+#ifdef SOUND_MPU
+#include "flash_settings.h"
+extern Settings settings;
+#include "mpu401/export.h"
 #endif
 
 extern uint LED_PIN;
@@ -103,7 +109,7 @@ void play_adlib() {
     flash_safe_execute_core_init();
     uint32_t start, end;
 
-#if defined(SOUND_SB) || defined(USB_MOUSE)
+#if defined(SOUND_SB) || defined(USB_MOUSE) || defined(SOUND_MPU)
 #ifdef USE_ALARM
     // Init PIC on this core so it handles timers
     PIC_Init();
@@ -116,6 +122,10 @@ void play_adlib() {
 #endif
 
     clamp_setup();
+
+#ifdef SOUND_MPU
+    MPU401_Init(settings.MPU.delaySysex, settings.MPU.fakeAllNotesOff);
+#endif
 
     struct audio_buffer_pool *ap = init_audio();
 
@@ -159,6 +169,9 @@ void play_adlib() {
 
         // uart emulation task
         uartemu_core1_task();
+#endif
+#ifdef SOUND_MPU
+        send_midi_bytes(1);
 #endif
     }
 }

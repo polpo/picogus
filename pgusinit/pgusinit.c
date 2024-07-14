@@ -20,11 +20,11 @@ void usage(char *argv0, card_mode_t mode, bool print_all) {
     printf("Usage:\n");
     printf("   /?            - show this message (/?? to show options for all modes)\n");
     printf("   /flash fw.uf2 - program the PicoGUS with the firmware file fw.uf2\n");
+    printf("   /mode x       - change card mode to x (gus, sb, mpu, tandy, cms, adlib, usb)\n");
+    printf("   /save         - save settings to the card to persist on system boot\n");
+    printf("   /defaults     - set all settings for all modes to defaults\n");
     printf("   /wtvol x      - set volume of wavetable header. Scale 0-100, Default: 100\n");
     printf("                   (for PicoGUS v2.0 boards only)\n");
-    printf("   /mode x       - change card mode to x (gus, sb, mpu, tandy, cms, adlib, usb)\n");
-    printf("   /defaults     - set all settings for all modes to defaults\n");
-    printf("   /save         - save settings to the card to persist on system boot\n");
     printf("   /joy 1|0      - enable/disable USB joystick support, Default: 0\n");
     printf("\n");
     if (mode == GUS_MODE || print_all) {
