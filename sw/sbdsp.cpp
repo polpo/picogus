@@ -18,8 +18,8 @@ static irq_handler_t SBDSP_DMA_isr_pt;
 static dma_inst_t dma_config;
 #define DMA_PIO_SM 2
 
-#define DSP_VERSION_MAJOR 2
-#define DSP_VERSION_MINOR 1
+#define DSP_VERSION_MAJOR 3
+#define DSP_VERSION_MINOR 0
 
 // Sound Blaster DSP I/O port offsets
 #define DSP_RESET           0x6
