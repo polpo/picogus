@@ -47,10 +47,9 @@ extern void sbdsp_init();
 extern void sbdsp_process();
 #endif
 #ifdef SOUND_OPL
-#include "opl.h"
 void play_adlib(void);
-extern "C" int OPL_Pico_Init(unsigned int);
-extern "C" unsigned int OPL_Pico_PortRead(opl_port_t);
+extern "C" int OPL_Pico_Init(void);
+extern "C" unsigned int OPL_Pico_PortRead(uint16_t);
 #include "cmd_buffers.h"
 cms_buffer_t opl_buffer = { {0}, 0, 0 };
 #endif
@@ -451,22 +450,20 @@ __force_inline void handle_iow(void) {
     if ((port >> 4) == sb_port_test) {      
         switch (port - settings.SB.basePort) {
         // OPL ports
+        case 0x0:
+        case 0x1:
+        case 0x2:
+        case 0x3:
         case 0x8:
+        case 0x9:
             // Fast write
             pio_sm_put(pio0, IOW_PIO_SM, IO_END);
             opl_buffer.cmds[opl_buffer.head++] = {
-                OPL_REGISTER_PORT,
+                port,
                 (uint8_t)(iow_read & 0xFF)
             };
             // Fast write - return early as we've already written 0x0u to the PIO
             return;
-            break;
-        case 0x9:
-            pio_sm_put(pio0, IOW_PIO_SM, IO_WAIT);
-            opl_buffer.cmds[opl_buffer.head++] = {
-                OPL_DATA_PORT,
-                (uint8_t)(iow_read & 0xFF)
-            };
             break;
         // DSP ports
         default:
@@ -479,24 +476,15 @@ __force_inline void handle_iow(void) {
     } else // if follows down below
 #endif // SOUND_SB
 #if defined(SOUND_OPL)
-    if (port == settings.SB.oplBasePort) {
+    if ((port & 0x3fe) == settings.SB.oplBasePort) {
         // Fast write
         pio_sm_put(pio0, IOW_PIO_SM, IO_END);
         opl_buffer.cmds[opl_buffer.head++] = {
-            OPL_REGISTER_PORT,
+            port,
             (uint8_t)(iow_read & 0xFF)
         };
         // Fast write - return early as we've already written 0x0u to the PIO
         return;
-    } else if (port == settings.SB.oplBasePort + 1) {
-        pio_sm_put(pio0, IOW_PIO_SM, IO_WAIT);
-        if (settings.SB.oplSpeedSensitive) {
-            busy_wait_us(1); // busy wait for speed sensitive games
-        }
-        opl_buffer.cmds[opl_buffer.head++] = {
-            OPL_DATA_PORT,
-            (uint8_t)(iow_read & 0xFF)
-        };
     } else // if follows down below
 #endif // SOUND_OPL
 #ifdef SOUND_MPU
@@ -626,16 +614,23 @@ __force_inline void handle_ior(void) {
 #if defined(SOUND_SB)
     if ((port >> 4) == sb_port_test) {
         pio_sm_put(pio0, IOR_PIO_SM, IO_WAIT);
-        if (port - settings.SB.basePort == 0x8) {
+        switch (port - settings.SB.basePort) {
+        // OPL ports
+        case 0x0:
+        case 0x2:
+        case 0x8:
             // wait for OPL buffer to process
             while (opl_buffer.tail != opl_buffer.head) {
                 tight_loop_contents();
             }
-            pio_sm_put(pio0, IOR_PIO_SM, IOR_SET_VALUE | OPL_Pico_PortRead(OPL_REGISTER_PORT));
-        } else {
+            pio_sm_put(pio0, IOR_PIO_SM, IOR_SET_VALUE | OPL_Pico_PortRead(port));
+            break;
+        // DSP ports
+        default:
             sbdsp_process();
             pio_sm_put(pio0, IOR_PIO_SM, IOR_SET_VALUE | sbdsp_read(port & 0xF));        
             sbdsp_process();
+            break;
         }
     } else // if follows down below
 #endif
@@ -647,7 +642,7 @@ __force_inline void handle_ior(void) {
         while (opl_buffer.tail != opl_buffer.head) {
             tight_loop_contents();
         }
-        pio_sm_put(pio0, IOR_PIO_SM, IOR_SET_VALUE | OPL_Pico_PortRead(OPL_REGISTER_PORT));
+        pio_sm_put(pio0, IOR_PIO_SM, IOR_SET_VALUE | OPL_Pico_PortRead(port));
     } else // if follows down below
 #endif
 #if defined(SOUND_MPU)
@@ -933,7 +928,7 @@ int main()
 #endif // SOUND_SB
 #ifdef SOUND_OPL
     puts("Creating OPL");
-    OPL_Pico_Init(0);
+    OPL_Pico_Init();
     multicore_launch_core1(&play_adlib);
 #endif
 

@@ -18,12 +18,14 @@
 #include "pico/audio_i2s.h"
 #include "pico/flash.h"
 
-#include "opl.h"
-extern "C" void OPL_Pico_simple(int16_t *buffer, uint32_t nsamples);
-extern "C" void OPL_Pico_PortWrite(opl_port_t, unsigned int);
+//#include "opl.h"
+extern "C" void OPL_Pico_PortWrite(uint16_t, unsigned int);
 
 #ifdef SOUND_SB
 extern int16_t sbdsp_sample();
+extern "C" void OPL_Pico_stereo(int16_t *buffer_l, int16_t *buffer_r, uint32_t nsamples);
+#else
+extern "C" void OPL_Pico_simple(int16_t *buffer, uint32_t nsamples);
 #endif
 #if defined(SOUND_SB) || defined(USB_MOUSE)
 #ifdef USE_ALARM
@@ -127,17 +129,21 @@ void play_adlib() {
                 notfirst = true;
             }
             auto cmd = opl_buffer.cmds[opl_buffer.tail];
-            OPL_Pico_PortWrite((opl_port_t)cmd.addr, cmd.data);
+            OPL_Pico_PortWrite(cmd.addr, cmd.data);
             // putchar('.');
             ++opl_buffer.tail;
         }
         struct audio_buffer *buffer = take_audio_buffer(ap, true);
         int16_t *samples = (int16_t *) buffer->buffer->bytes;
+#ifdef SOUND_SB
+        int16_t sb_sample = sbdsp_sample();
+        int16_t opl_samples[2];
+        OPL_Pico_stereo(&opl_samples[0], &opl_samples[1], 1);
+        samples[0] = clamp16((int32_t)sb_sample + (int32_t)opl_samples[0]);
+        samples[1] = clamp16((int32_t)sb_sample + (int32_t)opl_samples[1]);
+#else
         int16_t opl_sample;
         OPL_Pico_simple(&opl_sample, 1);
-#ifdef SOUND_SB
-        samples[0] = samples[1] = clamp16((int32_t)sbdsp_sample() + (int32_t)opl_sample);
-#else
         samples[0] = samples[1] = opl_sample;
 #endif
         buffer->sample_count=1;
