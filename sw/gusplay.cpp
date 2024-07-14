@@ -35,6 +35,12 @@ extern psram_spi_inst_t psram_spi;
 bi_decl(bi_3pins_with_names(PICO_AUDIO_I2S_DATA_PIN, "I2S DIN", PICO_AUDIO_I2S_CLOCK_PIN_BASE, "I2S BCK", PICO_AUDIO_I2S_CLOCK_PIN_BASE+1, "I2S LRCK"));
 #endif
 
+#ifdef SOUND_MPU
+#include "flash_settings.h"
+extern Settings settings;
+#include "mpu401/export.h"
+#endif
+
 #include "isa_dma.h"
 extern irq_handler_t GUS_DMA_isr_pt;
 extern dma_inst_t dma_config;
@@ -126,6 +132,10 @@ void play_gus() {
     tuh_init(BOARD_TUH_RHPORT);
 #endif
 
+#ifdef SOUND_MPU
+    MPU401_Init(settings.MPU.delaySysex, settings.MPU.fakeAllNotesOff);
+#endif
+
     struct audio_buffer_pool *ap = init_audio();
     for (;;) {
         // uint8_t active_voices = GUS_activeChannels();
@@ -137,12 +147,11 @@ void play_gus() {
             ((struct audio_format *) ap->format)->sample_freq = playback_rate;
         }
         struct audio_buffer *buffer = take_audio_buffer(ap, true);
-        /* gus->dothangs; */
         int16_t *samples = (int16_t *) buffer->buffer->bytes;
 
         // uint32_t gus_audio_begin = time_us_32();
-        // __dsb();
-        buffer->sample_count = GUS_CallBack(buffer->max_sample_count, samples);
+        uint32_t sample_count = GUS_CallBack(buffer->max_sample_count, samples);
+        buffer->sample_count = sample_count;
         /*
         uint32_t gus_audio_elapsed = time_us_32() - gus_audio_begin;
         if (active_voices) {
@@ -159,6 +168,10 @@ void play_gus() {
 #ifdef USB_STACK
         // Service TinyUSB events
         tuh_task();
+#endif
+#ifdef SOUND_MPU
+        // Calculate number of midi bytes to send at current sample rate and number of samples generated
+        send_midi_bytes(MAX(31250 * sample_count / playback_rate + 1, 4));
 #endif
     }
 }

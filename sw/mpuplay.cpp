@@ -32,7 +32,7 @@ void play_mpu() {
     MPU401_Init(settings.MPU.delaySysex, settings.MPU.fakeAllNotesOff);
 
     for (;;) {
-        send_midi_byte();				// see if we need to send a byte	
+        send_midi_byte(4);				// see if we need to send a byte	
 #ifdef USB_STACK
         // Service TinyUSB events
         tuh_task();

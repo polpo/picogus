@@ -48,20 +48,12 @@ typedef uint16_t Bit16u;
 typedef int32_t Bits;
 typedef int8_t Bit8s;
 
-/*typedef void (*PIC_EventHandler)(Bitu val);*/ /* SOFTMPU */
-
 // autodetect when Gateway runs by watching for it setting this message on the MT-32's LCD
 static const char* gateway_msg = "\xf0\x41\x10\x16\x12\x20\x00\x00       Gateway";
 static uint8_t gateway_pos = 0;
 static uint8_t gateway_len = 22;
 
 #include "../pico_pic.h"
-/* SOFTMPU: Stubbed functions */
-#if 0
-void PIC_Init(void); /* SOFTMPU */
-void PIC_AddEvent(EventID event,Bitu delay);
-void PIC_RemoveEvents(EventID event);
-#endif
 
 void MIDI_Init(bool delaysysex,bool fakeallnotesoff);
 void MIDI_RawOutByte(Bit8u data);
@@ -140,10 +132,12 @@ Bit8u __force_inline QueueUsed() {
 
 __force_inline static void QueueByte(Bit8u data) {
     if (mpu.state.block_ack) {mpu.state.block_ack=false;return;}
+#if MPU_IRQ
     if (mpu.queue_used==0 && mpu.intelligent) {
         mpu.state.irq_pending=true;
         PIC_ActivateIRQ();
     }
+#endif
     if (mpu.queue_used<MPU401_QUEUE) {
         Bit8u pos=mpu.queue_used+mpu.queue_pos;
         if (mpu.queue_pos>=MPU401_QUEUE) mpu.queue_pos-=MPU401_QUEUE;
@@ -349,14 +343,16 @@ __force_inline Bit8u MPU401_ReadData(void) { /* SOFTMPU */
         return ret;
     }
 
+#if MPU_IRQ
     if (mpu.queue_used == 0) PIC_DeActivateIRQ();
+#endif
 
     if (ret>=0xf0 && ret<=0xf7) { /* MIDI data request */
         mpu.state.channel=ret&7;
         mpu.state.data_onoff=0;
         mpu.state.cond_req=false;
     }
-    if (ret==MSG_MPU_COMMAND_REQ) {
+    else if (ret==MSG_MPU_COMMAND_REQ) {
         mpu.state.data_onoff=0;
         mpu.state.cond_req=true;
         if (mpu.condbuf.type!=T_OVERFLOW) {
@@ -366,7 +362,7 @@ __force_inline Bit8u MPU401_ReadData(void) { /* SOFTMPU */
         }
         mpu.condbuf.type=T_OVERFLOW;
     }
-    if (ret==MSG_MPU_END || ret==MSG_MPU_CLOCK || ret==MSG_MPU_ACK) {
+    else if (ret==MSG_MPU_END || ret==MSG_MPU_CLOCK || ret==MSG_MPU_ACK) {
         mpu.state.data_onoff=-1;
         MPU401_EOIHandlerDispatch();
     }
@@ -711,7 +707,9 @@ static uint32_t  MPU401_ResetDone(Bitu val) { /* SOFTMPU */
 __force_inline static void MPU401_Reset(void) {
     Bit8u i; /* SOFTMPU */
 
+#if MPU_IRQ
     PIC_DeActivateIRQ();
+#endif
     mpu.mode=(mpu.intelligent ? M_INTELLIGENT : M_UART);
     PIC_RemoveEvents(MPU401_Event);
     PIC_RemoveEvents(MPU401_EOIHandler);
