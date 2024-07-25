@@ -66,7 +66,7 @@ Minimum expected sample rate from DSP should be 8000hz?
 Maximum number of DSP to process at once should be 64.
 49716 / 8000 = 6.2145 * 64 = 397
 */
-#define SAMPLES_PER_BUFFER 512
+#define SAMPLES_PER_BUFFER 8
 
 struct audio_buffer_pool *init_audio() {
 
@@ -146,17 +146,31 @@ void play_adlib() {
         struct audio_buffer *buffer = take_audio_buffer(ap, true);
         int16_t *samples = (int16_t *) buffer->buffer->bytes;
 #ifdef SOUND_SB
-        int16_t sb_sample = sbdsp_sample();
-        int16_t opl_samples[2];
-        OPL_Pico_stereo(&opl_samples[0], &opl_samples[1], 1);
+        int16_t sb_sample = 0; //sbdsp_sample();
+                               //
+
+        int16_t opl_samples_l[SAMPLES_PER_BUFFER];
+        int16_t opl_samples_r[SAMPLES_PER_BUFFER];
+        //uint32_t audio_begin = time_us_32();
+        OPL_Pico_stereo(opl_samples_l, opl_samples_r, SAMPLES_PER_BUFFER);
+        /*
         samples[0] = clamp16((int32_t)sb_sample + (int32_t)opl_samples[0]);
         samples[1] = clamp16((int32_t)sb_sample + (int32_t)opl_samples[1]);
+        */
+        for (int i = 0; i < SAMPLES_PER_BUFFER; ++i) {
+            samples[i << 1] = opl_samples_l[i];
+            samples[(i << 1) + 1] = opl_samples_r[i];
+        }
+        //uint32_t audio_elapsed = time_us_32() - audio_begin;
+        //if (audio_elapsed > 5149) {
+        //    printf("%u ", audio_elapsed);
+        //}
 #else
         int16_t opl_sample;
         OPL_Pico_simple(&opl_sample, 1);
         samples[0] = samples[1] = opl_sample;
 #endif
-        buffer->sample_count=1;
+        buffer->sample_count=SAMPLES_PER_BUFFER;
         // putchar((unsigned char)buffer->buffer->bytes[1]);
         give_audio_buffer(ap, buffer);
 #ifdef USB_STACK

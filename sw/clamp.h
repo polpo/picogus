@@ -19,8 +19,11 @@ static void clamp_setup(void) {
 #endif
 }
 
+#ifndef INLINE
+#define INLINE __force_inline
+#endif
 
-static int16_t __force_inline clamp16(int32_t d) {
+static INLINE int16_t clamp16(int32_t d) {
 #ifdef INTERP_CLAMP
     interp1->accum[0] = d;
     return interp1->peek[0];

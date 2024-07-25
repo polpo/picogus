@@ -68,10 +68,10 @@ typedef struct sbdsp_t {
 
     uint16_t dma_interval;     
     // int16_t dma_interval_trim;
-    uint8_t dma_transfer_size;
-    uint8_t  dma_buffer[DSP_DMA_FIFO_SIZE];
-    volatile uint16_t dma_buffer_tail;
-    volatile uint16_t dma_buffer_head;
+    // uint8_t dma_transfer_size;
+    // uint8_t  dma_buffer[DSP_DMA_FIFO_SIZE];
+    // volatile uint16_t dma_buffer_tail;
+    // volatile uint16_t dma_buffer_head;
 
     uint16_t dma_pause_duration;
     uint8_t dma_pause_duration_low;

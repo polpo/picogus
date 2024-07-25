@@ -67,8 +67,11 @@ void OPL_Pico_simple(int16_t *buffer, uint32_t nsamples) {
 }
 
 void OPL_Pico_stereo(int16_t *buffer_l, int16_t *buffer_r, uint32_t nsamples) {
-    OPL_calc_buffer(opl_l.emu8950_opl, buffer_l, nsamples);
-    OPL_calc_buffer(opl_r.emu8950_opl, buffer_r, nsamples);
+    //OPL_calc_buffer_linear(opl_l.emu8950_opl, buffer_l, nsamples);
+    OPL_calc_buffer_stereo(opl_l.emu8950_opl, buffer_l, nsamples);
+    OPL_calc_buffer_stereo(opl_r.emu8950_opl, buffer_r, nsamples);
+    //OPL_calc_buffer(opl_l.emu8950_opl, buffer_l, nsamples);
+    //OPL_calc_buffer(opl_r.emu8950_opl, buffer_r, nsamples);
 }
 
 int OPL_Pico_Init(void)
@@ -134,7 +137,7 @@ static void WriteRegister(opl_instance_t* opl, unsigned int reg_num, unsigned in
 {
     switch (reg_num)
     {
-#if !EMU8950_NO_TIMER
+//#if !EMU8950_NO_TIMER
         case OPL_REG_TIMER1:
             opl->timer1.value = value;
             OPLTimer_CalculateEndTime(&opl->timer1);
@@ -168,7 +171,7 @@ static void WriteRegister(opl_instance_t* opl, unsigned int reg_num, unsigned in
             }
 
             break;
-#endif
+//#endif
         case OPL_REG_NEW:
         default:
             OPL_writeReg(opl->emu8950_opl, reg_num, value);

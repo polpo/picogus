@@ -147,12 +147,17 @@ add_subdirectory(opl)
 ################################################################################
 # Build GUS firmware
 function(build_gus TARGET_NAME MULTIFW)
-    set(USB_JOYSTICK TRUE)
+    #set(USB_JOYSTICK TRUE)
     config_target(${TARGET_NAME} ${MULTIFW})
     pico_set_program_name(${TARGET_NAME} "picogus-gus")
     target_sources(${TARGET_NAME} PRIVATE gusplay.cpp pico_pic.c isa_dma.c)
+    target_sources(${TARGET_NAME} PRIVATE
+        mpu401/mpu401.c
+        mpu401/midi.c
+    )
     target_compile_definitions(${TARGET_NAME} PRIVATE
         SOUND_GUS=1
+        SOUND_MPU=1
         PSRAM=1
         TEST_PSRAM=1
         PSRAM_ASYNC=1
@@ -173,31 +178,51 @@ function(build_gus TARGET_NAME MULTIFW)
     )
     pico_generate_pio_header(${TARGET_NAME} ${CMAKE_CURRENT_LIST_DIR}/isa_dma.pio)
     target_link_libraries(${TARGET_NAME} rp2040-psram hardware_interp)
-    pico_enable_stdio_uart(${TARGET_NAME} 1)
-    pico_enable_stdio_usb(${TARGET_NAME} 0)
+    pico_enable_stdio_uart(${TARGET_NAME} 0)
+    pico_enable_stdio_usb(${TARGET_NAME} 1)
     pico_enable_stdio_semihosting(${TARGET_NAME} 0)
 endfunction()
 
 ################################################################################
 # Build SB firmware
 function(build_sb TARGET_NAME MULTIFW)
-    set(USB_JOYSTICK TRUE)
+    #set(USB_JOYSTICK TRUE)
     config_target(${TARGET_NAME} ${MULTIFW})
     pico_set_program_name(${TARGET_NAME} "picogus-sb")
     target_sources(${TARGET_NAME} PRIVATE sbdsp.cpp sbplay.cpp pico_pic.c isa_dma.c)    
     target_link_libraries(${TARGET_NAME} opl)
+    target_sources(${TARGET_NAME} PRIVATE
+        mpu401/mpu401.c
+        mpu401/midi.c
+    )
     target_compile_definitions(${TARGET_NAME} PRIVATE
         SOUND_SB=1
         SOUND_OPL=1
         SOUND_DSP=1
+        SOUND_MPU=1
         USE_ALARM=1
         USE_EMU8950_OPL=1        
         EMU8950_ASM=1
+	EMU8950_NO_WAVE_TABLE_MAP=1
+	EMU8950_NO_TLL=1 # don't use lookup table for total level
+	EMU8950_NO_FLOAT=1 # double check there is no float
+        EMU8950_NO_TIMER=1 # disable timer which isn't used
+        EMU8950_NO_TEST_FLAG=1 # disable test flags (which aren't used)
+	EMU8950_SIMPLER_NOISE=1 # only generate noise bit when needed
+        EMU8950_SHORT_NOISE_UPDATE_CHECK=1 # only update short noise if it is used
+        # actually this doesn't make things faster
+	#EMU8950_LINEAR_NEG_NOT_NOT=1 # negative values rounded towrds -infinity not 0 without this; does it matter?
+	EMU8950_LINEAR_SKIP=1 # skip silent slots
+	EMU8950_LINEAR_END_OF_NOTE_OPTIMIZATION=1 # early out envelope when DECAY/SUSTAIN/RELEASE envelope reaches mute
+	EMU8950_NO_PERCUSSION_MODE=1 # rhythm only mode (doom doesn't use percussion; whhhaaaah!?)
+	EMU8950_LINEAR=1 # reorganize to do linear runs of channels
+	EMU8950_SLOT_RENDER=1
+
         # PICOW=1
     )
     pico_generate_pio_header(${TARGET_NAME} ${CMAKE_CURRENT_LIST_DIR}/isa_dma.pio)
-    pico_enable_stdio_uart(${TARGET_NAME} 1)
-    pico_enable_stdio_usb(${TARGET_NAME} 0)
+    pico_enable_stdio_uart(${TARGET_NAME} 0)
+    pico_enable_stdio_usb(${TARGET_NAME} 1)
     pico_enable_stdio_semihosting(${TARGET_NAME} 0)
 endfunction()
 
@@ -230,6 +255,8 @@ function(build_mpu TARGET_NAME MULTIFW)
     pico_set_program_name(${TARGET_NAME} "picogus-mpu401")
     target_compile_definitions(${TARGET_NAME} PRIVATE
         SOUND_MPU=1
+	MPU_ONLY=1
+	MPU_IRQ=1
     )
     target_sources(${TARGET_NAME} PRIVATE
         pico_pic.c

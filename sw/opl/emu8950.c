@@ -26,6 +26,8 @@
 #endif
 #endif
 
+#include "../clamp.h"
+
 #define _PI_ 3.14159265358979323846264338327950288
 
 /* dynamic range of envelope output */
@@ -727,6 +729,7 @@ static INLINE void set_block(OPL *opl, int ch, int blk) {
 }
 
 static INLINE void update_perc_mode(OPL *opl) {
+    if ((opl->reg[0xbd] >> 5) & 1) printf("perc");
 #if !EMU8950_NO_PERCUSSION_MODE
     const uint8_t new_perc_mode = (opl->reg[0xbd] >> 5) & 1;
 
@@ -1723,9 +1726,9 @@ uint32_t __not_in_flash_func(slot_car_linear_alg0)(OPL *opl, OPL_SLOT *slot, uin
 }
 #endif
 
-static_assert(EMU8950_NO_PERCUSSION_MODE, "");
+//static_assert(EMU8950_NO_PERCUSSION_MODE, "");
 // this produces stereo
-void OPL_calc_buffer_linear(OPL *opl, int32_t *buffer, uint32_t nsamples) {
+static INLINE void OPL_calc_buffer_linear(OPL *opl, int32_t *buffer, uint32_t nsamples) {
     int i;
 #if EMU8950_SLOT_RENDER
     // kind of a nit pick, but so cheap - saves a bug every 24 hours due to an optimization
@@ -1852,8 +1855,11 @@ void OPL_calc_buffer_linear(OPL *opl, int32_t *buffer, uint32_t nsamples) {
 }
 #endif
 
-void OPL_calc_buffer_stereo(OPL *opl, int32_t *buffer, uint32_t nsamples) {
+static int32_t buffer[256];
+
+void OPL_calc_buffer_stereo(OPL *opl, int16_t *in_buffer, uint32_t nsamples) {
     assert(opl->out_step == opl->inp_step);
+    memset(buffer, 0, nsamples * sizeof(int32_t));
 #if DUMPO
     bc++;
 #endif
@@ -1869,7 +1875,7 @@ void OPL_calc_buffer_stereo(OPL *opl, int32_t *buffer, uint32_t nsamples) {
     printf("\n");
 #endif
 
-        buffer[i] =  (raw << 16u) | raw;
+        in_buffer[i] = raw;
     }
 #else
     OPL_calc_buffer_linear(opl, buffer, nsamples);
@@ -1883,10 +1889,10 @@ void OPL_calc_buffer_stereo(OPL *opl, int32_t *buffer, uint32_t nsamples) {
         }
         printf("\n");
 #else
-        uint16_t raw = buffer[i] >> 1; // _MO()
+        //uint16_t raw = buffer[i];// >> 1; // _MO()
 #endif
         // todo clamp?
-        buffer[i] = (raw << 16u) | raw;
+        in_buffer[i] = clamp16(buffer[i]);
     }
 #endif
 }
