@@ -97,12 +97,12 @@ static int opl_opl3mode;
 
 static int register_num = 0;
 
-#if !EMU8950_NO_TIMER
+/* #if !EMU8950_NO_TIMER */
 // Timers; DBOPL does not do timer stuff itself.
 
 static opl_timer_t timer1 = { 12500, 0, 0, 0 };
 static opl_timer_t timer2 = { 3125, 0, 0, 0 };
-#endif
+/* #endif */
 
 // SDL parameters.
 
@@ -347,7 +347,7 @@ unsigned int OPL_Pico_PortRead(opl_port_t port)
         return 0xff;
     }
 
-#if !EMU8950_NO_TIMER
+/* #if !EMU8950_NO_TIMER */
     __dsb();
     // Use time_us_64 as current_time gets updated coarsely as the mix callback is called
     uint64_t pico_time = time_us_64();
@@ -362,7 +362,7 @@ unsigned int OPL_Pico_PortRead(opl_port_t port)
         result |= 0x80;   // Either have expired
         result |= 0x20;   // Timer 2 has expired
     }
-#endif
+/* #endif */
 
     return result;
 }
@@ -387,7 +387,7 @@ static void WriteRegister(unsigned int reg_num, unsigned int value)
 {
     switch (reg_num)
     {
-#if !EMU8950_NO_TIMER
+/* #if !EMU8950_NO_TIMER */
         case OPL_REG_TIMER1:
             timer1.value = value;
             OPLTimer_CalculateEndTime(&timer1);
@@ -421,7 +421,7 @@ static void WriteRegister(unsigned int reg_num, unsigned int value)
             }
 
             break;
-#endif
+/* #endif */
         case OPL_REG_NEW:
 #if !USE_WOODY_OPL && !USE_EMU8950_OPL
             opl_opl3mode = value & 0x01;
