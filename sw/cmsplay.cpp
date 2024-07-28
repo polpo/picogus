@@ -22,10 +22,11 @@
 #ifdef USB_STACK
 #include "tusb.h"
 #endif
-#ifdef USB_MOUSE
-#ifdef USE_ALARM
+#if (defined(USB_MOUSE) || defined(SOUND_MPU)) && defined(USE_ALARM)
 #include "pico_pic.h"
 #endif
+
+#ifdef USB_MOUSE
 #include "mouse/8250uart.h"
 #include "mouse/sermouse.h"
 #endif
@@ -38,6 +39,12 @@ saa1099_device *saa0, *saa1;
 #endif
 #include "cmd_buffers.h"
 extern cms_buffer_t cms_buffer;
+
+#ifdef SOUND_MPU
+#include "flash_settings.h"
+extern Settings settings;
+#include "mpu401/export.h"
+#endif
 
 extern uint LED_PIN;
 
@@ -87,16 +94,17 @@ void play_cms() {
     puts("starting core 1 CMS");
     flash_safe_execute_core_init();
 
-#ifdef USB_MOUSE
-#ifdef USE_ALARM
+#if (defined(USB_MOUSE) || defined(SOUND_MPU)) && defined(USE_ALARM)
     // Init PIC on this core so it handles timers
     PIC_Init();
     puts("pic inited on core 1");
 #endif
-#endif
 #ifdef USB_STACK
     // Init TinyUSB for joystick support
     tuh_init(BOARD_TUH_RHPORT);
+#endif
+#ifdef SOUND_MPU
+    MPU401_Init(settings.MPU.delaySysex, settings.MPU.fakeAllNotesOff);
 #endif
 #ifdef MAME_CMS
     puts("Creating SAA1099 1");
@@ -196,6 +204,9 @@ void play_cms() {
 
         // uart emulation task
         uartemu_core1_task();
+#endif
+#ifdef SOUND_MPU
+        send_midi_bytes(4);
 #endif
     }
 }

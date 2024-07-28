@@ -776,8 +776,6 @@ int main()
     loadSettings(&settings);
 #if defined(SOUND_GUS)
     settings.startupMode = GUS_MODE;
-#elif defined(SOUND_MPU)
-    settings.startupMode = MPU_MODE;
 #elif defined(SOUND_TANDY)
     settings.startupMode = TANDY_MODE;
 #elif defined(SOUND_CMS)
@@ -786,6 +784,8 @@ int main()
     settings.startupMode = SB_MODE;
 #elif defined(SOUND_OPL)
     settings.startupMode = ADLIB_MODE;
+#elif defined(MPU_ONLY)
+    settings.startupMode = MPU_MODE;
 #elif defined(USB_ONLY)
     settings.startupMode = USB_MODE;
 #else

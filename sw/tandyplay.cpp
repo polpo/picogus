@@ -28,10 +28,11 @@ extern uint LED_PIN;
 #ifdef USB_STACK
 #include "tusb.h"
 #endif
-#ifdef USB_MOUSE
-#ifdef USE_ALARM
+#if (defined(USB_MOUSE) || defined(SOUND_MPU)) && defined(USE_ALARM)
 #include "pico_pic.h"
 #endif
+
+#ifdef USB_MOUSE
 #include "mouse/8250uart.h"
 #include "mouse/sermouse.h"
 #endif
@@ -41,6 +42,12 @@ extern uint LED_PIN;
 #if PICO_ON_DEVICE
 #include "pico/binary_info.h"
 bi_decl(bi_3pins_with_names(PICO_AUDIO_I2S_DATA_PIN, "I2S DIN", PICO_AUDIO_I2S_CLOCK_PIN_BASE, "I2S BCK", PICO_AUDIO_I2S_CLOCK_PIN_BASE+1, "I2S LRCK"));
+#endif
+
+#ifdef SOUND_MPU
+#include "flash_settings.h"
+extern Settings settings;
+#include "mpu401/export.h"
 #endif
 
 #define SAMPLES_PER_BUFFER 8
@@ -84,16 +91,18 @@ void play_tandy() {
     puts("starting core 1 tandy");
     flash_safe_execute_core_init();
 
-#ifdef USB_MOUSE
-#ifdef USE_ALARM
+#if (defined(USB_MOUSE) || defined(SOUND_MPU)) && defined(USE_ALARM)
     // Init PIC on this core so it handles timers
     PIC_Init();
     puts("pic inited on core 1");
 #endif
-#endif
 #ifdef USB_STACK
     // Init TinyUSB for joystick support
     tuh_init(BOARD_TUH_RHPORT);
+#endif
+
+#ifdef SOUND_MPU
+    MPU401_Init(settings.MPU.delaySysex, settings.MPU.fakeAllNotesOff);
 #endif
 
     tandysound_t tandysound;
@@ -144,6 +153,9 @@ void play_tandy() {
 
         // uart emulation task
         uartemu_core1_task();
+#endif
+#ifdef SOUND_MPU
+        send_midi_bytes(8);
 #endif
     }
 }

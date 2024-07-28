@@ -246,7 +246,7 @@ function(build_adlib TARGET_NAME MULTIFW)
 endfunction()
 
 ################################################################################
-# Build MPU firmware
+# Build MPU-only firmware
 function(build_mpu TARGET_NAME MULTIFW)
     set(USB_JOYSTICK TRUE)
     set(SOUND_MPU TRUE)
@@ -266,6 +266,7 @@ endfunction()
 function(build_tandy TARGET_NAME MULTIFW)
     set(USB_JOYSTICK TRUE)
     set(USB_MOUSE TRUE)
+    set(SOUND_MPU TRUE)
     config_target(${TARGET_NAME} ${MULTIFW})
     pico_set_program_name(${TARGET_NAME} "picogus-tandy")
     target_compile_definitions(${TARGET_NAME} PRIVATE
@@ -283,6 +284,7 @@ endfunction()
 function(build_cms TARGET_NAME MULTIFW)
     set(USB_JOYSTICK TRUE)
     set(USB_MOUSE TRUE)
+    set(SOUND_MPU TRUE)
     config_target(${TARGET_NAME} ${MULTIFW})
     pico_set_program_name(${TARGET_NAME} "picogus-cms")
     target_compile_definitions(${TARGET_NAME} PRIVATE
