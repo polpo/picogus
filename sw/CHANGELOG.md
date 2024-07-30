@@ -1,3 +1,13 @@
+# v2.1.0
+
+## New features/changes
+
+### MPU-401 simultaneous with all modes
+
+MPU-401 emulation is now available in all modes. This can enable simultaneous digital sound effects in SB or GUS modes with MIDI output. If you have another MPU-401 card in the system, to prevent conflicts this can be disabled or moved to a different port with the `/mpuport` option to pgusinit.
+
+The original MPU mode is still available for titles that require MPU interrupts (titles on [this list](https://github.com/bjt42/softmpu/wiki/Compatible-Intelligent-Mode-Games) marked with a 1 require MPU interrupts).
+
 # v2.0.0
 
 ## New features/changes

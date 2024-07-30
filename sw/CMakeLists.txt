@@ -13,7 +13,7 @@ cmake_minimum_required(VERSION 3.13)
 include(pico_sdk_import.cmake)
 
 project(picogus
-    VERSION "2.0.0"
+    VERSION "2.1.0"
     LANGUAGES C CXX ASM
 )
 
