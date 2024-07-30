@@ -10,7 +10,7 @@
 #include "../common/picogus.h"
 
 static void banner(void) {
-    printf("PicoGUSinit v3.0.0 (c) 2024 Ian Scott - licensed under the GNU GPL v2\n\n");
+    printf("PicoGUSinit v3.1.0 (c) 2024 Ian Scott - licensed under the GNU GPL v2\n");
 }
 
 
@@ -31,7 +31,6 @@ static void usage(char *argv0, card_mode_t mode, bool print_all) {
     printf("   /mpuport x    - set the base port of the MPU-401. Default: 330, 0 to disable\n");
     printf("   /mpudelay 1|0 - delay SYSEX (for rev.0 Roland MT-32)\n");
     printf("   /mpufake 1|0  - fake all notes off (for Roland RA-50)\n");
-    printf("\n");
     if (mode == GUS_MODE || print_all) {
         //     "................................................................................\n"
         printf("GUS settings:\n");
@@ -42,7 +41,6 @@ static void usage(char *argv0, card_mode_t mode, bool print_all) {
         printf("                 Specifying 0 restores the GUS default behavior.\n");
         printf("                 (increase to fix games with streaming audio like Doom)\n");
         printf("   /gus44k 1|0 - Fixed 44.1kHz output for all active voice #s [EXPERIMENTAL]\n");
-        printf("\n");
     }
     if (mode == SB_MODE || print_all) {
         //     "................................................................................\n"
@@ -53,19 +51,16 @@ static void usage(char *argv0, card_mode_t mode, bool print_all) {
         printf("AdLib settings:\n");
         printf("   /oplport x   - set the base port of the OPL2. Default: 388, 0 to disable\n");
         printf("   /oplwait 1|0 - wait on OPL2 write. Can fix speed-sensitive early AdLib games\n");
-        printf("\n");
     }
     if (mode == TANDY_MODE || print_all) {
         //     "................................................................................\n"
         printf("Tandy settings:\n");
         printf("   /tandyport x - set the base port of the Tandy 3-voice. Default: 2C0\n");
-        printf("\n");
     }
     if (mode == CMS_MODE || print_all) {
         //     "................................................................................\n"
         printf("CMS settings:\n");
         printf("   /cmsport x - set the base port of the CMS. Default: 220\n");
-        printf("\n");
     }
     if (mode == USB_MODE || mode == CMS_MODE || mode == TANDY_MODE || mode == ADLIB_MODE || print_all) {
         //     "................................................................................\n"
