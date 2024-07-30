@@ -345,17 +345,17 @@ __force_inline uint8_t read_picogus_high(void) {
     case MODE_BOOTMODE: // Mode (GUS, OPL, MPU, etc...)
         return settings.startupMode;
     case MODE_GUSPORT: // GUS Base port
-        return settings.GUS.basePort >> 8;
+        return settings.GUS.basePort == 0xFFFF ? 0 : (settings.GUS.basePort >> 8);
     case MODE_OPLPORT: // Adlib Base port
-        return settings.SB.oplBasePort >> 8;
+        return settings.SB.oplBasePort == 0xFFFF ? 0 : (settings.SB.oplBasePort >> 8);
     case MODE_SBPORT: // SB Base port
-        return settings.SB.basePort >> 8;
+        return settings.SB.basePort == 0xFFFF ? 0 : (settings.SB.basePort >> 8);
     case MODE_MPUPORT: // MPU Base port
-        return settings.MPU.basePort >> 8;
+        return settings.MPU.basePort == 0xFFFF ? 0 : (settings.MPU.basePort >> 8);
     case MODE_TANDYPORT: // Tandy Base port
-        return settings.Tandy.basePort >> 8;
+        return settings.Tandy.basePort == 0xFFFF ? 0 : (settings.Tandy.basePort >> 8);
     case MODE_CMSPORT: // CMS Base port
-        return settings.CMS.basePort >> 8;
+        return settings.CMS.basePort == 0xFFFF ? 0 : (settings.CMS.basePort >> 8);
     case MODE_JOYEN: // enable joystick
         return settings.Joy.basePort == 0x201u;
     case MODE_GUSBUF: // GUS audio buffer size
@@ -392,6 +392,23 @@ __force_inline uint8_t read_picogus_high(void) {
 
 
 void processSettings(void) {
+#if defined(SOUND_GUS)
+    settings.startupMode = GUS_MODE;
+#elif defined(SOUND_TANDY)
+    settings.startupMode = TANDY_MODE;
+#elif defined(SOUND_CMS)
+    settings.startupMode = CMS_MODE;
+#elif defined(SOUND_SB)
+    settings.startupMode = SB_MODE;
+#elif defined(SOUND_OPL)
+    settings.startupMode = ADLIB_MODE;
+#elif defined(MPU_ONLY)
+    settings.startupMode = MPU_MODE;
+#elif defined(USB_ONLY)
+    settings.startupMode = USB_MODE;
+#else
+    settings.startupMode = INVALID_MODE;
+#endif
 #ifdef SOUND_SB
     sb_port_test = settings.SB.basePort >> 4;
 #endif
@@ -774,23 +791,6 @@ int main()
 
     // Load settings from flash
     loadSettings(&settings);
-#if defined(SOUND_GUS)
-    settings.startupMode = GUS_MODE;
-#elif defined(SOUND_TANDY)
-    settings.startupMode = TANDY_MODE;
-#elif defined(SOUND_CMS)
-    settings.startupMode = CMS_MODE;
-#elif defined(SOUND_SB)
-    settings.startupMode = SB_MODE;
-#elif defined(SOUND_OPL)
-    settings.startupMode = ADLIB_MODE;
-#elif defined(MPU_ONLY)
-    settings.startupMode = MPU_MODE;
-#elif defined(USB_ONLY)
-    settings.startupMode = USB_MODE;
-#else
-    settings.startupMode = INVALID_MODE;
-#endif
     hw_clear_bits(&xip_ctrl_hw->ctrl, XIP_CTRL_EN_BITS);
 
     // Determine board type. GPIO 29 is grounded on PicoGUS v2.0, and on a Pico, it's VSYS/3 (~1.666V)

@@ -724,10 +724,14 @@ int main(int argc, char* argv[]) {
         printf("Running in Sound Blaster 2.0 mode on port %x ", tmp_uint16);
         outp(CONTROL_PORT, MODE_OPLPORT); // Select port register
         tmp_uint16 = inpw(DATA_PORT_LOW); // Get port
-        printf("(AdLib port %x", tmp_uint16);
-        outp(CONTROL_PORT, MODE_OPLWAIT); // Select Adlib wait register
-        tmp_uint8 = inp(DATA_PORT_HIGH);
-        printf("%s)\n", tmp_uint8 ? ", wait on" : "");
+        if (tmp_uint16) {
+            printf("(AdLib port %x", tmp_uint16);
+            outp(CONTROL_PORT, MODE_OPLWAIT); // Select Adlib wait register
+            tmp_uint8 = inp(DATA_PORT_HIGH);
+            printf("%s)\n", tmp_uint8 ? ", wait on" : "");
+        } else {
+            printf("(AdLib port disabled)\n");
+        }
         break;
     default:
         printf("Running in unknown mode (maybe upgrade pgusinit?)\n");
