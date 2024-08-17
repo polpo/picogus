@@ -8,7 +8,7 @@ extern "C" {
 #include <stdbool.h>
 
 #define SETTINGS_MAGIC 0x70677573  // "pgus" in ascii
-#define SETTINGS_VERSION 1
+#define SETTINGS_VERSION 2
 
 // Settings struct has generous padding for future settings by aligning to 4 bytes
 typedef struct Settings {
@@ -49,6 +49,13 @@ typedef struct Settings {
         uint8_t reportRate;
         int16_t sensitivity;
     } Mouse;
+    struct {
+        uint16_t basePort;
+    } NE2K;
+    struct {
+        char ssid[33];
+        char password[64];
+    } WiFi;
 } Settings;
 
 
