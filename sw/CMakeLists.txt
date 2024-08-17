@@ -28,7 +28,7 @@ set(PICO_COPY_TO_RAM 1)
 
 # Tell the Pico SDK to use our local tinyusb instead of the one included in the SDK
 # This is needed to support tusb_xinput
-set(PICO_TINYUSB_PATH ${CMAKE_CURRENT_LIST_DIR}/tinyusb)
+set(PICO_TINYUSB_PATH ${CMAKE_CURRENT_LIST_DIR}/lib/tinyusb)
 
 #set(PICO_DEOPTIMIZED_DEBUG "1")
 #set(CMAKE_BUILD_TYPE "Debug")
@@ -173,7 +173,7 @@ function(config_target TARGET_NAME MULTIFW)
     pico_enable_stdio_semihosting(${TARGET_NAME} 0)
 endfunction()
 
-add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/tusb_xinput)
+add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/lib/tusb_xinput)
 add_subdirectory(rp2040-psram)
 add_subdirectory(opl)
 
