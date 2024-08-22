@@ -50,15 +50,15 @@ jobs:
       - name: Create Build Environment
         run: cmake -E make_directory ${{github.workspace}}/build
 
-      - name: Patch Pico SDK to allow LTO
-        run: sed -i 's/WRAPPER_FUNC(x) __wrap_/WRAPPER_FUNC(x) __attribute__((used)) __wrap_/' ${{env.PICO_SDK_PATH}}/src/rp2_common/pico_platform_compiler/include/pico/platform/compiler.h
+      # - name: Patch Pico SDK to allow LTO
+      #   run: sed -i 's/WRAPPER_FUNC(x) __wrap_/WRAPPER_FUNC(x) __attribute__((used)) __wrap_/' ${{env.PICO_SDK_PATH}}/src/rp2_common/pico_platform_compiler/include/pico/platform/compiler.h
 
       - name: Build Mega Firmware
         shell: bash
         working-directory: ${{github.workspace}}/build
         run: |
           mkdir -p $OUTPUT_DIR
-          cmake $GITHUB_WORKSPACE/sw -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DPROJECT_TYPE="MULTIFW" -DUSE_LTO=1
+          cmake $GITHUB_WORKSPACE/sw -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DPROJECT_TYPE="MULTIFW" #-DUSE_LTO=1
           cmake --build . --config $BUILD_TYPE --parallel $(nproc)
           cp picogus.uf2 $OUTPUT_DIR/picogus.uf2
 
