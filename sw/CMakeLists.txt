@@ -2,6 +2,12 @@
 
 cmake_minimum_required(VERSION 3.13)
 
+set(PICO_BOARD_HEADER_DIRS ${CMAKE_CURRENT_LIST_DIR})
+if(NOT PICO_BOARD)
+    set(PICO_BOARD "picogus2")
+    message("PICO_BOARD not set, defaulting to ${PROJECT_TYPE}")
+endif()
+set(PICO_COPY_TO_RAM 1)
 
 # Initialise pico_sdk from installed location
 # (note this can come from environment, CMake cache etc)
@@ -21,10 +27,6 @@ set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
 
 include(pico_extras_import.cmake)
-
-set(PICO_BOARD_HEADER_DIRS ${CMAKE_CURRENT_LIST_DIR})
-set(PICO_BOARD PICO_W)
-set(PICO_COPY_TO_RAM 1)
 
 # Tell the Pico SDK to use our local tinyusb instead of the one included in the SDK
 # This is needed to support tusb_xinput
@@ -311,9 +313,9 @@ function(build_usb TARGET_NAME MULTIFW)
 endfunction()
 
 
-function(build_ne2000 TARGET_NAME MULTIFW)
+function(build_ne2k TARGET_NAME MULTIFW)
     config_target(${TARGET_NAME} ${MULTIFW})
-    pico_set_program_name(${TARGET_NAME} "picogus-ne2000")
+    pico_set_program_name(${TARGET_NAME} "picogus-ne2k")
     # set(USB_JOYSTICK FALSE)
     # set(PICO_BOARD PICO_W) # For now, until USB Dongle
     # set(PICO_BOARD picow-fast)
@@ -322,6 +324,9 @@ function(build_ne2000 TARGET_NAME MULTIFW)
     target_compile_definitions(${TARGET_NAME} PRIVATE
        NE2000=1
        PICOW=1
+       # CYW43_RESOURCE_ATTRIBUTE="__in_flash()"
+       CYW43_CONFIG_FILE="cyw43_firmware.h"
+       CYW43_PIO_CLOCK_DIV_INT=3
     )
     target_sources(${TARGET_NAME} PRIVATE
         ne2000play.cpp
@@ -329,6 +334,7 @@ function(build_ne2000 TARGET_NAME MULTIFW)
     target_link_libraries(
         ${TARGET_NAME}
         ne2000        
+        pico_cyw43_arch_none
     )
 endfunction()
 
@@ -458,9 +464,9 @@ elseif(PROJECT_TYPE STREQUAL "CMS")
 elseif(PROJECT_TYPE STREQUAL "USB")
     set(FW_TARGET pg-usb)
     build_usb(pg-usb FALSE)
-elseif(PROJECT_TYPE STREQUAL "NE2000")
-    set(FW_TARGET pg-ne2000)
-    build_ne2000(pg-ne2000 FALSE)
+elseif(PROJECT_TYPE STREQUAL "NE2K")
+    set(FW_TARGET pg-ne2k)
+    build_ne2k(pg-ne2k FALSE)
 endif()
 
 ################################################################################

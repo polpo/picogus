@@ -4,6 +4,7 @@
 #include "flash_settings.h"
 #include "hardware/flash.h"
 #include "hardware/sync.h"
+#include "hardware/clocks.h"
 #include "pico/stdlib.h"
 #include "pico/flash.h"
 

@@ -16,13 +16,13 @@ target_sources(ne2000 INTERFACE
 )
 
 target_link_libraries(ne2000 INTERFACE
-    # pico_cyw43_arch_none
-    pico_cyw43_arch_poll
+    pico_cyw43_arch_none
+    # pico_cyw43_arch_poll
 ) 
-target_compile_definitions(pico_cyw43_arch_poll_headers INTERFACE
-    CYW43_LWIP=0
-)
-target_compile_definitions(ne2000 INTERFACE
-    CYW43_LWIP=0
-)
+# target_compile_definitions(pico_cyw43_arch_poll_headers INTERFACE
+#     CYW43_LWIP=0
+# )
+# target_compile_definitions(ne2000 INTERFACE
+#     CYW43_LWIP=0
+# )
 

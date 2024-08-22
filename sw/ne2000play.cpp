@@ -52,7 +52,7 @@ void play_ne2000() {
                 break;
             }
         }
-        cyw43_arch_poll();
+        /* cyw43_arch_poll(); */
         /*
         if (((time_us_32() >> 21) & 0x1) == 0x1) { 
             if (flag == false) {

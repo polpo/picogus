@@ -235,6 +235,9 @@ void cyw43_cb_tcpip_init(cyw43_t *self, int itf) {}
 void cyw43_cb_tcpip_deinit(cyw43_t *self, int itf) {}
 void cyw43_cb_tcpip_set_link_up(cyw43_t *self, int itf) {}
 void cyw43_cb_tcpip_set_link_down(cyw43_t *self, int itf) {}
+struct pbuf;
+uint16_t pbuf_copy_partial(const struct pbuf *p, void *dataptr, uint16_t len, uint16_t offset) {}
+
 
 static void ne2000_raise_irq(ne2000_t *ne2000) {                
         PIC_ActivateIRQ();        

@@ -321,10 +321,14 @@ __force_inline void write_picogus_high(uint8_t value) {
         break;
     case MODE_WIFIAPPLY:
         printf("Applying wifi settings: %s %s\n", settings.WiFi.ssid, settings.WiFi.password);
+#ifdef PICOW
         PG_Wifi_Connect(settings.WiFi.ssid, settings.WiFi.password);
+#endif
         break;
     case MODE_WIFISTAT:
-        multicore_fifo_push_blocking(FIFO_WIFI_STATUS);                           
+#ifdef PICOW
+        multicore_fifo_push_blocking(FIFO_WIFI_STATUS);
+#endif
         break;
     case MODE_WIFISCAN:
         break;
@@ -436,7 +440,11 @@ __force_inline uint8_t read_picogus_high(void) {
         break;
     */
     case MODE_WIFISTAT:
+#ifdef PICOW
         return PG_Wifi_ReadStatusStr();
+#else
+        return 0;
+#endif
         break;
     /*
     case MODE_WIFISCAN:
