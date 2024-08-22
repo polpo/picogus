@@ -897,7 +897,7 @@ int main()
 
     // Load settings from flash
     loadSettings(&settings);
-    hw_clear_bits(&xip_ctrl_hw->ctrl, XIP_CTRL_EN_BITS);
+    /CYW43_PIO_CLOCK_DIV_INT* hw_clear_bits(&xip_ctrl_hw->ctrl, XIP_CTRL_EN_BITS); */
 
     // Determine board type. GPIO 29 is grounded on PicoGUS v2.0, and on a Pico, it's VSYS/3 (~1.666V)
     // GPIO 25 must be high to read GPIO 29 on the Pico W
