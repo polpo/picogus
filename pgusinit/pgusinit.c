@@ -73,6 +73,15 @@ static void usage(char *argv0, card_mode_t mode, bool print_all) {
         printf("          (increase for smoother cursor movement, decrease for lower CPU load)\n");
         printf("   /mousesen n   - set mouse sensitivity (256 - 100%, 128 - 50%, 512 - 200%)\n");
     }
+    if (mode == NE2000_MODE || print_all) {
+        //     "................................................................................\n"
+        printf("NE2000/WiFi settings:\n");
+        printf("   /ne2kport x   - set the base port of the NE2000. Default: 300\n");
+        printf("   /wifissid abc - set the WiFi SSID to abc\n");
+        printf("   /wifipass xyz - set the WiFi WPA/WPA2 password/key to xyz\n");
+        printf("   /wifinopass   - unset the WiFi password to connect to an open access point\n");
+        printf("   /wifistatus   - print current WiFi status\n");
+    }
 }
 
 static const char* mouse_protocol_str[] = {
@@ -810,6 +819,12 @@ int main(int argc, char* argv[]) {
         } else {
             printf("(AdLib port disabled)\n");
         }
+        break;
+    case NE2000_MODE:
+        outp(CONTROL_PORT, MODE_NE2KPORT); // Select port register
+        tmp_uint16 = inpw(DATA_PORT_LOW); // Get port
+        printf("Running in NE2000 mode on port %x\n", tmp_uint16);
+        wifi_printStatus();
         break;
     default:
         printf("Running in unknown mode (maybe upgrade pgusinit?)\n");
