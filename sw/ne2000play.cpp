@@ -33,10 +33,8 @@ extern uint LED_PIN;
 void play_ne2000() {
     //flash_safe_execute_core_init();
     puts("starting core 1 ne2000");
-    set_sys_clock_khz(240000, true);//temporary hack because of board definition flash divider
     PG_EnableWifi();
     PG_Wifi_Connect(settings.WiFi.ssid, settings.WiFi.password);
-    set_sys_clock_khz(366000, true);
 
     static bool flag = false;
     while(1) {

@@ -334,7 +334,6 @@ function(build_ne2k TARGET_NAME MULTIFW)
     target_link_libraries(
         ${TARGET_NAME}
         ne2000        
-        pico_cyw43_arch_none
     )
 endfunction()
 

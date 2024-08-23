@@ -67,7 +67,7 @@ jobs:
         working-directory: ${{github.workspace}}/build
         run: |
           mkdir -p $OUTPUT_DIR
-          cmake $GITHUB_WORKSPACE/sw -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DPROJECT_TYPE="NE2K" -DPICO_BOARD=pico_w #-DUSE_LTO=1
+          cmake $GITHUB_WORKSPACE/sw -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DPROJECT_TYPE="NE2K" -DPICO_BOARD=picow_fast #-DUSE_LTO=1
           cmake --build . --config $BUILD_TYPE --parallel $(nproc)
           cp pg-ne2k.uf2 $OUTPUT_DIR/pg-ne2k.uf2
 
