@@ -59,6 +59,8 @@ static dma_inst_t dma_config;
 
 #define DSP_DMA_FIFO_SIZE       1024
 
+#define DSP_UNUSED_STATUS_BITS_PULLED_HIGH 0x7F
+
 typedef struct sbdsp_t {
     uint8_t inbox;
     uint8_t outbox;
@@ -476,9 +478,9 @@ uint8_t sbdsp_read(uint8_t address) {
         case DSP_READ_STATUS: //e
             PIC_DeActivateIRQ();
             //printf("i");
-            return (sbdsp.dav_pc << 7);            
+            return sbdsp.dav_pc << 7 | DSP_UNUSED_STATUS_BITS_PULLED_HIGH;
         case DSP_WRITE_STATUS://c                        
-            return (sbdsp.dav_dsp | sbdsp.dsp_busy) << 7;                                
+            return (sbdsp.dav_dsp | sbdsp.dsp_busy) << 7 | DSP_UNUSED_STATUS_BITS_PULLED_HIGH;
         default:
             //printf("SB READ: %x\n\r",address);
             return 0xFF;            
