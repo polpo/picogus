@@ -477,7 +477,7 @@ uint8_t sbdsp_read(uint8_t address) {
             //printf("i");
             return (sbdsp.dav_pc << 7);            
         case DSP_WRITE_STATUS://c                        
-            return (sbdsp.dav_dsp | sbdsp.dsp_busy) << 7;                                
+            return (sbdsp.dav_dsp | sbdsp.dsp_busy | sbdsp.dac_resume_pending) << 7;                                
         default:
             //printf("SB READ: %x\n\r",address);
             return 0xFF;            
