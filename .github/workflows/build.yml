@@ -5,9 +5,10 @@ jobs:
       runs-on: ubuntu-22.04
       env: 
         BUILD_TYPE: "Release"
-        PICOSDK_VER: "1.5.1"
-        PICOEXTRA_VER: "sdk-1.5.1"
+        PICOSDK_VER: "2.0.0"
+        PICOEXTRA_VER: "sdk-2.0.0"
         # The Pico-SDK will listen to these environment vars
+        PICOTOOL_FETCH_FROM_GIT_PATH: ${{github.workspace}}/pico/picotool
         PICO_SDK_PATH: ${{github.workspace}}/pico/pico-sdk
         PICO_EXTRAS_PATH: ${{github.workspace}}/pico/pico-extras
         OUTPUT_DIR: ${{github.workspace}}/binaries
@@ -20,7 +21,7 @@ jobs:
       - name: Install Arm GNU Toolchain (arm-none-eabi-gcc)
         uses: carlosperate/arm-none-eabi-gcc-action@v1
         with:
-          release: '13.2.Rel1'
+          release: '13.3.Rel1'
 
       # Since we reference stable versions of Pico-SDK and pico-extras, we can cache their downloads.
       # If this were to reference changing branches (like "master"), this caching step must be removed!!!
@@ -49,17 +50,26 @@ jobs:
       - name: Create Build Environment
         run: cmake -E make_directory ${{github.workspace}}/build
 
-      - name: Patch Pico SDK to allow LTO
-        run: sed -i 's/WRAPPER_FUNC(x) __wrap_/WRAPPER_FUNC(x) __attribute__((used)) __wrap_/' ${{env.PICO_SDK_PATH}}/src/rp2_common/pico_platform/include/pico/platform.h
+      # - name: Patch Pico SDK to allow LTO
+      #   run: sed -i 's/WRAPPER_FUNC(x) __wrap_/WRAPPER_FUNC(x) __attribute__((used)) __wrap_/' ${{env.PICO_SDK_PATH}}/src/rp2_common/pico_platform_compiler/include/pico/platform/compiler.h
 
       - name: Build Mega Firmware
         shell: bash
         working-directory: ${{github.workspace}}/build
         run: |
           mkdir -p $OUTPUT_DIR
-          cmake $GITHUB_WORKSPACE/sw -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DPROJECT_TYPE="MULTIFW" -DUSE_LTO=1
+          cmake $GITHUB_WORKSPACE/sw -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DPROJECT_TYPE="MULTIFW" #-DUSE_LTO=1
           cmake --build . --config $BUILD_TYPE --parallel $(nproc)
           cp picogus.uf2 $OUTPUT_DIR/picogus.uf2
+
+      - name: Build NE2000 Firmware
+        shell: bash
+        working-directory: ${{github.workspace}}/build
+        run: |
+          mkdir -p $OUTPUT_DIR
+          cmake $GITHUB_WORKSPACE/sw -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DPROJECT_TYPE="NE2K" -DPICO_BOARD=picow_fast #-DUSE_LTO=1
+          cmake --build . --config $BUILD_TYPE --parallel $(nproc)
+          cp pg-ne2k.uf2 $OUTPUT_DIR/pg-ne2k.uf2
 
       # will generate PicoGUS Firmwares.zip as downloadable artifact with all .uf2 files
       - name: Upload All Firmwares

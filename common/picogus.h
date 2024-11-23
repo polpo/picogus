@@ -26,10 +26,11 @@ typedef enum {
     TANDY_MODE   = 4,
     CMS_MODE     = 5,
     SB_MODE      = 6,
-    USB_MODE     = 7
+    USB_MODE     = 7,
+    NE2000_MODE  = 8
 } card_mode_t;
 
-static const char *modenames[8] = {
+static const char *modenames[9] = {
     "INVALID",
     "GUS",
     "ADLIB",
@@ -37,7 +38,8 @@ static const char *modenames[8] = {
     "TANDY",
     "CMS",
     "SB",
-    "USB"
+    "USB",
+    "NE2000"
 };
 
 #define MODE_MAGIC      0x00 // Magic string
@@ -62,6 +64,13 @@ static const char *modenames[8] = {
 #define MODE_MOUSEPROTO 0x41 // Mouse protocol
 #define MODE_MOUSERATE  0x42 // Mouse report rate
 #define MODE_MOUSESEN   0x43 // Mouse sensitivity
+#define MODE_NE2KPORT   0x50 // NE2000 Base port
+#define MODE_WIFISSID   0x51 // NE2000 SSID
+#define MODE_WIFIPASS   0x52 // NE2000 password
+#define MODE_WIFIAPPLY  0x53 // NE2000 password
+#define MODE_WIFISTAT   0x54 // NE2000 wifi status
+#define MODE_WIFISCAN   0x55 // NE2000 wifi scan
+
 #define MODE_DEFAULTS   0xE0 // Select reset to defaults register
 #define MODE_SAVE       0xE1 // Select save settings register
 #define MODE_REBOOT     0xE2 // Select reboot register

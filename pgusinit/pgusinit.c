@@ -10,7 +10,7 @@
 #include "../common/picogus.h"
 
 static void banner(void) {
-    printf("PicoGUSinit v3.1.0 (c) 2024 Ian Scott - licensed under the GNU GPL v2\n");
+    printf("PicoGUSinit v3.2.0 (c) 2024 Ian Scott - licensed under the GNU GPL v2\n");
 }
 
 
@@ -72,6 +72,15 @@ static void usage(char *argv0, card_mode_t mode, bool print_all) {
         printf("   /mouserate n  - set report rate in Hz. Default: 60, Min: 20, Max: 200\n");
         printf("          (increase for smoother cursor movement, decrease for lower CPU load)\n");
         printf("   /mousesen n   - set mouse sensitivity (256 - 100%, 128 - 50%, 512 - 200%)\n");
+    }
+    if (mode == NE2000_MODE || print_all) {
+        //     "................................................................................\n"
+        printf("NE2000/WiFi settings:\n");
+        printf("   /ne2kport x   - set the base port of the NE2000. Default: 300\n");
+        printf("   /wifissid abc - set the WiFi SSID to abc\n");
+        printf("   /wifipass xyz - set the WiFi WPA/WPA2 password/key to xyz\n");
+        printf("   /wifinopass   - unset the WiFi password to connect to an open access point\n");
+        printf("   /wifistatus   - print current WiFi status\n");
     }
 }
 
@@ -349,6 +358,43 @@ static int write_firmware(const char* fw_filename) {
     return 0;
 }
 
+static void wifi_printStatus(void)
+{
+    outp(CONTROL_PORT, 0xCC); // Knock on the door...
+    outp(CONTROL_PORT, MODE_WIFISTAT); // Select WiFi status mode
+    outp(DATA_PORT_HIGH, 0); // Write to start getting the status
+   
+    printf("WiFi status: ");
+    uint16_t try = 0;
+    char c;
+    while (c = inp(DATA_PORT_HIGH)) {
+        if (c == 255) {
+            if (++try == 10000) {
+                printf("Error getting WiFI status\n");
+                break;
+            } else {
+                continue;
+            }
+        }
+        putchar(c);
+    }
+    putchar('\n');
+}
+
+static void send_string(uint8_t mode, char* str, int16_t max_len)
+{
+    outp(CONTROL_PORT, 0xCC); // Knock on the door...
+    outp(CONTROL_PORT, mode);
+    char chr;
+    for (int i = 0; i < max_len; ++i) {
+        if (str[i] == 0) { // End of string
+            break;
+        }
+        outp(DATA_PORT_HIGH, str[i]);
+    }
+    outp(DATA_PORT_HIGH, 0);
+}
+
 #define process_bool_opt(option) \
 if (i + 1 >= argc) { \
     usage(argv[0], mode, false); \
@@ -378,6 +424,9 @@ int main(int argc, char* argv[]) {
     uint8_t enable_joystick = 0;
     uint8_t wtvol;
     char fw_filename[256] = {0};
+    char wifi_ssid[33] = {0};
+    char wifi_pass[64] = {0};
+    bool nopass = false;
     card_mode_t mode;
     char mode_name[8] = {0};
     int fw_num = 8;
@@ -389,7 +438,7 @@ int main(int argc, char* argv[]) {
     outp(CONTROL_PORT, MODE_MAGIC); // Select magic string register
     if (inp(DATA_PORT_HIGH) != 0xDD) {
         err_pigus();
-        return 99;
+        //return 99;
     };
     printf("PicoGUS detected: ");
     print_firmware_string();
@@ -409,6 +458,7 @@ int main(int argc, char* argv[]) {
             }
             return write_firmware(fw_filename);
         }
+        printf("arg: %s\n", argv[i]);
         ++i;
     }
 
@@ -603,6 +653,38 @@ int main(int argc, char* argv[]) {
             }
             outp(CONTROL_PORT, MODE_MOUSERATE);
             outp(DATA_PORT_HIGH, tmp_uint8);
+        // NE2000/WiFi options /////////////////////////////////////////////////////////////////
+        } else if (stricmp(argv[i], "/ne2kport") == 0) {
+            process_port_opt(tmp_uint16);
+            outp(CONTROL_PORT, MODE_NE2KPORT); // Select NE2000 port register
+            outpw(DATA_PORT_LOW, tmp_uint16); // Write port
+        } else if (stricmp(argv[i], "/wifistatus") == 0) {
+            wifi_printStatus();
+        } else if (stricmp(argv[i], "/wifissid") == 0) {
+            if (i + 1 >= argc) {
+                usage(argv[0], mode, false);
+                return 255;
+            }
+            e = sscanf(argv[++i], "%32s", wifi_ssid);
+            if (e != 1) {
+                usage(argv[0], mode, false);
+                return 4;
+            }
+            send_string(MODE_WIFISSID, wifi_ssid, 32);
+        } else if (stricmp(argv[i], "/wifipass") == 0) {
+            if (i + 1 >= argc) {
+                usage(argv[0], mode, false);
+                return 255;
+            }
+            e = sscanf(argv[++i], "%63s", wifi_pass);
+            if (e != 1) {
+                usage(argv[0], mode, false);
+                return 4;
+            }
+            send_string(MODE_WIFIPASS, wifi_pass, 63);
+        } else if (stricmp(argv[i], "/wifinopass") == 0) {
+            nopass = true;
+            send_string(MODE_WIFIPASS, "", 1);
         } else {
             printf("Unknown option: %s\n", argv[i]);
             usage(argv[0], mode, false);
@@ -625,6 +707,11 @@ int main(int argc, char* argv[]) {
             return 255;
         }
         return reboot_to_firmware(fw_num, permanent);
+    }
+
+    if (wifi_ssid[0] || wifi_pass[0] || nopass) {
+        outp(CONTROL_PORT, MODE_WIFIAPPLY);
+        outp(DATA_PORT_HIGH, 0);
     }
 
     outp(CONTROL_PORT, MODE_HWTYPE); // Select hardware type register
@@ -732,6 +819,12 @@ int main(int argc, char* argv[]) {
         } else {
             printf("(AdLib port disabled)\n");
         }
+        break;
+    case NE2000_MODE:
+        outp(CONTROL_PORT, MODE_NE2KPORT); // Select port register
+        tmp_uint16 = inpw(DATA_PORT_LOW); // Get port
+        printf("Running in NE2000 mode on port %x\n", tmp_uint16);
+        wifi_printStatus();
         break;
     default:
         printf("Running in unknown mode (maybe upgrade pgusinit?)\n");

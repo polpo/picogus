@@ -4,6 +4,7 @@
 #include "flash_settings.h"
 #include "hardware/flash.h"
 #include "hardware/sync.h"
+#include "hardware/clocks.h"
 #include "pico/stdlib.h"
 #include "pico/flash.h"
 
@@ -44,6 +45,13 @@ static const Settings defaultSettings = {
         .protocol = 0,
         .reportRate = 60,
         .sensitivity = 0x100
+    },
+    .NE2K = {
+        .basePort = 0x300,
+    },
+    .WiFi = {
+        .ssid = {0},
+        .password = {0}
     }
 };
 

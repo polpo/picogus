@@ -2,6 +2,7 @@
 
 #include <stdio.h>
 #include <hardware/flash.h>
+#include "hardware/clocks.h"
 #include "pico/multicore.h"
 #include "pico/stdlib.h"
 
