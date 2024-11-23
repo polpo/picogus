@@ -222,28 +222,28 @@ __force_inline void write_picogus_low(uint8_t value) {
 __force_inline void write_picogus_high(uint8_t value) {
     switch (sel_reg) {
     case MODE_GUSPORT: // GUS Base port
-        settings.GUS.basePort = (value && basePort_low) ? ((value << 8) | (basePort_low & 0xFF)) : 0xFFFF;
+        settings.GUS.basePort = (value || basePort_low) ? ((value << 8) | basePort_low) : 0xFFFF;
 #ifdef SOUND_GUS
         gus_port_test = settings.GUS.basePort >> 4 | 0x10;
 #endif
         break;
     case MODE_OPLPORT: // Adlib Base port
-        settings.SB.oplBasePort = (value && basePort_low) ? ((value << 8) | (basePort_low & 0xFF)) : 0xFFFF;
+        settings.SB.oplBasePort = (value || basePort_low) ? ((value << 8) | basePort_low) : 0xFFFF;
         break;
     case MODE_SBPORT: // SB Base port
-        settings.SB.basePort = (value && basePort_low) ? ((value << 8) | (basePort_low & 0xFF)) : 0xFFFF;
+        settings.SB.basePort = (value || basePort_low) ? ((value << 8) | basePort_low) : 0xFFFF;
 #ifdef SOUND_SB
         sb_port_test = settings.SB.basePort >> 4;
 #endif
         break;
     case MODE_MPUPORT: // MPU Base port
-        settings.MPU.basePort = (value && basePort_low) ? ((value << 8) | (basePort_low & 0xFF)) : 0xFFFF;
+        settings.MPU.basePort = (value || basePort_low) ? ((value << 8) | basePort_low) : 0xFFFF;
         break;
     case MODE_TANDYPORT: // Tandy Base port
-        settings.Tandy.basePort = (value && basePort_low) ? ((value << 8) | (basePort_low & 0xFF)) : 0xFFFF;
+        settings.Tandy.basePort = (value || basePort_low) ? ((value << 8) | basePort_low) : 0xFFFF;
         break;
     case MODE_CMSPORT: // CMS Base port
-        settings.CMS.basePort = (value && basePort_low) ? ((value << 8) | (basePort_low & 0xFF)) : 0xFFFF;
+        settings.CMS.basePort = (value || basePort_low) ? ((value << 8) | basePort_low) : 0xFFFF;
         break;
     case MODE_JOYEN: // enable joystick
         settings.Joy.basePort = value ? 0x201u : 0xffff;
@@ -289,7 +289,7 @@ __force_inline void write_picogus_high(uint8_t value) {
         settings.SB.oplSpeedSensitive = value;
         break;
     case MODE_MOUSEPORT:  // USB Mouse port (0 - disabled)
-        settings.Mouse.basePort = (value && basePort_low) ? ((value << 8) | (basePort_low & 0xFF)) : 0xFFFF;
+        settings.Mouse.basePort = (value || basePort_low) ? ((value << 8) | basePort_low) : 0xFFFF;
         break;
     case MODE_MOUSEPROTO:  // USB Mouse protocol
         settings.Mouse.protocol = value;
@@ -310,7 +310,7 @@ __force_inline void write_picogus_high(uint8_t value) {
 #endif
         break;
     case MODE_NE2KPORT: // NE2000 Base port
-        settings.NE2K.basePort = (value && basePort_low) ? ((value << 8) | (basePort_low & 0xFF)) : 0xFFFF;
+        settings.NE2K.basePort = (value || basePort_low) ? ((value << 8) | basePort_low) : 0xFFFF;
         break;
     case MODE_WIFISSID:
         settings.WiFi.ssid[cur_write++] = value;
@@ -373,7 +373,7 @@ __force_inline uint8_t read_picogus_low(void) {
         return settings.Mouse.basePort == 0xFFFF ? 0 : (settings.Mouse.basePort & 0xFF);
     case MODE_MOUSESEN:  // USB Mouse Sensitivity (8.8 fixedpoint)
         return settings.Mouse.sensitivity & 0xFF;
-    case MODE_NE2KPORT:  // USB Mouse port (0 - disabled)
+    case MODE_NE2KPORT:  // NE2000 Base port (0 - disabled)
         return settings.NE2K.basePort == 0xFFFF ? 0 : (settings.NE2K.basePort & 0xFF);
     default:
         return 0x0;
