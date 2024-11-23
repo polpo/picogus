@@ -210,6 +210,8 @@ void sbdsp_init() {
 
     puts("Initing ISA DMA PIO...");    
     SBDSP_DMA_isr_pt = sbdsp_dma_isr;
+
+    sbdsp.outbox = 0xAA;
     dma_config = DMA_init(pio0, DMA_PIO_SM, SBDSP_DMA_isr_pt);         
 }
 
@@ -438,29 +440,39 @@ void sbdsp_process(void) {
     }                
     sbdsp.dsp_busy=0;
 }
+
+static uint32_t DSP_Reset_Event(Bitu val) {
+    sbdsp.reset_state=0;                
+    sbdsp.outbox = 0xAA;
+    sbdsp.dav_pc=1;
+    sbdsp.current_command=0;
+    sbdsp.current_command_index=0;
+
+    sbdsp.dma_block_size=0x7FF; //default per 2.01
+    sbdsp.dma_sample_count=0;
+    sbdsp.dma_sample_count_rx=0;              
+    sbdsp.speaker_on = false;
+    sbdsp.dac_resume_pending = false;
+    return 0;
+}
+
 static __force_inline void sbdsp_reset(uint8_t value) {
     //TODO: COLDBOOT ? WARMBOOT ?    
     value &= 1; // Some games may write unknown data for bits other than the LSB.
     switch(value) {
         case 1:                        
+            PIC_RemoveEvents(DSP_Reset_Event);  
             sbdsp.autoinit=0;
             sbdsp_dma_disable();
             sbdsp.reset_state=1;
             break;
         case 0:
-            if(sbdsp.reset_state==0) return; 
-            if(sbdsp.reset_state==1) {                
-                sbdsp.reset_state=0;                
-                sbdsp.outbox = 0xAA;
-                sbdsp.dav_pc=1;
-                sbdsp.current_command=0;
-                sbdsp.current_command_index=0;
-
-                sbdsp.dma_block_size=0x7FF; //default per 2.01
-                sbdsp.dma_sample_count=0;
-                sbdsp.dma_sample_count_rx=0;              
-                sbdsp.speaker_on = false;
-                sbdsp.dac_resume_pending = false;
+            if(sbdsp.reset_state==1) {
+                sbdsp.dav_pc=0;
+                // sbdsp.outbox = 0xAA;
+                PIC_RemoveEvents(DSP_Reset_Event);  
+                PIC_AddEvent(DSP_Reset_Event, 100, 1);
+                sbdsp.reset_state = 2;
             }
             break;
         default:
@@ -476,7 +488,6 @@ uint8_t sbdsp_read(uint8_t address) {
             return sbdsp.outbox;
         case DSP_READ_STATUS: //e
             PIC_DeActivateIRQ();
-            //printf("i");
             return sbdsp.dav_pc << 7 | DSP_UNUSED_STATUS_BITS_PULLED_HIGH;
         case DSP_WRITE_STATUS://c                        
             return (sbdsp.dav_dsp | sbdsp.dsp_busy | sbdsp.dac_resume_pending) << 7 | DSP_UNUSED_STATUS_BITS_PULLED_HIGH;
