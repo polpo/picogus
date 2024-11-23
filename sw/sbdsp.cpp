@@ -44,7 +44,7 @@ static dma_inst_t dma_config;
 #define DSP_MIDI_WRITE_POLL     0x38
 #define DSP_SET_TIME_CONSTANT   0x40
 #define DSP_DMA_PAUSE           0xD0
-#define DSP_DMA_PAUSE_DURATION  0x80    //Used by Tryrian
+#define DSP_DAC_PAUSE_DURATION  0x80    // Pause DAC for a duration, then generate an interrupt. Used by Tyrian.
 #define DSP_ENABLE_SPEAKER      0xD1
 #define DSP_DISABLE_SPEAKER     0xD3
 #define DSP_DMA_RESUME          0xD4
@@ -73,8 +73,8 @@ typedef struct sbdsp_t {
     volatile uint16_t dma_buffer_tail;
     volatile uint16_t dma_buffer_head;
 
-    uint16_t dma_pause_duration;
-    uint8_t dma_pause_duration_low;
+    uint16_t dac_pause_duration;
+    uint8_t dac_pause_duration_low;
 
     uint16_t dma_block_size;
     uint32_t dma_sample_count;
@@ -96,6 +96,7 @@ typedef struct sbdsp_t {
     volatile bool dav_pc;
     volatile bool dav_dsp;
     volatile bool dsp_busy;
+    bool dac_resume_pending;
 
     uint8_t reset_state;  
    
@@ -155,13 +156,7 @@ static __force_inline void sbdsp_dma_enable() {
     if(!sbdsp.dma_enabled) {
         // sbdsp_fifo_clear();
         sbdsp.dma_enabled=true;            
-        if(sbdsp.dma_pause_duration) {            
-            PIC_AddEvent(DSP_DMA_Event,sbdsp.dma_interval * sbdsp.dma_pause_duration,1);
-            sbdsp.dma_pause_duration=0;
-        }
-        else {
-            PIC_AddEvent(DSP_DMA_Event,sbdsp.dma_interval,1);
-        }
+        PIC_AddEvent(DSP_DMA_Event,sbdsp.dma_interval,1);
     }
     else {
         //printf("INFO: DMA Already Enabled");        
@@ -173,18 +168,11 @@ static uint32_t DSP_DMA_Event(Bitu val) {
     uint32_t current_interval;
     sbdsp.dma_sample_count_rx++;    
 
-    if(sbdsp.dma_pause_duration) {
-        current_interval = sbdsp.dma_interval * sbdsp.dma_pause_duration;        
-        sbdsp.dma_pause_duration=0;
-    }
-    else {
-        current_interval = sbdsp.dma_interval;
-    }
+    current_interval = sbdsp.dma_interval;
 
     if(sbdsp.dma_sample_count_rx <= sbdsp.dma_sample_count) {        
         return current_interval;
-    }
-    else {                  
+    } else {                  
         PIC_ActivateIRQ();
         if(sbdsp.autoinit) {            
             sbdsp.dma_sample_count_rx=0;            
@@ -202,8 +190,15 @@ static void sbdsp_dma_isr(void) {
     sbdsp.cur_sample = (int16_t)(dma_data & 0xFF) - 0x80 << 5;
 }
 
+static uint32_t DSP_DAC_Resume_event(Bitu val) {
+    PIC_ActivateIRQ();
+    sbdsp.dac_resume_pending = false;
+    PIC_RemoveEvents(DSP_DAC_Resume_event);
+    return 0;
+}
+
 int16_t sbdsp_sample() {
-    return sbdsp.speaker_on ? sbdsp.cur_sample : 0;
+    return (sbdsp.speaker_on & ~sbdsp.dac_resume_pending) ? sbdsp.cur_sample : 0;
 }
 
 void sbdsp_init() {    
@@ -410,17 +405,20 @@ void sbdsp_process(void) {
             }
             break;
         
-        case DSP_DMA_PAUSE_DURATION:
+        case DSP_DAC_PAUSE_DURATION:
             if(sbdsp.dav_dsp) {                             
                 if(sbdsp.current_command_index==1) {                    
-                    sbdsp.dma_pause_duration_low=sbdsp.inbox;
+                    sbdsp.dac_pause_duration_low=sbdsp.inbox;
                     sbdsp.dav_dsp=0;                    
                 }
                 else if(sbdsp.current_command_index==2) {                    
-                    sbdsp.dma_pause_duration = sbdsp.dma_pause_duration_low + (sbdsp.inbox << 8);
+                    sbdsp.dac_pause_duration = sbdsp.dac_pause_duration_low + (sbdsp.inbox << 8);
+                    sbdsp.dac_resume_pending = true;
+                    // When the specified duration elapses, the DSP generates an interrupt.
+                    PIC_AddEvent(DSP_DAC_Resume_event, sbdsp.dma_interval * sbdsp.dac_pause_duration, 1);
                     sbdsp.dav_dsp=0;
                     sbdsp.current_command=0;          
-                    //printf("(0x80) Pause Duration:%u\n\r",sbdsp.dma_pause_duration);                                        
+                    //printf("(0x80) Pause Duration:%u\n\r",sbdsp.dac_pause_duration);                                        
                 }
                 sbdsp.current_command_index++;
             }
@@ -460,6 +458,7 @@ static __force_inline void sbdsp_reset(uint8_t value) {
                 sbdsp.dma_sample_count=0;
                 sbdsp.dma_sample_count_rx=0;              
                 sbdsp.speaker_on = false;
+                sbdsp.dac_resume_pending = false;
             }
             break;
         default:
@@ -478,7 +477,7 @@ uint8_t sbdsp_read(uint8_t address) {
             //printf("i");
             return (sbdsp.dav_pc << 7);            
         case DSP_WRITE_STATUS://c                        
-            return (sbdsp.dav_dsp | sbdsp.dsp_busy) << 7;                                
+            return (sbdsp.dav_dsp | sbdsp.dsp_busy | sbdsp.dac_resume_pending) << 7;                                
         default:
             //printf("SB READ: %x\n\r",address);
             return 0xFF;            
