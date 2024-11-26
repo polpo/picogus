@@ -5,9 +5,7 @@ extern Settings settings;
 
 #include "pico/flash.h"
 
-#ifdef USE_ALARM
 #include "pico_pic.h"
-#endif
 
 #ifdef USB_STACK
 #include "tusb.h"
@@ -24,11 +22,9 @@ void play_mpu() {
     tuh_init(BOARD_TUH_RHPORT);
 #endif
 
-#ifdef USE_ALARM
     // Init PIC on this core so it handles timers
     PIC_Init();
     puts("pic inited on core 1");
-#endif
     MPU401_Init(settings.MPU.delaySysex, settings.MPU.fakeAllNotesOff);
 
     for (;;) {

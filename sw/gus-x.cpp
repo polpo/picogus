@@ -751,7 +751,13 @@ void DEBUG_PrintGUS() { //debugger "GUS" command
 
 static INLINE void GUS_CheckIRQ(void);
 
-static uint32_t GUS_TimerEvent(Bitu val);
+static uint32_t GUS_TimerEventHandler(Bitu val);
+static PIC_TimerEvent GUS_TimerEvent0 = {
+    .handler = GUS_TimerEventHandler,
+};
+static PIC_TimerEvent GUS_TimerEvent1 = {
+    .handler = GUS_TimerEventHandler,
+};
 
 void GUS_StopDMA();
 void GUS_StartDMA();
@@ -814,7 +820,8 @@ static void GUSReset(void) {
         myGUS.timers[0].running = false;
         myGUS.timers[1].running = false;
 
-        PIC_RemoveEvents(GUS_TimerEvent);
+        PIC_RemoveEvent(&GUS_TimerEvent0);
+        PIC_RemoveEvent(&GUS_TimerEvent1);
 
         // myGUS.fixed_44k_output = false;
 
@@ -1031,7 +1038,7 @@ __force_inline static uint16_t ExecuteReadRegister(void) {
     }
 }
 
-static uint32_t GUS_TimerEvent(Bitu val) {
+static uint32_t GUS_TimerEventHandler(Bitu val) {
     // putchar('-');
     critical_section_enter_blocking(&gus_crit);
     if (!myGUS.timers[val].masked) myGUS.timers[val].reached=true;
@@ -1374,13 +1381,13 @@ __force_inline void write_gus(Bitu port, Bitu val) {
         myGUS.timers[1].masked=(val & 0x20)>0;
         if (val & 0x1) {
             if (!myGUS.timers[0].running) {
-                PIC_AddEvent(GUS_TimerEvent,myGUS.timers[0].delay,0);
+                PIC_AddEvent(&GUS_TimerEvent0, myGUS.timers[0].delay, 0);
                 myGUS.timers[0].running=true;
             }
         } else myGUS.timers[0].running=false;
         if (val & 0x2) {
             if (!myGUS.timers[1].running) {
-                PIC_AddEvent(GUS_TimerEvent,myGUS.timers[1].delay,1);
+                PIC_AddEvent(&GUS_TimerEvent1, myGUS.timers[1].delay, 1);
                 myGUS.timers[1].running=true;
             }
         } else myGUS.timers[1].running=false;
@@ -1435,7 +1442,7 @@ static bool GUS_DMA_Active = false;
 __force_inline
 #endif
 uint32_t 
-GUS_DMA_Event(Bitu val) {
+GUS_DMA_EventHandler(Bitu val) {
     (void)val;//UNUSED
     if (!GUS_DMA_Active) {
         return 0;
@@ -1465,6 +1472,9 @@ GUS_DMA_Event(Bitu val) {
     DMA_Start_Write(&dma_config);
     return 0;
 }
+static PIC_TimerEvent GUS_DMA_Event = {
+    .handler = GUS_DMA_EventHandler
+};
 
 void 
 GUS_DMA_isr() {
@@ -1518,7 +1528,7 @@ GUS_DMA_isr() {
     } else {
         ++myGUS.dmaAddr;
         /* keep going */
-        PIC_AddEvent(GUS_DMA_Event, myGUS.dmaInterval, 2);
+        PIC_AddEvent(&GUS_DMA_Event, myGUS.dmaInterval, 0);
     }
 }
 irq_handler_t GUS_DMA_isr_pt = GUS_DMA_isr;
@@ -1550,7 +1560,7 @@ void __force_inline process_dma(void) {
     }
     uint32_t cur_time = time_us_32();
     if (next_event && cur_time >= next_event) {
-        next_event = cur_time + GUS_DMA_Event(2);
+        next_event = cur_time + GUS_DMA_Event(0);
     }
 }
 #endif
@@ -1591,8 +1601,7 @@ __force_inline void GUS_StartDMA() {
     }
     
 #ifndef POLLING_DMA
-    // PIC_AddEvent(GUS_DMA_Event, 13, 2);
-    PIC_AddEvent(GUS_DMA_Event, myGUS.dmaInterval, 2);
+    PIC_AddEvent(&GUS_DMA_Event, myGUS.dmaInterval, 0);
 #else
     next_event = time_us_32() + myGUS.dmaInterval;
 #endif

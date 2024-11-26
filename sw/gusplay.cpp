@@ -17,9 +17,7 @@
 #include "pico/audio_i2s.h"
 #include "pico/flash.h"
 
-#ifdef USE_ALARM
 #include "pico_pic.h"
-#endif
 
 #ifdef USB_STACK
 #include "tusb.h"
@@ -92,10 +90,8 @@ void play_gus() {
     flash_safe_execute_core_init();
     uint32_t start, end;
 
-#ifdef USE_ALARM
     // Init PIC on this core so it handles timers
     PIC_Init();
-#endif
 
     // Init ISA DMA on this core so it handles the ISR
     puts("Initing ISA DMA PIO...");

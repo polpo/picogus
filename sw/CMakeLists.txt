@@ -78,7 +78,6 @@ function(config_target TARGET_NAME MULTIFW)
         PICO_AUDIO_I2S_DATA_PIN=16
         PICO_AUDIO_I2S_CLOCK_PIN_BASE=17
         PICO_AUDIO_I2S_PIO=1
-        USE_ALARM=1
         M62429_PIO=1
     )
 

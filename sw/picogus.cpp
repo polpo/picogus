@@ -837,10 +837,6 @@ void err_blink(void) {
     }
 }
 
-#ifndef USE_ALARM
-#include "pico_pic.h"
-#endif
-
 constexpr uint32_t rp2_clock = RP2_CLOCK_SPEED;
 constexpr float psram_clkdiv = (float)rp2_clock / 200000.0;
 constexpr float pwm_clkdiv = (float)rp2_clock / 22727.27;
@@ -1115,10 +1111,6 @@ extern void PIC_DeActivateIRQ(void);
 
     gpio_xor_mask(LED_PIN);
 
-#ifndef USE_ALARM
-    PIC_Init();
-#endif
-
     processSettings();
 
     for (;;) {
@@ -1130,9 +1122,6 @@ extern void PIC_DeActivateIRQ(void);
         if (ior_has_data()) {
             handle_ior();
         }
-#endif
-#ifndef USE_ALARM
-        PIC_HandleEvents();
 #endif
 #ifdef POLLING_DMA
         process_dma();

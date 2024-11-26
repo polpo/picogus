@@ -159,7 +159,7 @@ void PG_Wifi_Connect(const char* ssid, const char* pass) {
 void PG_Wifi_Reconnect(void)
 {
     int16_t status = cyw43_wifi_link_status(&cyw43_state, CYW43_ITF_STA);
-    printf("status: %d\n", status);
+    //printf("status: %d\n", status);
     switch(status)
     {
         case CYW43_LINK_JOIN :

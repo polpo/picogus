@@ -31,7 +31,10 @@
 uart_state_t uart_state;
 
 // forward declarations
-static uint32_t uartemu_event(Bitu val);
+static uint32_t uartemu_event_handler(Bitu val);
+static PIC_TimerEvent uartemu_event = {
+    .handler = uartemu_event_handler,
+};
 
 // initialize emulation
 uint32_t uartemu_init(int iobase) {
@@ -71,7 +74,7 @@ uint32_t uartemu_init(int iobase) {
 // deinit emulation
 uint32_t uartemu_done() {
     // remove stale events
-    PIC_RemoveEvents(uartemu_event);
+    PIC_RemoveEvent(&uartemu_event);
 
     // deinit critical section
     critical_section_deinit(&uart_state.crit);
@@ -126,7 +129,7 @@ static void uartemu_rxdata_advance() {
     }
 }
 
-static uint32_t uartemu_event(Bitu val) {
+static uint32_t uartemu_event_handler(Bitu val) {
     // acquire lock
     critical_section_enter_blocking(&uart_state.crit);
 
@@ -172,7 +175,7 @@ static uint32_t uartemu_event(Bitu val) {
 
 static void uartemu_post_event(uint32_t type, uint32_t delay_us) {
     // add event
-    PIC_AddEvent(uartemu_event, delay_us, type);
+    PIC_AddEvent(&uartemu_event, delay_us, type);
 }
 
 // TX message pipe drain

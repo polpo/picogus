@@ -33,8 +33,6 @@
 /* SOFTMPU: Moved exported functions & types to header */
 #include "export.h"
 
-extern uint LED_PIN;
-
 /* HardMPU includes */
 /*
 #include <avr/sfr_defs.h>
@@ -59,10 +57,22 @@ void MIDI_Init(bool delaysysex,bool fakeallnotesoff);
 void MIDI_RawOutByte(Bit8u data);
 bool MIDI_Available(void);
 
-static uint32_t MPU401_Event(Bitu val);
-static uint32_t MPU401_ResetDone(Bitu val);
+static uint32_t MPU401_EventHandler(Bitu val);
+static PIC_TimerEvent MPU401_Event = {
+    .handler = MPU401_EventHandler
+};
+static uint32_t MPU401_ResetDoneHandler(Bitu val);
+static PIC_TimerEvent MPU401_ResetDone = {
+    .handler = MPU401_ResetDoneHandler
+};
 static uint32_t MPU401_InitHandler(Bitu val);
+static PIC_TimerEvent MPU401_InitEvent = {
+    .handler = MPU401_InitHandler
+};
 static uint32_t MPU401_EOIHandler(Bitu val);
+static PIC_TimerEvent MPU401_EOI = {
+    .handler = MPU401_EOIHandler
+};
 static void MPU401_Reset(void);
 static void MPU401_EOIHandlerDispatch(void);
 
@@ -172,7 +182,7 @@ __force_inline void MPU401_WriteCommand(Bit8u val, bool crit) { /* SOFTMPU */
             mpu.state.cmd_pending=val+1;
             goto write_command_return;
         }
-        PIC_RemoveEvents(MPU401_ResetDone);
+        PIC_RemoveEvent(&MPU401_ResetDone);
         mpu.state.reset=false;
     }
     if (val<=0x2f) {
@@ -185,7 +195,7 @@ __force_inline void MPU401_WriteCommand(Bit8u val, bool crit) { /* SOFTMPU */
         switch (val&0xc) {
             case  0x4:      /* Stop */
                 if (mpu.state.playing && !mpu.clock.clock_to_host)
-                    PIC_RemoveEvents(MPU401_Event);
+                    PIC_RemoveEvent(&MPU401_Event);
                 mpu.state.playing=false;
                 for (i=0xb0;i<0xbf;i++) {  /* All notes off */
                     MIDI_RawOutByte(i);
@@ -196,7 +206,7 @@ __force_inline void MPU401_WriteCommand(Bit8u val, bool crit) { /* SOFTMPU */
             case 0x8:       /* Play */
                 /*LOG(LOG_MISC,LOG_NORMAL)("MPU-401:Intelligent mode playback started");*/ /* SOFTMPU */
                 if (!mpu.state.playing && !mpu.clock.clock_to_host)
-                    PIC_AddEvent(MPU401_Event,MPU401_TIMECONSTANT/((mpu.clock.tempo*mpu.clock.timebase*mpu.clock.tempo_rel)/0x40), 2);
+                    PIC_AddEvent(&MPU401_Event,MPU401_TIMECONSTANT/((mpu.clock.tempo*mpu.clock.timebase*mpu.clock.tempo_rel)/0x40), 0);
                 mpu.state.playing=true;
                 ClrQueue();
                 break;
@@ -227,12 +237,12 @@ __force_inline void MPU401_WriteCommand(Bit8u val, bool crit) { /* SOFTMPU */
             break;
         case 0x94: /* Clock to host */
             if (mpu.clock.clock_to_host && !mpu.state.playing)
-                PIC_RemoveEvents(MPU401_Event);
+                PIC_RemoveEvent(&MPU401_Event);
             mpu.clock.clock_to_host=false;
             break;
         case 0x95:
             if (!mpu.clock.clock_to_host && !mpu.state.playing)
-                PIC_AddEvent(MPU401_Event,MPU401_TIMECONSTANT/((mpu.clock.tempo*mpu.clock.timebase*mpu.clock.tempo_rel)/0x40), 2);
+                PIC_AddEvent(&MPU401_Event,MPU401_TIMECONSTANT/((mpu.clock.tempo*mpu.clock.timebase*mpu.clock.tempo_rel)/0x40), 0);
             mpu.clock.clock_to_host=true;
             break;
         case 0xc2: /* Internal timebase */
@@ -307,7 +317,7 @@ __force_inline void MPU401_WriteCommand(Bit8u val, bool crit) { /* SOFTMPU */
             break;
         case 0xff:      /* Reset MPU-401 */
             /*LOG(LOG_MISC,LOG_NORMAL)("MPU-401:Reset %X",val);*/ /* SOFTMPU */
-            PIC_AddEvent(MPU401_ResetDone, MPU401_RESETBUSY, 0);
+            PIC_AddEvent(&MPU401_ResetDone, MPU401_RESETBUSY, 0);
             mpu.state.reset=true;
             if (mpu.mode==M_UART) {
                 MPU401_Reset();
@@ -621,7 +631,7 @@ __force_inline static void UpdateConductor(void) {
     mpu.state.req_mask|=(1<<9);
 }
 
-uint32_t MPU401_Event(Bitu val) {
+uint32_t MPU401_EventHandler(Bitu val) {
     /* SOFTMPU */
     /* putchar('.'); */
     Bit8u i;
@@ -656,7 +666,7 @@ next_event:
 __force_inline static void MPU401_EOIHandlerDispatch(void) {
     if (mpu.state.send_now) {
         mpu.state.eoi_scheduled=true;
-        PIC_AddEvent(MPU401_EOIHandler, 60, 1); // Possible a bit longer
+        PIC_AddEvent(&MPU401_EOI, 60, 0); // Possible a bit longer
     }
     else if (!mpu.state.eoi_scheduled) MPU401_EOIHandler(0);
 }
@@ -693,7 +703,7 @@ __force_inline uint32_t MPU401_EOIHandler(Bitu val) {
     return 0;
 }
 
-static uint32_t  MPU401_ResetDone(Bitu val) { /* SOFTMPU */
+static uint32_t  MPU401_ResetDoneHandler(Bitu val) { /* SOFTMPU */
     critical_section_enter_blocking(&mpu_crit);
     mpu.state.reset=false;
     if (mpu.state.cmd_pending) {
@@ -711,8 +721,8 @@ __force_inline static void MPU401_Reset(void) {
     PIC_DeActivateIRQ();
 #endif
     mpu.mode=(mpu.intelligent ? M_INTELLIGENT : M_UART);
-    PIC_RemoveEvents(MPU401_Event);
-    PIC_RemoveEvents(MPU401_EOIHandler);
+    PIC_RemoveEvent(&MPU401_Event);
+    PIC_RemoveEvent(&MPU401_EOI);
     mpu.state.eoi_scheduled=false;
     mpu.state.wsd=false;
     mpu.state.wsm=false;
@@ -752,7 +762,7 @@ void MPU401_Init(bool delaysysex, bool fakeallnotesoff)
     if (!critical_section_is_initialized(&mpu_crit)) {
         critical_section_init(&mpu_crit);
     }
-    PIC_AddEvent(MPU401_InitHandler, 1000, 3);
+    PIC_AddEvent(&MPU401_InitEvent, 1000, 0);
 }
 
 uint32_t MPU401_InitHandler(Bitu val)

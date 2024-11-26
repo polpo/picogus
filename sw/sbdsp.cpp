@@ -11,6 +11,8 @@ Author : Kevin Moonlight <me@yyzkevin.com>
 
 */
 
+extern uint LED_PIN;
+
 #include "isa_dma.h"
 
 
@@ -107,8 +109,6 @@ typedef struct sbdsp_t {
 
 static sbdsp_t sbdsp;
 
-static uint32_t DSP_DMA_Event(Bitu val);
-
 #if 0
 uint16_t sbdsp_fifo_level() {
     if(sbdsp.dma_buffer_tail < sbdsp.dma_buffer_head) return DSP_DMA_FIFO_SIZE - (sbdsp.dma_buffer_head - sbdsp.dma_buffer_tail);
@@ -148,9 +148,14 @@ uint16_t sbdsp_fifo_tx(char *buffer,uint16_t len) {
 }
 #endif
 
+static uint32_t DSP_DMA_EventHandler(Bitu val);
+static PIC_TimerEvent DSP_DMA_Event = {
+    .handler = DSP_DMA_EventHandler,
+};
+
 static __force_inline void sbdsp_dma_disable() {
     sbdsp.dma_enabled=false;    
-    PIC_RemoveEvents(DSP_DMA_Event);  
+    PIC_RemoveEvent(&DSP_DMA_Event);  
     sbdsp.cur_sample = 0;  // zero current sample
 }
 
@@ -158,14 +163,14 @@ static __force_inline void sbdsp_dma_enable() {
     if(!sbdsp.dma_enabled) {
         // sbdsp_fifo_clear();
         sbdsp.dma_enabled=true;            
-        PIC_AddEvent(DSP_DMA_Event,sbdsp.dma_interval,1);
+        PIC_AddEvent(&DSP_DMA_Event, sbdsp.dma_interval, 0);
     }
     else {
         //printf("INFO: DMA Already Enabled");        
     }
 }
 
-static uint32_t DSP_DMA_Event(Bitu val) {
+static uint32_t DSP_DMA_EventHandler(Bitu val) {
     DMA_Start_Write(&dma_config);    
     uint32_t current_interval;
     sbdsp.dma_sample_count_rx++;    
@@ -192,12 +197,14 @@ static void sbdsp_dma_isr(void) {
     sbdsp.cur_sample = (int16_t)(dma_data & 0xFF) - 0x80 << 5;
 }
 
-static uint32_t DSP_DAC_Resume_event(Bitu val) {
+static uint32_t DSP_DAC_Resume_eventHandler(Bitu val) {
     PIC_ActivateIRQ();
     sbdsp.dac_resume_pending = false;
-    PIC_RemoveEvents(DSP_DAC_Resume_event);
     return 0;
 }
+static PIC_TimerEvent DSP_DAC_Resume_event = {
+    .handler = DSP_DAC_Resume_eventHandler,
+};
 
 int16_t sbdsp_sample() {
     return (sbdsp.speaker_on & ~sbdsp.dac_resume_pending) ? sbdsp.cur_sample : 0;
@@ -419,7 +426,7 @@ void sbdsp_process(void) {
                     sbdsp.dac_pause_duration = sbdsp.dac_pause_duration_low + (sbdsp.inbox << 8);
                     sbdsp.dac_resume_pending = true;
                     // When the specified duration elapses, the DSP generates an interrupt.
-                    PIC_AddEvent(DSP_DAC_Resume_event, sbdsp.dma_interval * sbdsp.dac_pause_duration, 1);
+                    PIC_AddEvent(&DSP_DAC_Resume_event, sbdsp.dma_interval * sbdsp.dac_pause_duration, 0);
                     sbdsp.dav_dsp=0;
                     sbdsp.current_command=0;          
                     //printf("(0x80) Pause Duration:%u\n\r",sbdsp.dac_pause_duration);                                        
@@ -441,7 +448,7 @@ void sbdsp_process(void) {
     sbdsp.dsp_busy=0;
 }
 
-static uint32_t DSP_Reset_Event(Bitu val) {
+static uint32_t DSP_Reset_EventHandler(Bitu val) {
     sbdsp.reset_state=0;                
     sbdsp.outbox = 0xAA;
     sbdsp.dav_pc=1;
@@ -455,13 +462,16 @@ static uint32_t DSP_Reset_Event(Bitu val) {
     sbdsp.dac_resume_pending = false;
     return 0;
 }
+static PIC_TimerEvent DSP_Reset_Event = {
+    .handler = DSP_Reset_EventHandler,
+};
 
 static __force_inline void sbdsp_reset(uint8_t value) {
     //TODO: COLDBOOT ? WARMBOOT ?    
     value &= 1; // Some games may write unknown data for bits other than the LSB.
     switch(value) {
         case 1:                        
-            PIC_RemoveEvents(DSP_Reset_Event);  
+            PIC_RemoveEvent(&DSP_Reset_Event);  
             sbdsp.autoinit=0;
             sbdsp_dma_disable();
             sbdsp.reset_state=1;
@@ -470,8 +480,8 @@ static __force_inline void sbdsp_reset(uint8_t value) {
             if(sbdsp.reset_state==1) {
                 sbdsp.dav_pc=0;
                 // sbdsp.outbox = 0xAA;
-                PIC_RemoveEvents(DSP_Reset_Event);  
-                PIC_AddEvent(DSP_Reset_Event, 100, 1);
+                PIC_RemoveEvent(&DSP_Reset_Event);  
+                PIC_AddEvent(&DSP_Reset_Event, 100, 0);
                 sbdsp.reset_state = 2;
             }
             break;

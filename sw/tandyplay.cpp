@@ -28,7 +28,7 @@ extern uint LED_PIN;
 #ifdef USB_STACK
 #include "tusb.h"
 #endif
-#if (defined(USB_MOUSE) || defined(SOUND_MPU)) && defined(USE_ALARM)
+#if defined(USB_MOUSE) || defined(SOUND_MPU)
 #include "pico_pic.h"
 #endif
 
@@ -91,7 +91,7 @@ void play_tandy() {
     puts("starting core 1 tandy");
     flash_safe_execute_core_init();
 
-#if (defined(USB_MOUSE) || defined(SOUND_MPU)) && defined(USE_ALARM)
+#if defined(USB_MOUSE) || defined(SOUND_MPU)
     // Init PIC on this core so it handles timers
     PIC_Init();
     puts("pic inited on core 1");
