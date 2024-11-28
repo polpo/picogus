@@ -5,8 +5,8 @@ jobs:
       runs-on: ubuntu-22.04
       env: 
         BUILD_TYPE: "Release"
-        PICOSDK_VER: "2.0.0"
-        PICOEXTRA_VER: "sdk-2.0.0"
+        PICOSDK_VER: "2.1.0"
+        PICOEXTRA_VER: "sdk-2.1.0"
         # The Pico-SDK will listen to these environment vars
         PICOTOOL_FETCH_FROM_GIT_PATH: ${{github.workspace}}/pico/picotool
         PICO_SDK_PATH: ${{github.workspace}}/pico/pico-sdk
