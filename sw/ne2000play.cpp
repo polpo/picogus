@@ -38,6 +38,8 @@ extern "C" {
   #include "ne2000/ne2000.h"
 }
 
+#include "pico_pic.h"
+
 #include "flash_settings.h"
 extern Settings settings;
 
@@ -53,7 +55,7 @@ static PIC_TimerEvent Wifi_Reconnect_Event = {
 };
 
 void play_ne2000() {
-    //flash_safe_execute_core_init();
+    flash_safe_execute_core_init();
     puts("starting core 1 ne2000");
     PG_EnableWifi();
     PG_Wifi_Connect(settings.WiFi.ssid, settings.WiFi.password);
