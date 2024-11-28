@@ -1,14 +1,26 @@
+/*
+ *  Copyright (C) 2022-2024  Ian Scott
+ *
+ *  This program is free software; you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation; either version 2 of the License, or
+ *  (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
+ */
+
 #include "pico_pic.h"
 
 #include "pico/time.h"
 
 #include <stdio.h>
-
-// A fixed pool of multiple events.
-// gus-x has 3 different timer events - two timers and one DMA
-// 8250uart has 3
-// mpu401 has 3
-// SB has 1
 
 alarm_pool_t* alarm_pool;
 
