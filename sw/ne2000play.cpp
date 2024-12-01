@@ -64,6 +64,7 @@ void play_ne2000() {
     PG_EnableWifi();
     PG_Wifi_Connect(settings.WiFi.ssid, settings.WiFi.password);
 
+    static bool flag = false;
     while(1) {
         PIC_AddEvent(&Wifi_Reconnect_Event, 1000, 0);
         if (multicore_fifo_rvalid()) {
@@ -79,5 +80,14 @@ void play_ne2000() {
             }
         }
         //cyw43_arch_poll();
+        if (((time_us_32() >> 21) & 0x1) == 0x1) { 
+            if (flag == false) {
+                putchar('=');
+                PG_Wifi_Reconnect();
+                flag = true;
+            }
+        } else {
+            flag = false;
+        }
     }
 }
