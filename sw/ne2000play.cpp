@@ -48,6 +48,7 @@ extern uint LED_PIN;
 
 static uint32_t Wifi_Reconnect_EventHandler(Bitu val) {
     PG_Wifi_Reconnect();
+    putchar('=');
     return 1000000;
 }
 static PIC_TimerEvent Wifi_Reconnect_Event = {
@@ -61,7 +62,7 @@ void play_ne2000() {
     PG_Wifi_Connect(settings.WiFi.ssid, settings.WiFi.password);
 
     while(1) {
-        PIC_AddEvent(&Wifi_Reconnect_Event, 1000000, 0);
+        // PIC_AddEvent(&Wifi_Reconnect_Event, 1000000, 0);
         if (multicore_fifo_rvalid()) {
             switch(multicore_fifo_pop_blocking()) {
             case FIFO_NE2K_SEND:
@@ -74,6 +75,6 @@ void play_ne2000() {
                 break;
             }
         }
-        /* cyw43_arch_poll(); */
+        cyw43_arch_poll();
     }
 }

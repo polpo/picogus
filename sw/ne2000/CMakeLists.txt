@@ -25,4 +25,6 @@ target_link_libraries(ne2000 INTERFACE
 # target_compile_definitions(ne2000 INTERFACE
 #     CYW43_LWIP=0
 # )
-
+target_compile_definitions(ne2000 INTERFACE
+    # PICO_CYW43_ARCH_POLL=1
+)

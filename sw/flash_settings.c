@@ -110,7 +110,7 @@ void saveSettings(const Settings* settings)
     static_assert(sizeof(Settings) < FLASH_PAGE_SIZE, "Settings struct doesn't fit inside one flash page");
     memcpy(data, settings, sizeof(Settings));
     printf("doing settings save: ");
-    int result = flash_safe_execute(saveSettingsSafe, data, 100);
+    int result = flash_safe_execute(saveSettingsSafe, data, 1000);
     if (result) {
         printf("uh oh... %d", result);
     }
