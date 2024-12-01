@@ -25,6 +25,10 @@ target_link_libraries(ne2000 INTERFACE
 # target_compile_definitions(ne2000 INTERFACE
 #     CYW43_LWIP=0
 # )
+target_compile_definitions(pico_cyw43_arch_none_headers INTERFACE
+    PICO_CYW43_ARCH_THREADSAFE_BACKGROUND=1
+)
 target_compile_definitions(ne2000 INTERFACE
     # PICO_CYW43_ARCH_POLL=1
+    PICO_CYW43_ARCH_THREADSAFE_BACKGROUND=1
 )

@@ -110,13 +110,12 @@ void saveSettings(const Settings* settings)
     static_assert(sizeof(Settings) < FLASH_PAGE_SIZE, "Settings struct doesn't fit inside one flash page");
     memcpy(data, settings, sizeof(Settings));
     printf("doing settings save: ");
-    int result = flash_safe_execute(saveSettingsSafe, data, 1000);
-    if (result) {
-        printf("uh oh... %d", result);
-    }
-    /*
+    /* int result = flash_safe_execute(saveSettingsSafe, data, 100); */
+    /* if (result) { */
+    /*     printf("uh oh... %d", result); */
+    /* } */
     // Stop second core
-    multicore_reset_core1();
+    /* multicore_reset_core1(); */
     // Clock down the RP2040 so the flash at its default 1/2 clock divider is within spec (<=133MHz)
     set_sys_clock_khz(240000, true);
 
@@ -128,7 +127,6 @@ void saveSettings(const Settings* settings)
     set_sys_clock_khz(RP2_CLOCK_SPEED, true);
     restore_interrupts(ints);
     printf("settings saved");
-    */
 }
 
 void getDefaultSettings(Settings* settings)
