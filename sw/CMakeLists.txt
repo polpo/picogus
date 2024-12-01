@@ -315,15 +315,9 @@ endfunction()
 function(build_ne2k TARGET_NAME MULTIFW)
     config_target(${TARGET_NAME} ${MULTIFW})
     pico_set_program_name(${TARGET_NAME} "picogus-ne2k")
-    # set(USB_JOYSTICK FALSE)
-    # set(PICO_BOARD PICO_W) # For now, until USB Dongle
-    # set(PICO_BOARD picow-fast)
-    #set(PICO_CYW43_SUPPORTED "1")
-    #pico_register_common_scope_var(PICO_CYW43_SUPPORTED)
     target_compile_definitions(${TARGET_NAME} PRIVATE
        NE2000=1
        PICOW=1
-       # CYW43_RESOURCE_ATTRIBUTE="__in_flash()"
        CYW43_CONFIG_FILE="cyw43_firmware.h"
        CYW43_PIO_CLOCK_DIV_INT=3
     )

@@ -17,18 +17,13 @@ target_sources(ne2000 INTERFACE
 
 target_link_libraries(ne2000 INTERFACE
     pico_cyw43_arch_none
-    # pico_cyw43_arch_poll
 ) 
-# target_compile_definitions(pico_cyw43_arch_poll_headers INTERFACE
-#     CYW43_LWIP=0
-# )
-# target_compile_definitions(ne2000 INTERFACE
-#     CYW43_LWIP=0
-# )
-target_compile_definitions(pico_cyw43_arch_none_headers INTERFACE
-    PICO_CYW43_ARCH_THREADSAFE_BACKGROUND=1
-)
-target_compile_definitions(ne2000 INTERFACE
-    # PICO_CYW43_ARCH_POLL=1
-    PICO_CYW43_ARCH_THREADSAFE_BACKGROUND=1
-)
+
+if(PROJECT_TYPE STREQUAL "NE2K")
+    target_compile_definitions(pico_cyw43_arch_none_headers INTERFACE
+        PICO_CYW43_ARCH_THREADSAFE_BACKGROUND=1
+    )
+    target_compile_definitions(ne2000 INTERFACE
+        PICO_CYW43_ARCH_THREADSAFE_BACKGROUND=1
+    )
+endif()
