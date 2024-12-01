@@ -475,7 +475,6 @@ int main(int argc, char* argv[]) {
             }
             return write_firmware(fw_filename);
         }
-        printf("arg: %s\n", argv[i]);
         ++i;
     }
 
