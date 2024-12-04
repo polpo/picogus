@@ -27,7 +27,6 @@
 #include "hardware/structs/clocks.h"
 #include "hardware/timer.h"
 #include "pico/multicore.h"
-#include "pico/flash.h"
 
 #endif
 
@@ -46,17 +45,7 @@ extern Settings settings;
 extern uint LED_PIN;
 
 
-static uint32_t Wifi_Reconnect_EventHandler(Bitu val) {
-    putchar('=');
-    PG_Wifi_Reconnect();
-    return 1000;
-}
-static PIC_TimerEvent Wifi_Reconnect_Event = {
-    .handler = Wifi_Reconnect_EventHandler
-};
-
 void play_ne2000() {
-    // flash_safe_execute_core_init();
     // Init PIC on this core so it handles timers
     PIC_Init();
 
@@ -66,7 +55,6 @@ void play_ne2000() {
 
     static bool flag = false;
     while(1) {
-        PIC_AddEvent(&Wifi_Reconnect_Event, 1000, 0);
         if (multicore_fifo_rvalid()) {
             switch(multicore_fifo_pop_blocking()) {
             case FIFO_NE2K_SEND:
@@ -79,7 +67,6 @@ void play_ne2000() {
                 break;
             }
         }
-        //cyw43_arch_poll();
         if (((time_us_32() >> 21) & 0x1) == 0x1) { 
             if (flag == false) {
                 putchar('=');

@@ -24,7 +24,6 @@
 #include "hardware/sync.h"
 #include "hardware/clocks.h"
 #include "pico/stdlib.h"
-#include "pico/flash.h"
 
 static const Settings defaultSettings = {
     .magic = SETTINGS_MAGIC,
@@ -92,30 +91,14 @@ void loadSettings(Settings* settings)
 }
 
 
-static void saveSettingsSafe(void* data)
-{
-    putchar('-');
-    // Clock down the RP2040 so the flash at its default 1/2 clock divider is within spec (<=133MHz)
-    set_sys_clock_khz(240000, true);
-    flash_range_erase(SETTINGS_SECTOR, FLASH_SECTOR_SIZE);    // last sector
-    putchar('-');
-    flash_range_program(SETTINGS_SECTOR, data, FLASH_PAGE_SIZE);
-    set_sys_clock_khz(RP2_CLOCK_SPEED, true);
-    printf("settings saved");
-}
-
 void saveSettings(const Settings* settings)
 {
     uint8_t data[FLASH_PAGE_SIZE] = {0};
     static_assert(sizeof(Settings) < FLASH_PAGE_SIZE, "Settings struct doesn't fit inside one flash page");
     memcpy(data, settings, sizeof(Settings));
     printf("doing settings save: ");
-    /* int result = flash_safe_execute(saveSettingsSafe, data, 100); */
-    /* if (result) { */
-    /*     printf("uh oh... %d", result); */
-    /* } */
-    // Stop second core
-    /* multicore_reset_core1(); */
+    // No need for flash_safe_execute or stop second core, since it will not touch flash
+    // If the 2nd core will ever touch flash, reconsider this approach!
     // Clock down the RP2040 so the flash at its default 1/2 clock divider is within spec (<=133MHz)
     set_sys_clock_khz(240000, true);
 

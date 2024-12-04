@@ -28,7 +28,6 @@
 
 #include "pico/stdlib.h"
 #include "pico/audio_i2s.h"
-#include "pico/flash.h"
 
 #include "square/square.h"
 
@@ -101,7 +100,7 @@ struct audio_buffer_pool *init_audio() {
 
 void play_tandy() {
     puts("starting core 1 tandy");
-    flash_safe_execute_core_init();
+    // flash_safe_execute_core_init();
 
 #if defined(USB_MOUSE) || defined(SOUND_MPU)
     // Init PIC on this core so it handles timers

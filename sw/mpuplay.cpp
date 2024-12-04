@@ -21,8 +21,6 @@
 #include "flash_settings.h"
 extern Settings settings;
 
-#include "pico/flash.h"
-
 #include "pico_pic.h"
 
 #ifdef USB_STACK
@@ -33,7 +31,7 @@ extern Settings settings;
 
 void play_mpu() {
     puts("starting core 1 MPU");
-    flash_safe_execute_core_init();
+    // flash_safe_execute_core_init();
 
 #ifdef USB_STACK
     // Init TinyUSB for joystick support
