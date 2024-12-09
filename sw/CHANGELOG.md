@@ -1,3 +1,28 @@
+# v2.2.0
+
+## New features/changes
+
+### NE2000 emulation/WiFi
+
+*Please note* that this mode is not supported on PicoGUS 2.0! It needs a v1.1, v1.2, or Femto version of the PicoGUS that takes a Raspberry Pi Pico and requires a Pico W! I made this mode mainly just so I could use WiFi on my Pocket386 with a Femto card plugged into it. At least for now, NE2K mode comes in its own separate firmware file (`pg-ne2k.uf2`) and no other emulation is enabled when this firmware is loaded. Due to this limitation and the fact that the PCB design of the PicoGUS 1.x is not ideal for WiFI reception, consider this mode just a bit of a nice bonus. Config options have been added to pgusinit for NE2000 and WiFi SSID/password settings.
+
+## Fixes
+
+### Sound Blaster 2.0 emulation
+
+* Fixes detection in Windows 9x, allowing SB mode to work in Windows 9x. Thanks to Ian Hanschen (@ianhan) for contributing the fix.
+* Fixes detection in Tyrian and Dig-It! Thanks again to Ian Hanschen for the fix.
+* Fixes detection in STMIK-based demos (Mental Surgery by Future Crew, SX by Substance, Min Monitor Briner by Syntax Error, probably others)
+
+### GUS emulation
+
+* Fixes intelligent mode MIDI buffer overrun and slow MIDI output in GUS mode. Usually showed up as an "Exc. Checksum Error" on the MT-32 screen. 
+
+### General
+
+* Fixes issue with setting port numbers less than 0x100 or ending in 00. This fixes common port settings like 0c0 for Tandy or 0x300 for NE2000
+* Refactors timers to be less jittery; shouldn't be noticeable in practice but may fix some GUS emulation edge cases.
+
 # v2.1.0
 
 ## New features/changes
