@@ -27,7 +27,7 @@
 #include "../common/picogus.h"
 
 static void banner(void) {
-    printf("PicoGUSinit v3.2.0 (c) 2024 Ian Scott - licensed under the GNU GPL v2\n");
+    printf("PicoGUSinit v3.3.0 (c) 2024 Ian Scott - licensed under the GNU GPL v2\n");
 }
 
 

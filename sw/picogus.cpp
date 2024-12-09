@@ -203,7 +203,6 @@ __force_inline void select_picogus(uint8_t value) {
         break;
     case MODE_WIFIAPPLY:
     case MODE_WIFISTAT:
-    case MODE_WIFISCAN:
         break;
     case MODE_SAVE: // Select save settings register
     case MODE_REBOOT: // Select reboot register
@@ -348,8 +347,6 @@ __force_inline void write_picogus_high(uint8_t value) {
         multicore_fifo_push_blocking(FIFO_WIFI_STATUS);
 #endif
         break;
-    case MODE_WIFISCAN:
-        break;
     // For multifw
     case MODE_BOOTMODE:
         settings.startupMode = value;
@@ -464,10 +461,6 @@ __force_inline uint8_t read_picogus_high(void) {
         return 0;
 #endif
         break;
-    /*
-    case MODE_WIFISCAN:
-        return PG_Wifi_ReadScanStr();
-    */
     case MODE_HWTYPE: // Hardware version
         return BOARD_TYPE;
     case MODE_FLASH:

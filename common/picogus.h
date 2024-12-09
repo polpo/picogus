@@ -65,11 +65,10 @@ static const char *modenames[9] = {
 #define MODE_MOUSERATE  0x42 // Mouse report rate
 #define MODE_MOUSESEN   0x43 // Mouse sensitivity
 #define MODE_NE2KPORT   0x50 // NE2000 Base port
-#define MODE_WIFISSID   0x51 // NE2000 SSID
-#define MODE_WIFIPASS   0x52 // NE2000 password
-#define MODE_WIFIAPPLY  0x53 // NE2000 password
-#define MODE_WIFISTAT   0x54 // NE2000 wifi status
-#define MODE_WIFISCAN   0x55 // NE2000 wifi scan
+#define MODE_WIFISSID   0x51 // WiFi SSID
+#define MODE_WIFIPASS   0x52 // WiFi password
+#define MODE_WIFIAPPLY  0x53 // apply WiFi settings
+#define MODE_WIFISTAT   0x54 // WiFi status
 
 #define MODE_DEFAULTS   0xE0 // Select reset to defaults register
 #define MODE_SAVE       0xE1 // Select save settings register
