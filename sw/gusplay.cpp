@@ -178,7 +178,7 @@ void play_gus() {
 #endif
 #ifdef SOUND_MPU
         // Calculate number of midi bytes to send at current sample rate and number of samples generated
-        send_midi_bytes(MAX(31250 * sample_count / playback_rate + 1, 4));
+        send_midi_bytes(MAX(31250 * sample_count / playback_rate + 1, 8));
 #endif
     }
 }

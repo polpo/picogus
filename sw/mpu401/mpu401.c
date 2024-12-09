@@ -47,11 +47,6 @@ typedef uint16_t Bit16u;
 typedef int32_t Bits;
 typedef int8_t Bit8s;
 
-// autodetect when Gateway runs by watching for it setting this message on the MT-32's LCD
-static const char* gateway_msg = "\xf0\x41\x10\x16\x12\x20\x00\x00       Gateway";
-static uint8_t gateway_pos = 0;
-static uint8_t gateway_len = 22;
-
 #include "../pico_pic.h"
 
 void MIDI_Init(bool delaysysex,bool fakeallnotesoff);
@@ -100,7 +95,6 @@ typedef enum MpuDataType MpuDataType; /* SOFTMPU */
 #define MSG_MPU_CLOCK           0xfd
 #define MSG_MPU_ACK             0xfe
 
-static bool config_versionfix = false;
 static bool config_delaysysex = false;
 static bool config_fakeallnotesoff = false;
 
@@ -278,14 +272,8 @@ __force_inline void MPU401_WriteCommand(Bit8u val, bool crit) { /* SOFTMPU */
             QueueByte(0);
             goto write_command_return;
         case 0xac:      /* Request version */
-            if (config_versionfix) {
-                // Hack for Gateway
-                QueueByte(MPU401_VERSION);
-                QueueByte(MSG_MPU_ACK);
-            } else {
-                QueueByte(MSG_MPU_ACK);
-                QueueByte(MPU401_VERSION);
-            }
+            QueueByte(MSG_MPU_ACK);
+            QueueByte(MPU401_VERSION);
             goto write_command_return;
         case 0xad:      /* Request revision */
             QueueByte(MSG_MPU_ACK);
@@ -388,18 +376,6 @@ __force_inline void MPU401_WriteData(Bit8u val, bool crit) { /* SOFTMPU */
     static Bit8u length,cnt,posd; /* SOFTMPU */
     if (mpu.mode==M_UART) {
         MIDI_RawOutByte(val);
-        // autodetect when Gateway runs
-        if (val == gateway_msg[gateway_pos]) {
-            // printf("v: %x (%c)\n", val, val);
-            ++gateway_pos;
-            if (gateway_pos == gateway_len) {
-                // printf("Gateway hack enabled!");
-                config_versionfix = true;
-                gateway_pos = 0;
-            }
-        } else {
-            gateway_pos = 0;
-        }
         goto write_return;
     }
     switch (mpu.state.command_byte) {       /* 0xe# command data */
@@ -759,7 +735,6 @@ void MPU401_Init(bool delaysysex, bool fakeallnotesoff)
 {
     config_delaysysex = delaysysex;
     config_fakeallnotesoff = fakeallnotesoff;
-    config_versionfix = false;
     if (!critical_section_is_initialized(&mpu_crit)) {
         critical_section_init(&mpu_crit);
     }
