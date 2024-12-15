@@ -218,7 +218,7 @@ endfunction()
 # Build SB firmware
 function(build_sb TARGET_NAME MULTIFW)
     set(USB_JOYSTICK TRUE)
-    set(SOUND_MPU TRUE)
+    set(SOUND_MPU FALSE)
     set(SOUND_OPL TRUE)
     config_target(${TARGET_NAME} ${MULTIFW})
     pico_set_program_name(${TARGET_NAME} "picogus-sb")

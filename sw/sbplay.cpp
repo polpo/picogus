@@ -34,7 +34,7 @@ extern "C" void OPL_Pico_simple(int16_t *buffer, uint32_t nsamples);
 extern "C" void OPL_Pico_PortWrite(opl_port_t, unsigned int);
 
 #ifdef SOUND_SB
-extern int16_t sbdsp_sample();
+extern void sbdsp_samples(int16_t* buf);
 #endif
 #if defined(SOUND_SB) || defined(USB_MOUSE) || defined(SOUND_MPU)
 #include "pico_pic.h"
@@ -153,7 +153,9 @@ void play_adlib() {
         int16_t opl_sample;
         OPL_Pico_simple(&opl_sample, 1);
 #ifdef SOUND_SB
-        samples[0] = samples[1] = clamp16((int32_t)sbdsp_sample() + (int32_t)opl_sample);
+        sbdsp_samples(samples);
+        samples[0] = clamp16((int32_t)samples[0] + (int32_t)opl_sample);
+        samples[1] = clamp16((int32_t)samples[1] + (int32_t)opl_sample);
 #else
         samples[0] = samples[1] = opl_sample;
 #endif

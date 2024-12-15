@@ -42,8 +42,8 @@ static irq_handler_t SBDSP_DMA_isr_pt;
 static dma_inst_t dma_config;
 #define DMA_PIO_SM 2
 
-#define DSP_VERSION_MAJOR 2
-#define DSP_VERSION_MINOR 1
+#define DSP_VERSION_MAJOR 4
+#define DSP_VERSION_MINOR 5
 
 // Sound Blaster DSP I/O port offsets
 #define DSP_RESET           0x6
@@ -51,6 +51,9 @@ static dma_inst_t dma_config;
 #define DSP_WRITE           0xC
 #define DSP_WRITE_STATUS    0xC
 #define DSP_READ_STATUS     0xE
+#define DSP_IRQ_16_STATUS   0xF
+#define MIXER_COMMAND       0x4
+#define MIXER_DATA          0x5
 
 #define OUTPUT_SAMPLERATE   49716ul     
 
@@ -61,12 +64,23 @@ static dma_inst_t dma_config;
 #define DSP_DMA_SINGLE          0x14    //follosed by length
 #define DSP_DMA_AUTO            0X1C    //length based on 48h
 #define DSP_DMA_BLOCK_SIZE      0x48    //block size for highspeed/dma
+
+// SB16 DSP commands
+#define DSP_DMA_IO_START        0xB0
+#define DSP_DMA_IO_END          0xCF
+#define DSP_PAUSE_DMA_16        0xD5
+#define DSP_CONTINUE_DMA_16     0x47
+#define DSP_CONTINUE_DMA_8      0x45
+#define DSP_EXIT_DMA_16         0xD9
+#define DSP_EXIT_DMA_8          0xDA
+
 //#define DSP_DMA_DAC 0x14
 #define DSP_DIRECT_DAC          0x10
 #define DSP_DIRECT_ADC          0x20
 #define DSP_MIDI_READ_POLL      0x30
 #define DSP_MIDI_WRITE_POLL     0x38
 #define DSP_SET_TIME_CONSTANT   0x40
+#define DSP_SET_SAMPLING_RATE   0x41
 #define DSP_DMA_PAUSE           0xD0
 #define DSP_DAC_PAUSE_DURATION  0x80    // Pause DAC for a duration, then generate an interrupt. Used by Tyrian.
 #define DSP_ENABLE_SPEAKER      0xD1
@@ -75,15 +89,36 @@ static dma_inst_t dma_config;
 #define DSP_SPEAKER_STATUS      0xD8
 #define DSP_IDENT               0xE0
 #define DSP_VERSION             0xE1
+#define DSP_COPYRIGHT           0xE3
 #define DSP_WRITETEST           0xE4
 #define DSP_READTEST            0xE8
 #define DSP_SINE                0xF0
-#define DSP_IRQ                 0xF2
+#define DSP_IRQ_8               0xF2
+#define DSP_IRQ_16              0xF3
 #define DSP_CHECKSUM            0xF4
+
+#define MIXER_INTERRUPT         0x80
+#define MIXER_DMA               0x81
+#define MIXER_IRQ_STATUS        0x82
+#define MIXER_STEREO            0xE
 
 #define DSP_DMA_FIFO_SIZE       1024
 
 #define DSP_UNUSED_STATUS_BITS_PULLED_HIGH 0x7F
+
+static char const * const copyright_string="COPYRIGHT (C) CREATIVE TECHNOLOGY LTD, 1992.";
+
+
+union sample {
+    int16_t data16;
+    uint8_t data8[2];
+};
+
+union sample32 {
+    uint32_t data32;
+    int16_t data16[2];
+    uint8_t data8[4];
+};
 
 typedef struct sbdsp_t {
     uint8_t inbox;
@@ -91,6 +126,8 @@ typedef struct sbdsp_t {
     uint8_t test_register;
     uint8_t current_command;
     uint8_t current_command_index;
+
+    uint8_t mixer_command;
 
     uint16_t dma_interval;     
     // int16_t dma_interval_trim;
@@ -103,11 +140,13 @@ typedef struct sbdsp_t {
     uint8_t dac_pause_duration_low;
 
     uint16_t dma_block_size;
-    uint32_t dma_sample_count;
-    uint32_t dma_sample_count_rx;
+    uint16_t dma_sample_count;      // Number of 8 or 16 bit samples minus 1
+    uint32_t dma_xfer_count;        // Number of 8-bit DMA transfers minus 1
+    uint32_t dma_xfer_count_rx;     // Number of started DMA transfers
+    uint32_t dma_xfer_count_played; // Number of actually received DMA xfers
 
     uint8_t time_constant;
-    // uint16_t sample_rate;
+    uint16_t sample_rate;
     // uint32_t sample_step;
     // uint64_t cycle_us;
 
@@ -116,6 +155,9 @@ typedef struct sbdsp_t {
                 
     bool autoinit;    
     bool dma_enabled;
+    bool dma_16bit;
+    bool dma_stereo;
+    bool dma_signed;
 
     bool speaker_on;
         
@@ -123,10 +165,22 @@ typedef struct sbdsp_t {
     volatile bool dav_dsp;
     volatile bool dsp_busy;
     bool dac_resume_pending;
+    volatile bool irq_8_pending;
+    volatile bool irq_16_pending;
+
+    uint8_t interrupt;
+    uint8_t dma;
 
     uint8_t reset_state;  
    
-    volatile int16_t cur_sample;
+    // volatile int16_t cur_sample_l;
+    // volatile int16_t cur_sample_r;
+
+    sample32 cur_sample;
+    sample32 next_sample;
+
+    // volatile sample next_sample_l;
+    // volatile sample next_sample_r;
 } sbdsp_t;
 
 static sbdsp_t sbdsp;
@@ -175,10 +229,17 @@ static PIC_TimerEvent DSP_DMA_Event = {
     .handler = DSP_DMA_EventHandler,
 };
 
-static __force_inline void sbdsp_dma_disable() {
+static __force_inline void sbdsp_dma_disable(bool pause) {
     sbdsp.dma_enabled=false;    
     PIC_RemoveEvent(&DSP_DMA_Event);  
-    sbdsp.cur_sample = 0;  // zero current sample
+    // sbdsp.cur_sample_l = 0;  // zero current sample
+    // sbdsp.cur_sample_r = 0;  // zero current sample
+    sbdsp.cur_sample.data32 = 0;
+    if (!pause) {
+        sbdsp.dma_16bit = false;
+        sbdsp.dma_signed = false;
+        sbdsp.dma_stereo = false;
+    }
 }
 
 static __force_inline void sbdsp_dma_enable() {    
@@ -194,32 +255,66 @@ static __force_inline void sbdsp_dma_enable() {
 
 static uint32_t DSP_DMA_EventHandler(Bitu val) {
     DMA_Start_Write(&dma_config);    
-    uint32_t current_interval;
-    sbdsp.dma_sample_count_rx++;    
+    // uint32_t current_interval = 0;
+    // sbdsp.dma_xfer_count_rx++;    
 
-    current_interval = sbdsp.dma_interval;
+    // current_interval = sbdsp.dma_interval;
 
-    if(sbdsp.dma_sample_count_rx <= sbdsp.dma_sample_count) {        
-        return current_interval;
+    if(sbdsp.dma_xfer_count_rx++ < sbdsp.dma_xfer_count) {        
+        // current_interval = sbdsp.dma_interval;
+        return sbdsp.dma_interval;
     } else {                  
+        if (sbdsp.dma_16bit) {
+            sbdsp.irq_16_pending = true;
+        } else {
+            sbdsp.irq_8_pending = true;
+        }
         PIC_ActivateIRQ();
         if(sbdsp.autoinit) {            
-            sbdsp.dma_sample_count_rx=0;            
-            return current_interval;
+            sbdsp.dma_xfer_count_rx=0;            
+            // current_interval = sbdsp.dma_interval;
+            return sbdsp.dma_interval;
         }
         else {            
-            sbdsp_dma_disable();            
+            sbdsp_dma_disable(false);
         }
     } 
+    // sbdsp.dma_xfer_count_rx++;    
+    // DMA_Start_Write(&dma_config);    
     return 0;
 }
 
 static void sbdsp_dma_isr(void) {
-    const uint32_t dma_data = DMA_Complete_Write(&dma_config);    
-    sbdsp.cur_sample = (int16_t)(dma_data & 0xFF) - 0x80 << 5;
+    const uint8_t dma_data = DMA_Complete_Write(&dma_config) & 0xff;
+    if (sbdsp.dma_stereo) {
+        if (sbdsp.dma_16bit) {
+            // 16 bit stereo
+            sbdsp.next_sample.data8[sbdsp.dma_xfer_count_played & 3] = dma_data;
+            if ((sbdsp.dma_xfer_count_played & 3) == 3) {
+                sbdsp.cur_sample.data32 = sbdsp.dma_signed ? sbdsp.next_sample.data32 : sbdsp.next_sample.data32 ^ 0x80008000;
+            }
+        } else {
+            // 8 bit stereo
+            sbdsp.next_sample.data16[sbdsp.dma_xfer_count_played & 1] = dma_data << 8;
+            if ((sbdsp.dma_xfer_count_played & 1) == 1) {
+                sbdsp.cur_sample.data32 = sbdsp.dma_signed ? sbdsp.next_sample.data32 : sbdsp.next_sample.data32 ^ 0x80008000;
+            }
+        }
+    } else {
+        // TODO 16 bit mono
+        // 8 bit mono
+        sbdsp.next_sample.data16[0] = sbdsp.next_sample.data16[1] = dma_data << 8;
+        sbdsp.cur_sample.data32 = sbdsp.dma_signed ? sbdsp.next_sample.data32 : sbdsp.next_sample.data32 ^ 0x80008000;
+    }
+    sbdsp.dma_xfer_count_played++;
 }
 
 static uint32_t DSP_DAC_Resume_eventHandler(Bitu val) {
+    if (sbdsp.dma_16bit) {
+        sbdsp.irq_16_pending = true;
+    } else {
+        sbdsp.irq_8_pending = true;
+    }
     PIC_ActivateIRQ();
     sbdsp.dac_resume_pending = false;
     return 0;
@@ -228,17 +323,26 @@ static PIC_TimerEvent DSP_DAC_Resume_event = {
     .handler = DSP_DAC_Resume_eventHandler,
 };
 
-int16_t sbdsp_sample() {
-    return (sbdsp.speaker_on & ~sbdsp.dac_resume_pending) ? sbdsp.cur_sample : 0;
+void sbdsp_samples(int16_t *buf) {
+    if (sbdsp.speaker_on & ~sbdsp.dac_resume_pending) {
+        // buf[0] = sbdsp.cur_sample_l;
+        // buf[1] = sbdsp.cur_sample_r;
+        // *buf = sbdsp.cur_sample.data16;
+        memcpy(buf, &sbdsp.cur_sample, 4);
+    } else {
+        buf[0] = buf[1] = 0;
+    }
 }
 
 void sbdsp_init() {    
     // uint8_t x,y,z;    
     // char buffer[32];
-       
 
     puts("Initing ISA DMA PIO...");    
     SBDSP_DMA_isr_pt = sbdsp_dma_isr;
+
+    sbdsp.dma = 0x2; // force DMA 1 for now
+    sbdsp.interrupt = 0x2; // force IRQ 5 for now
 
     sbdsp.outbox = 0xAA;
     dma_config = DMA_init(pio0, DMA_PIO_SM, SBDSP_DMA_isr_pt);         
@@ -265,8 +369,9 @@ void sbdsp_process(void) {
 
     switch(sbdsp.current_command) {  
         case DSP_DMA_PAUSE:
+        case DSP_PAUSE_DMA_16:
             sbdsp.current_command=0;                                    
-            sbdsp_dma_disable();
+            sbdsp_dma_disable(true);
             //printf("(0xD0)DMA PAUSE\n\r");            
             break;
         case DSP_DMA_RESUME:
@@ -274,11 +379,22 @@ void sbdsp_process(void) {
             sbdsp_dma_enable();                        
             //printf("(0xD4)DMA RESUME\n\r");                                            
             break;
+        case DSP_CONTINUE_DMA_16:
+        case DSP_CONTINUE_DMA_8:
+            sbdsp.autoinit = 1;           
+            sbdsp.current_command = 0;
+            break;
+        case DSP_EXIT_DMA_16:
+        case DSP_EXIT_DMA_8:
+            sbdsp.autoinit = 0;
+            sbdsp.current_command = 0;
+            break;
         case DSP_DMA_AUTO:     
             // printf("(0x1C)DMA_AUTO\n\r");                   
             sbdsp.autoinit=1;           
-            sbdsp.dma_sample_count = sbdsp.dma_block_size;
-            sbdsp.dma_sample_count_rx=0;
+            sbdsp.dma_xfer_count = sbdsp.dma_block_size;
+            sbdsp.dma_xfer_count_rx=0;
+            sbdsp.dma_xfer_count_played=0;
             sbdsp_dma_enable();            
             sbdsp.current_command=0;                 
             break;        
@@ -287,8 +403,9 @@ void sbdsp_process(void) {
             sbdsp.dav_dsp=0;
             sbdsp.current_command=0;  
             sbdsp.autoinit=1;
-            sbdsp.dma_sample_count = sbdsp.dma_block_size;
-            sbdsp.dma_sample_count_rx=0;
+            sbdsp.dma_xfer_count = sbdsp.dma_block_size;
+            sbdsp.dma_xfer_count_rx=0;
+            sbdsp.dma_xfer_count_played=0;
             sbdsp_dma_enable();            
             break;            
 
@@ -302,7 +419,7 @@ void sbdsp_process(void) {
                     sbdsp.dma_interval = 1000000ul / sbdsp.sample_rate; // redundant.                    
                     */
                     sbdsp.dma_interval = 256 - sbdsp.time_constant;
-                    // sbdsp.sample_rate = 1000000ul / sbdsp.dma_interval;           
+                    sbdsp.sample_rate = 0; // Rate of 0 indicates time constant drives DMA timing           
                     // sbdsp.sample_step = sbdsp.sample_rate * 65535ul / OUTPUT_SAMPLERATE;                    
                     // sbdsp.sample_factor = (OUTPUT_SAMPLERATE / sbdsp.sample_rate)+5; //Estimate
                     
@@ -313,6 +430,23 @@ void sbdsp_process(void) {
                     
                     sbdsp.dav_dsp=0;
                     sbdsp.current_command=0;                    
+                }    
+                sbdsp.current_command_index++;
+            }
+            break;
+        case DSP_SET_SAMPLING_RATE:
+            if(sbdsp.dav_dsp) {
+                if(sbdsp.current_command_index==1) { // wSamplingRate.HighByte
+                    // Need to fix this (some kind of trim?)
+                    sbdsp.sample_rate = sbdsp.inbox << 8;
+                    sbdsp.dav_dsp=0;
+                } else if (sbdsp.current_command_index==2) { // wSamplingRate.LowByte
+                    sbdsp.sample_rate |= sbdsp.inbox;
+                    // Default interval for 8-bit mono, will adjust when DMA starts
+                    sbdsp.dma_interval = 1000000ul / sbdsp.sample_rate;
+                    sbdsp.dav_dsp=0;
+                    sbdsp.current_command=0;
+                    // printf("(0x40) DSP_SET_SAMPLING_RATE: %d %d\n\r", sbdsp.sample_rate, sbdsp.dma_interval);
                 }    
                 sbdsp.current_command_index++;
             }
@@ -338,31 +472,39 @@ void sbdsp_process(void) {
             sbdsp.dav_dsp=0;
             sbdsp.current_command=0;  
             sbdsp.autoinit=0;
-            sbdsp.dma_sample_count = sbdsp.dma_block_size;
-            sbdsp.dma_sample_count_rx=0;
+            sbdsp.dma_xfer_count = sbdsp.dma_block_size;
+            sbdsp.dma_xfer_count_rx=0;
+            sbdsp.dma_xfer_count_played=0;
             sbdsp_dma_enable();            
             break;            
         case DSP_DMA_SINGLE:              
             if(sbdsp.dav_dsp) {            
                 if(sbdsp.current_command_index==1) {
-                    sbdsp.dma_sample_count = sbdsp.inbox;
+                    sbdsp.dma_xfer_count = sbdsp.inbox;
                     sbdsp.dav_dsp=0;                    
                 }
                 else if(sbdsp.current_command_index==2) {
                     // printf("(0x14)DMA_SINGLE\n\r");                      
-                    sbdsp.dma_sample_count += (sbdsp.inbox << 8);
-                    sbdsp.dma_sample_count_rx=0;                    
+                    sbdsp.dma_xfer_count += (sbdsp.inbox << 8);
+                    sbdsp.dma_xfer_count_rx=0;                    
+                    sbdsp.dma_xfer_count_played=0;
                     sbdsp.dav_dsp=0;
                     sbdsp.current_command=0;  
                     sbdsp.autoinit=0;                                  
-                    //printf("Sample Count:%u\n",sbdsp.dma_sample_count);                                        
+                    //printf("Sample Count:%u\n",sbdsp.dma_xfer_count);                                        
                     sbdsp_dma_enable();                                                                                                                            
                 }
                 sbdsp.current_command_index++;
             }                        
             break;            
-        case DSP_IRQ:
+        case DSP_IRQ_8:
             sbdsp.current_command=0;             
+            sbdsp.irq_8_pending = true;
+            PIC_ActivateIRQ();                
+            break;            
+        case DSP_IRQ_16:
+            sbdsp.current_command=0;             
+            sbdsp.irq_16_pending = true;
             PIC_ActivateIRQ();                
             break;            
         case DSP_VERSION:
@@ -390,7 +532,7 @@ void sbdsp_process(void) {
             }                                       
             break;
         case DSP_ENABLE_SPEAKER:
-            //printf("ENABLE SPEAKER\n");
+            // printf("ENABLE SPEAKER\n");
             sbdsp.speaker_on = true;
             sbdsp.current_command=0;
             break;
@@ -408,7 +550,8 @@ void sbdsp_process(void) {
         case DSP_DIRECT_DAC:
             if(sbdsp.dav_dsp) {
                 if(sbdsp.current_command_index==1) {
-                    sbdsp.cur_sample=(int16_t)(sbdsp.inbox) - 0x80 << 5;
+                    // sbdsp.cur_sample_l = sbdsp.cur_sample_r = (int16_t)(sbdsp.inbox) - 0x80 << 5;
+                    sbdsp.cur_sample.data16[0] = sbdsp.cur_sample.data16[1] = ((int16_t)(sbdsp.inbox) - 0x80) << 8;
                     sbdsp.dav_dsp=0;
                     sbdsp.current_command=0;
                 }
@@ -458,7 +601,49 @@ void sbdsp_process(void) {
             break;       
         //case DSP_SINE:
         //case DSP_CHECKSUM:          
+        case DSP_DMA_IO_START ... DSP_DMA_IO_END: 
+            if (sbdsp.dav_dsp) {
+                if (sbdsp.current_command_index==0) { // bCommand + bMode
+                    // printf("%x\n", sbdsp.current_command);
+                    // printf("%x\n", sbdsp.inbox);
+                    sbdsp.dma_16bit = (sbdsp.current_command & 0xf0) == 0xb0;
+                    sbdsp.autoinit = sbdsp.current_command & 0x4;
+                    sbdsp.dma_signed = sbdsp.inbox & 0x10;
+                    sbdsp.dma_stereo = sbdsp.inbox & 0x20;
+                    sbdsp.dav_dsp = 0;                    
+                } else if (sbdsp.current_command_index==1) { // wLength.LowByte
+                    // printf("%x\n", sbdsp.inbox);
+                    sbdsp.dma_sample_count = sbdsp.inbox;
+                    sbdsp.dav_dsp = 0;                    
+                } else if (sbdsp.current_command_index==2) { // wLength.HighByte
+                    // printf("%x\n", sbdsp.inbox);
+                    // printf("(0xbx/0xcx)DMA_IO\n\r");
+                    sbdsp.dma_sample_count |= (sbdsp.inbox << 8);
+                    if (sbdsp.dma_16bit) {
+                        // sbdsp.dma_sample_count += 1;
+                        // sbdsp.dma_sample_count <<= 1;
+                        sbdsp.dma_xfer_count = ((sbdsp.dma_sample_count + 1) << 1) - 1;
+                        sbdsp.dma_interval >>= 1;
+                    } else {
+                        sbdsp.dma_xfer_count = sbdsp.dma_sample_count;
+                    }
+                    if (sbdsp.dma_stereo) {
+                        sbdsp.dma_interval >>= 1;
+                    }
+                    // sbdsp.dma_interval = 10;
+                    sbdsp.dma_xfer_count_rx = 0;
+                    sbdsp.dma_xfer_count_played = 0;
+                    sbdsp.dav_dsp = 0;
+                    sbdsp.current_command = 0;  
+                    sbdsp.speaker_on = true;
+                    // printf("starting DMA: autoinit %d stereo %d 16b %d signed %d sample count %d dma count %d interval %d", sbdsp.autoinit, sbdsp.dma_stereo, sbdsp.dma_16bit, sbdsp.dma_signed, sbdsp.dma_sample_count, sbdsp.dma_xfer_count, sbdsp.dma_interval);
+                    sbdsp_dma_enable();
+                }
+                sbdsp.current_command_index++;
+            }
+            break;            
         case 0:
+        // case 0xff:
             //not in a command
             break;            
         default:
@@ -478,8 +663,11 @@ static uint32_t DSP_Reset_EventHandler(Bitu val) {
     sbdsp.current_command_index=0;
 
     sbdsp.dma_block_size=0x7FF; //default per 2.01
-    sbdsp.dma_sample_count=0;
-    sbdsp.dma_sample_count_rx=0;              
+    sbdsp.dma_xfer_count=0;
+    sbdsp.dma_xfer_count_rx=0;              
+    sbdsp.dma_xfer_count_played=0;
+    sbdsp.dma_stereo = false;
+    sbdsp.dma_signed = false;
     sbdsp.speaker_on = false;
     sbdsp.dac_resume_pending = false;
     return 0;
@@ -495,7 +683,7 @@ static __force_inline void sbdsp_reset(uint8_t value) {
         case 1:                        
             PIC_RemoveEvent(&DSP_Reset_Event);  
             sbdsp.autoinit=0;
-            sbdsp_dma_disable();
+            sbdsp_dma_disable(false);
             sbdsp.reset_state=1;
             break;
         case 0:
@@ -512,6 +700,45 @@ static __force_inline void sbdsp_reset(uint8_t value) {
     }
 }
 
+static uint8_t mixer_state[256] = { 0 };
+
+static __force_inline uint8_t sbmixer_read(void) {
+    switch (sbdsp.mixer_command) {
+        case MIXER_INTERRUPT:
+            return sbdsp.interrupt;
+            break;
+        case MIXER_DMA:
+            return sbdsp.dma;
+            break;
+        case MIXER_IRQ_STATUS:
+            // printf("IRQ status\n");
+            return (sbdsp.irq_16_pending << 1) || sbdsp.irq_8_pending;
+        default:
+            // printf("Unimplemented mixer read: %x\n", sbdsp.mixer_command);
+            // return mixer_state[sbdsp.mixer_command];
+            return 0xff;
+    }
+}
+
+static __force_inline void sbmixer_write(uint8_t value) {
+    switch (sbdsp.mixer_command) {
+        case MIXER_INTERRUPT:
+            // sbdsp.interrupt = value;
+            break;
+        case MIXER_DMA:
+            // sbdsp.dma = value;
+            break;
+        case MIXER_STEREO:
+            // printf("stereo %x\n", value);
+            sbdsp.dma_stereo = value & 2;
+            // no break
+        default:
+            mixer_state[sbdsp.mixer_command] = value;
+            // printf("Unimplemented mixer write: %x %x\n", sbdsp.mixer_command, value);
+            break;
+    }
+}
+
 uint8_t sbdsp_read(uint8_t address) {    
     uint8_t x;            
     switch(address) {        
@@ -519,10 +746,23 @@ uint8_t sbdsp_read(uint8_t address) {
             sbdsp.dav_pc=0;
             return sbdsp.outbox;
         case DSP_READ_STATUS: //e
-            PIC_DeActivateIRQ();
+            if (sbdsp.irq_8_pending) {
+                sbdsp.irq_8_pending = false;
+                PIC_DeActivateIRQ();
+            }
             return sbdsp.dav_pc << 7 | DSP_UNUSED_STATUS_BITS_PULLED_HIGH;
+        case DSP_IRQ_16_STATUS:
+            // printf(" 16 IRQ ack");
+            if (sbdsp.irq_16_pending) {
+                // putchar('y');
+                sbdsp.irq_16_pending = false;
+                PIC_DeActivateIRQ();
+            }
+            return 0xff;
         case DSP_WRITE_STATUS://c                        
             return (sbdsp.dav_dsp | sbdsp.dsp_busy | sbdsp.dac_resume_pending) << 7 | DSP_UNUSED_STATUS_BITS_PULLED_HIGH;
+        case MIXER_DATA:
+            return sbmixer_read();
         default:
             //printf("SB READ: %x\n\r",address);
             return 0xFF;            
@@ -538,7 +778,11 @@ void sbdsp_write(uint8_t address, uint8_t value) {
             break;            
         case DSP_RESET:
             sbdsp_reset(value);
-            break;        
+            break;
+        case MIXER_COMMAND:
+            sbdsp.mixer_command = value;
+        case MIXER_DATA:
+            sbmixer_write(value);
         default:
             //printf("SB WRITE: %x => %x \n\r",value,address);            
             break;
