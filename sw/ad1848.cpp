@@ -76,6 +76,7 @@ typedef struct ad1848_t {
     bool play;
     bool mce;           // Mode change enable - mutes output during mode changes
     bool trd;           // Transfer request disable
+    bool aci;
     bool irq_enabled;
     bool irq_pending;
 
@@ -245,15 +246,16 @@ void ad1848_init() {
 // }
 
 
-// static uint32_t AD1848_Reset_EventHandler(Bitu val) {
-//     return 0;
-// }
-// static PIC_TimerEvent AD1848_Reset_Event = {
-//     .handler = AD1848_Reset_EventHandler,
-// };
+static uint32_t AD1848_Reset_EventHandler(Bitu val) {
+    ad1848.aci = false;
+    return 0;
+}
+static PIC_TimerEvent AD1848_Reset_Event = {
+    .handler = AD1848_Reset_EventHandler,
+};
 // static __force_inline void ad1848_reset(uint8_t value) {
-//     // PIC_RemoveEvent(&DSP_Reset_Event);
-//     // PIC_AddEvent(&DSP_Reset_Event, 100, 0);
+//     // PIC_RemoveEvent(&AD1848_Reset_Event);
+//     // PIC_AddEvent(&AD1848_Reset_Event, 100, 0);
 // }
 
 
@@ -263,8 +265,9 @@ uint8_t ad1848_read(uint8_t port) {
             return ad1848.idx_addr | (ad1848.mce ? 0x40 : 0) | (ad1848.trd ? 0x20 : 0);
         case 1:
             putchar('r'); putchar(ad1848.idx_addr + 0x30);
-            if (ad1848.idx_addr == 4) {
-                return drq ? 0x10 : 0;
+            if (ad1848.idx_addr == 11) {
+                return 0x0;
+                return (drq ? 0x10 : 0) | (ad1848.aci ? 0x20 : 0);
             }
             return ad1848.regs.idx[ad1848.idx_addr];
         case 2:
@@ -299,9 +302,16 @@ void ad1848_write(uint8_t port, uint8_t data) {
     static constexpr int div_factor[] = {3072, 1536, 896, 768, 448, 384, 512, 2560};
     switch (port) {
         case 0:
+            {
             ad1848.idx_addr = data & 0xf;
-            ad1848.mce = data & 0x40;
+            bool new_mce = data & 0x40;
+            if (!new_mce && ad1848.mce) { // exiting mce
+                ad1848.aci = true;
+                PIC_AddEvent(&AD1848_Reset_Event, 128 * ad1848.dma_interval, 0);
+            }
+            ad1848.mce = new_mce;
             ad1848.trd = data & 0x20;
+            }
             break;
         case 1:
             putchar('w'); putchar(ad1848.idx_addr + 0x30);
