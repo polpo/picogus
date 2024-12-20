@@ -147,7 +147,9 @@ static __force_inline uint32_t simple_filter(uint32_t x, uint32_t y)
 }
 
 
-uint16_t trim = 0;
+static uint16_t trim = 0;
+
+static bool drq;
 
 static uint32_t AD1848_DMA_EventHandler(Bitu val) {
     // uint32_t current_interval;
@@ -155,6 +157,7 @@ static uint32_t AD1848_DMA_EventHandler(Bitu val) {
 
     // uint32_t to_xfer = MIN(ad1848.dma_bytes_per_frame, sbdsp.dma_xfer_count_left);
     DMA_Multi_Start_Write(&dma_config, ad1848.dma_bytes_per_frame);
+    drq = true;
     // DMA_Start_Write(&dma_config);
     ad1848.dma_count_left--;
     // putchar(sbdsp.dma_xfer_count_left + 0x30);
@@ -190,6 +193,7 @@ static uint32_t AD1848_DMA_EventHandler(Bitu val) {
 
 static void ad1848_dma_isr(void) {
     // while (!pio_sm_is_rx_fifo_empty(dma_config.pio, dma_config.sm)) {
+    drq = false;
     const uint32_t dma_data = DMA_Complete_Write(&dma_config);
     // printf("dma %x ", dma_data);
     if (ad1848.dma_stereo) {
@@ -259,6 +263,9 @@ uint8_t ad1848_read(uint8_t port) {
             return ad1848.idx_addr | (ad1848.mce ? 0x40 : 0) | (ad1848.trd ? 0x20 : 0);
         case 1:
             putchar('r'); putchar(ad1848.idx_addr + 0x30);
+            if (ad1848.idx_addr == 4) {
+                return drq ? 0x10 : 0;
+            }
             return ad1848.regs.idx[ad1848.idx_addr];
         case 2:
             putchar('r'); putchar('s');
@@ -300,7 +307,9 @@ void ad1848_write(uint8_t port, uint8_t data) {
             putchar('w'); putchar(ad1848.idx_addr + 0x30);
             if(ad1848.idx_addr == 12)
                 return;
-            ad1848.regs.idx[ad1848.idx_addr] = data;
+            if (ad1848.idx_addr != 11) {
+                ad1848.regs.idx[ad1848.idx_addr] = data;
+            }
             switch (ad1848.idx_addr)
             {
                 case 8:
