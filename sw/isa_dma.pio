@@ -28,24 +28,24 @@
 
 ; budget: 12 instructions
 .program dma_write
-.side_set 2 opt                         ; sideset bit 1 is ADS, bit 0 is IOCHRDY
+.side_set 1 opt                         ; sideset bit is ADS
 restart:
     set pins, 0                         ; deassert DRQ
 .wrap_target
     out x, 32                           ; wait to trigger DMA operation
     set pins, 1                         ; assert DRQ
     wait 1 gpio DACK_PIN                ; DACK faling edge - no sideset up to this point as it could interfere with isa_io.pio
-    set pins, 0          side 0b10      ; deassert DRQ, muxes to data
-    wait 0 gpio IOW_PIN  side 0b10      ; wait for IOW assert
-    jmp pin tc_flag      side 0b10      ; if TC high, transfer is over
-    in null, 24          side 0b10      ; write 0 to TC flag, autopush
+    set pins, 0          side 0b1       ; deassert DRQ, muxes to data
+    wait 0 gpio IOW_PIN  side 0b1       ; wait for IOW assert
+    jmp pin tc_flag      side 0b1       ; if TC high, transfer is over
+    in null, 24          side 0b1       ; write 0 to TC flag, autopush
 wait_iow:
-    wait 1 gpio IOW_PIN  side 0b10      ; wait for IOW deassert
-    in pins, 8           side 0b00      ; input data, muxes back to addr
+    wait 1 gpio IOW_PIN  side 0b1       ; wait for IOW deassert
+    in pins, 8           side 0b0       ; input data, muxes back to addr
 .wrap
 tc_flag:
-    in x, 24             side 0b10      ; set TC flag. X is full o' 1s
-    jmp wait_iow         side 0b10
+    in x, 24             side 0b1       ; set TC flag. X is full o' 1s
+    jmp wait_iow         side 0b1 
 
 % c-sdk {
 static inline void dma_write_program_init(PIO pio, uint sm, uint offset) {
@@ -53,9 +53,8 @@ static inline void dma_write_program_init(PIO pio, uint sm, uint offset) {
 
     // Set up AD0 bus as input
     sm_config_set_in_pins(&c, AD0_PIN);
-    // Autopush at 8 bits
-    // sm_config_set_in_shift(&c, false, true, 9);
-    sm_config_set_in_shift(&c, false, true, 32);
+    // Autopush at 32 bits
+    sm_config_set_in_shift(&c, true, true, 32);
 
     // Autopull 32 bits (condition variables)
     sm_config_set_out_shift(&c, true, true /* autopull */, 32);
@@ -73,14 +72,89 @@ static inline void dma_write_program_init(PIO pio, uint sm, uint offset) {
     pio_sm_set_consecutive_pindirs(pio, sm, TC_PIN, 1, false);
     pio_sm_set_consecutive_pindirs(pio, sm, DACK_PIN, 1, false);
 
-    // set up IOCHRDY and ADS
-    sm_config_set_sideset_pins(&c, IOCHRDY_PIN);
-    pio_gpio_init(pio, IOCHRDY_PIN);
+    // set up ADS
+    sm_config_set_sideset_pins(&c, ADS_PIN);
     pio_gpio_init(pio, ADS_PIN);
-    pio_sm_set_consecutive_pindirs(pio, sm, IOCHRDY_PIN, 2, true);
+    pio_sm_set_consecutive_pindirs(pio, sm, ADS_PIN, 1, true);
 
     // Load our configuration, and jump to the start of the program
     pio_sm_init(pio, sm, offset, &c);
+    // Set the state machine running
+    pio_sm_set_enabled(pio, sm, true);
+}
+%}
+
+; version of dma_write_multi that keeps DRQ asserted for all transfers
+.program dma_write_multi
+.side_set 1 opt                         ; sideset bit is ADS
+restart:
+    set pins, 0                         ; deassert DRQ
+.wrap_target
+    out x, 32                           ; wait to trigger DMA operation - X has number of bytes to xfer minus 1
+    set pins, 1                         ; assert DRQ
+dma_loop:
+    wait 1 gpio DACK_PIN                ; DACK assert - no sideset up to this point as it could interfere with isa_io.pio
+    wait 0 gpio IOW_PIN  side 0b1       ; wait for IOW assert, muxes to data
+    jmp !X deassert_drq                 ; if last loop, deassert DRQ
+continue:
+    wait 1 gpio IOW_PIN  side 0b1       ; wait for IOW deassert
+    in pins, 8           side 0b0       ; input data, muxes back to addr
+    wait 0 gpio DACK_PIN                ; wait for DACK deassert - necessary, otherwise could still be asserted next dma_loop
+    jmp X-- dma_loop                    ; loop until (X+1) bytes have been transferred
+.wrap
+deassert_drq:
+    set pins, 0                         ; deassert DRQ
+    jmp continue
+
+; version of dma_write_multi that asserts DRQ each transfer
+;.program dma_write_multi
+;.side_set 1 opt                         ; sideset bit is ADS
+;restart:
+;    set pins, 0                         ; deassert DRQ
+;.wrap_target
+;    out x, 32                           ; wait to trigger DMA operation - X has number of bytes to xfer minus 1
+;dma_loop:
+;    set pins, 1                         ; assert DRQ
+;    wait 1 gpio DACK_PIN                ; DACK faling edge - no sideset up to this point as it could interfere with isa_io.pio
+;    wait 0 gpio IOW_PIN  side 0b1       ; wait for IOW assert, muxes to data
+;    set pins, 0                         ; deassert DRQ
+;    wait 1 gpio IOW_PIN  side 0b1       ; wait for IOW deassert
+;    in pins, 8           side 0b0       ; input data, muxes back to addr
+;    wait 0 gpio DACK_PIN                ; wait for DACK deassert - necessary, otherwise could still be asserted next dma_loop
+;    jmp X-- dma_loop                    ; loop until (X+1) bytes have been transferred
+;.wrap
+
+% c-sdk {
+static inline void dma_write_multi_program_init(PIO pio, uint sm, uint offset) {
+    pio_sm_config c = dma_write_multi_program_get_default_config(offset);
+
+    // Set up AD0 bus as input
+    sm_config_set_in_pins(&c, AD0_PIN);
+    // Autopush - default 4 bytes but can be reconfigured at runtime
+    sm_config_set_in_shift(&c, true, true, 32);
+
+    // Autopull 32 bits (loop count)
+    sm_config_set_out_shift(&c, false, true /* autopull */, 32);
+
+    // Set the pin direction for IOW and AD0 bus as input at the PIO
+    pio_sm_set_consecutive_pindirs(pio, sm, IOW_PIN, 1, false);
+    pio_sm_set_consecutive_pindirs(pio, sm, AD0_PIN, 8, false);
+
+    // Config DMA pins
+    sm_config_set_set_pins(&c, DRQ_PIN, 1);
+    pio_gpio_init(pio, DRQ_PIN);
+    gpio_set_drive_strength(DRQ_PIN, GPIO_DRIVE_STRENGTH_12MA);
+    pio_sm_set_consecutive_pindirs(pio, sm, DRQ_PIN, 1, true);
+    pio_sm_set_consecutive_pindirs(pio, sm, DACK_PIN, 1, false);
+
+    // set up ADS
+    sm_config_set_sideset_pins(&c, ADS_PIN);
+    pio_gpio_init(pio, ADS_PIN);
+    pio_sm_set_consecutive_pindirs(pio, sm, ADS_PIN, 1, true);
+
+    // Load our configuration, and jump to the start of the program
+    pio_sm_init(pio, sm, offset, &c);
+
     // Set the state machine running
     pio_sm_set_enabled(pio, sm, true);
 }

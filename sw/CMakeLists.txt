@@ -223,7 +223,7 @@ function(build_sb TARGET_NAME MULTIFW)
     config_target(${TARGET_NAME} ${MULTIFW})
     pico_set_program_name(${TARGET_NAME} "picogus-sb")
     target_sources(${TARGET_NAME} PRIVATE
-        sbdsp.cpp
+        ad1848.cpp
         sbplay.cpp
         isa_dma.c
     )

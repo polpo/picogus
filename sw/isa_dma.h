@@ -41,6 +41,7 @@ typedef struct dma_inst {
 } dma_inst_t;
 
 dma_inst_t DMA_init(PIO pio, uint sm, irq_handler_t dma_isr);
+dma_inst_t DMA_multi_init(PIO pio, uint sm, irq_handler_t dma_isr);
 
 // __force_inline size_t DMA_Write(dma_inst_t* dma, uint32_t dmaaddr, bool invert_msb, bool is_16bit, uint32_t delay, bool* dma_active) {
 __force_inline extern void DMA_Start_Write(dma_inst_t* dma) {
@@ -49,13 +50,23 @@ __force_inline extern void DMA_Start_Write(dma_inst_t* dma) {
 
 // __force_inline uint32_t DMA_Complete_Write(dma_inst_t* dma, uint32_t dmaaddr, bool invert_msb) {
 __force_inline extern uint32_t DMA_Complete_Write(dma_inst_t* dma) {
-    // putchar('.');
-    uint32_t dma_data = pio_sm_get(dma->pio, dma->sm);
-    return dma_data;
+    return pio_sm_get(dma->pio, dma->sm);
 }
 
 __force_inline extern void DMA_Cancel_Write(dma_inst_t* dma) {
     pio_sm_exec(dma->pio, dma->sm, pio_encode_jmp(dma->offset));
+}
+
+// xfer_count: number of DMA transfers for each push. DRQ is held high for all transfers
+__force_inline extern void DMA_Multi_Start_Write(dma_inst_t* dma, uint32_t xfer_count) {
+    pio_sm_put_blocking(dma->pio, dma->sm, xfer_count - 1);  // Write 1s to kick off DMA process.
+}
+
+// push_thresh: set number of bits for the DMA pio to autopush  
+__force_inline extern void DMA_Multi_Set_Push_Threshold(dma_inst_t* dma, uint32_t push_thresh) {
+    hw_write_masked(&dma->pio->sm[dma->sm].shiftctrl,
+                    push_thresh << PIO_SM0_SHIFTCTRL_PUSH_THRESH_LSB,
+                    PIO_SM0_SHIFTCTRL_PUSH_THRESH_BITS);
 }
 
 #ifdef __cplusplus

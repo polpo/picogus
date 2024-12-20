@@ -140,10 +140,12 @@ typedef struct sbdsp_t {
     uint8_t dac_pause_duration_low;
 
     uint16_t dma_block_size;
+    uint32_t dma_bytes_per_frame;
     uint16_t dma_sample_count;      // Number of 8 or 16 bit samples minus 1
     uint32_t dma_xfer_count;        // Number of 8-bit DMA transfers minus 1
-    uint32_t dma_xfer_count_rx;     // Number of started DMA transfers
-    uint32_t dma_xfer_count_played; // Number of actually received DMA xfers
+    // uint32_t dma_xfer_count_rx;     // Number of started DMA transfers
+    // uint32_t dma_xfer_count_played; // Number of actually received DMA xfers
+    uint32_t dma_xfer_count_left;     // Number of started DMA transfers
 
     uint8_t time_constant;
     uint16_t sample_rate;
@@ -158,6 +160,7 @@ typedef struct sbdsp_t {
     bool dma_16bit;
     bool dma_stereo;
     bool dma_signed;
+    volatile bool dma_done;
 
     bool speaker_on;
         
@@ -245,7 +248,11 @@ static __force_inline void sbdsp_dma_disable(bool pause) {
 static __force_inline void sbdsp_dma_enable() {    
     if(!sbdsp.dma_enabled) {
         // sbdsp_fifo_clear();
-        sbdsp.dma_enabled=true;            
+        sbdsp.dma_enabled=true;
+        // Set autopush bits to number of bits per audio frame. 32 will get masked to 0 by this operation which is correct behavior
+        hw_write_masked(&pio0->sm[DMA_PIO_SM].shiftctrl,
+                        (sbdsp.dma_bytes_per_frame << 3) << PIO_SM0_SHIFTCTRL_PUSH_THRESH_LSB,
+                        PIO_SM0_SHIFTCTRL_PUSH_THRESH_BITS);
         PIC_AddEvent(&DSP_DMA_Event, sbdsp.dma_interval, 0);
     }
     else {
@@ -253,17 +260,31 @@ static __force_inline void sbdsp_dma_enable() {
     }
 }
 
+
 static uint32_t DSP_DMA_EventHandler(Bitu val) {
-    DMA_Start_Write(&dma_config);    
-    // uint32_t current_interval = 0;
-    // sbdsp.dma_xfer_count_rx++;    
+    // DMA_Multi_Start_Write(&dma_config, sbdsp.dma_bytes_per_frame);
+    uint32_t current_interval;
+
+    // uint32_t to_xfer = MIN(sbdsp.dma_bytes_per_frame, sbdsp.dma_xfer_count_left);
+    // DMA_Multi_Start_Write(&dma_config, to_xfer);
+    DMA_Start_Write(&dma_config);
+    // sbdsp.dma_xfer_count_left -= to_xfer;
+    sbdsp.dma_xfer_count_left--;
+    // putchar(sbdsp.dma_xfer_count_left + 0x30);
 
     // current_interval = sbdsp.dma_interval;
+    
+    // sbdsp.dsp_busy = sbdsp.dma_xfer_count_left > 10000;
+    // if ((sbdsp.dma_xfer_count_left & 0xfff) == 0)
+    // printf("%u\n", sbdsp.dma_xfer_count_left);
 
-    if(sbdsp.dma_xfer_count_rx++ < sbdsp.dma_xfer_count) {        
-        // current_interval = sbdsp.dma_interval;
-        return sbdsp.dma_interval;
-    } else {                  
+    if(sbdsp.dma_xfer_count_left) {
+        // TODO adjust interval based on to_xfer and actual sampling rate
+        current_interval = sbdsp.dma_interval;
+        // return sbdsp.dma_interval;
+    } else {
+        putchar('%');
+        sbdsp.dma_done = true;
         if (sbdsp.dma_16bit) {
             sbdsp.irq_16_pending = true;
         } else {
@@ -271,42 +292,77 @@ static uint32_t DSP_DMA_EventHandler(Bitu val) {
         }
         PIC_ActivateIRQ();
         if(sbdsp.autoinit) {            
-            sbdsp.dma_xfer_count_rx=0;            
-            // current_interval = sbdsp.dma_interval;
-            return sbdsp.dma_interval;
+            sbdsp.dma_xfer_count_left = sbdsp.dma_xfer_count;            
+            current_interval = sbdsp.dma_interval;
+            // return sbdsp.dma_interval;
         }
-        else {            
+        else {
             sbdsp_dma_disable(false);
+            current_interval = 0;
         }
     } 
-    // sbdsp.dma_xfer_count_rx++;    
+    // sbdsp.dma_xfer_count_rx++;
+    /*
+    if (MIN(sbdsp.dma_bytes_per_frame, (sbdsp.dma_xfer_count + 1 - sbdsp.dma_xfer_count_rx)) != sbdsp.dma_bytes_per_frame) {
+        putchar((sbdsp.dma_xfer_count + 1 - sbdsp.dma_xfer_count_rx) + 0x30);
+    }
+    DMA_Multi_Start_Write(&dma_config, MIN(sbdsp.dma_bytes_per_frame, (sbdsp.dma_xfer_count + 1 - sbdsp.dma_xfer_count_rx)));
+    if (!sbdsp.dma_done) {
+        sbdsp.dma_xfer_count_rx += sbdsp.dma_bytes_per_frame;
+        sbdsp.dma_done = false;
+    }
     // DMA_Start_Write(&dma_config);    
-    return 0;
+    // return 0;
+    */
+    return current_interval;
 }
 
 static void sbdsp_dma_isr(void) {
-    const uint8_t dma_data = DMA_Complete_Write(&dma_config) & 0xff;
+    while (!pio_sm_is_rx_fifo_empty(dma_config.pio, dma_config.sm)) {
+    const uint32_t dma_data = DMA_Complete_Write(&dma_config);
+    // printf("dma %x ", dma_data);
     if (sbdsp.dma_stereo) {
         if (sbdsp.dma_16bit) {
             // 16 bit stereo
+            /*
             sbdsp.next_sample.data8[sbdsp.dma_xfer_count_played & 3] = dma_data;
             if ((sbdsp.dma_xfer_count_played & 3) == 3) {
                 sbdsp.cur_sample.data32 = sbdsp.dma_signed ? sbdsp.next_sample.data32 : sbdsp.next_sample.data32 ^ 0x80008000;
             }
+            */
+            sbdsp.cur_sample.data32 = sbdsp.dma_signed ? dma_data : dma_data ^ 0x80008000;
         } else {
             // 8 bit stereo
+            /*
             sbdsp.next_sample.data16[sbdsp.dma_xfer_count_played & 1] = dma_data << 8;
             if ((sbdsp.dma_xfer_count_played & 1) == 1) {
                 sbdsp.cur_sample.data32 = sbdsp.dma_signed ? sbdsp.next_sample.data32 : sbdsp.next_sample.data32 ^ 0x80008000;
             }
+            */
+            // sbdsp.next_sample.data16[0] = dma_data << 8;
+            // sbdsp.next_sample.data16[1] = dma_data & 0xff00;
+            sbdsp.next_sample.data16[0] = dma_data >> 16;
+            sbdsp.next_sample.data16[1] = dma_data >> 8;
+            sbdsp.cur_sample.data32 = sbdsp.dma_signed ? sbdsp.next_sample.data32 : sbdsp.next_sample.data32 ^ 0x80008000;
         }
     } else {
         // TODO 16 bit mono
         // 8 bit mono
-        sbdsp.next_sample.data16[0] = sbdsp.next_sample.data16[1] = dma_data << 8;
+        // sbdsp.next_sample.data16[0] = sbdsp.next_sample.data16[1] = dma_data << 8;
+        sbdsp.next_sample.data16[0] = sbdsp.next_sample.data16[1] = dma_data >> 16;
         sbdsp.cur_sample.data32 = sbdsp.dma_signed ? sbdsp.next_sample.data32 : sbdsp.next_sample.data32 ^ 0x80008000;
     }
-    sbdsp.dma_xfer_count_played++;
+    }
+    // if (sbdsp.dma_done) {
+    //     if (sbdsp.dma_16bit) {
+    //         sbdsp.irq_16_pending = true;
+    //     } else {
+    //         sbdsp.irq_8_pending = true;
+    //     }
+    //     PIC_ActivateIRQ();
+    //     sbdsp.dma_done = false;
+    // }
+    // sbdsp.dma_xfer_count_played++;
 }
 
 static uint32_t DSP_DAC_Resume_eventHandler(Bitu val) {
@@ -345,6 +401,7 @@ void sbdsp_init() {
     sbdsp.interrupt = 0x2; // force IRQ 5 for now
 
     sbdsp.outbox = 0xAA;
+    // dma_config = DMA_multi_init(pio0, DMA_PIO_SM, SBDSP_DMA_isr_pt);         
     dma_config = DMA_init(pio0, DMA_PIO_SM, SBDSP_DMA_isr_pt);         
 }
 
@@ -352,6 +409,22 @@ void sbdsp_init() {
 static __force_inline void sbdsp_output(uint8_t value) {
     sbdsp.outbox=value;
     sbdsp.dav_pc=1;    
+}
+
+
+static __force_inline void sbdsp_set_dma_interval() {
+    if (sbdsp.sample_rate) {
+        sbdsp.dma_interval = 1000000ul / sbdsp.sample_rate;
+    } else {
+        sbdsp.dma_interval = 256 - sbdsp.time_constant;
+    }
+    if (sbdsp.dma_stereo) {
+        // printf("stereoeoeoeo");
+        sbdsp.dma_interval >>= 1;
+    }
+    if (sbdsp.dma_16bit) {
+        sbdsp.dma_interval >>= 1;
+    }
 }
 
 
@@ -366,7 +439,9 @@ void sbdsp_process(void) {
             sbdsp.dav_dsp=0;
         }
     }
-
+    // if (sbdsp.current_command) {
+    //     putchar(sbdsp.inbox);
+    // }
     switch(sbdsp.current_command) {  
         case DSP_DMA_PAUSE:
         case DSP_PAUSE_DMA_16:
@@ -376,6 +451,7 @@ void sbdsp_process(void) {
             break;
         case DSP_DMA_RESUME:
             sbdsp.current_command=0;
+            sbdsp.dma_done = false;
             sbdsp_dma_enable();                        
             //printf("(0xD4)DMA RESUME\n\r");                                            
             break;
@@ -392,21 +468,29 @@ void sbdsp_process(void) {
         case DSP_DMA_AUTO:     
             // printf("(0x1C)DMA_AUTO\n\r");                   
             sbdsp.autoinit=1;           
-            sbdsp.dma_xfer_count = sbdsp.dma_block_size;
-            sbdsp.dma_xfer_count_rx=0;
-            sbdsp.dma_xfer_count_played=0;
+            sbdsp.dma_xfer_count = sbdsp.dma_block_size + 1;
+            sbdsp.dma_xfer_count_left = sbdsp.dma_xfer_count;
+            // sbdsp.dma_xfer_count_rx=0;
+            // sbdsp.dma_xfer_count_played=0;
+            sbdsp.dma_bytes_per_frame = sbdsp.dma_stereo ? 2 : 1;
+            sbdsp_set_dma_interval();
+            sbdsp.dma_done = false;
             sbdsp_dma_enable();            
             sbdsp.current_command=0;                 
             break;        
         case DSP_DMA_HS_AUTO:
             // printf("(0x90) DMA_HS_AUTO\n\r");            
             sbdsp.dav_dsp=0;
-            sbdsp.current_command=0;  
             sbdsp.autoinit=1;
-            sbdsp.dma_xfer_count = sbdsp.dma_block_size;
-            sbdsp.dma_xfer_count_rx=0;
-            sbdsp.dma_xfer_count_played=0;
+            sbdsp.dma_xfer_count = sbdsp.dma_block_size + 1;
+            sbdsp.dma_xfer_count_left = sbdsp.dma_xfer_count;
+            // sbdsp.dma_xfer_count_rx=0;
+            // sbdsp.dma_xfer_count_played=0;
+            sbdsp.dma_bytes_per_frame = sbdsp.dma_stereo ? 2 : 1;
+            sbdsp_set_dma_interval();
+            sbdsp.dma_done = false;
             sbdsp_dma_enable();            
+            sbdsp.current_command=0;  
             break;            
 
         case DSP_SET_TIME_CONSTANT:
@@ -418,7 +502,7 @@ void sbdsp_process(void) {
                     sbdsp.sample_rate = 1000000ul / (256 - sbdsp.time_constant);           
                     sbdsp.dma_interval = 1000000ul / sbdsp.sample_rate; // redundant.                    
                     */
-                    sbdsp.dma_interval = 256 - sbdsp.time_constant;
+                    // sbdsp.dma_interval = 256 - sbdsp.time_constant;
                     sbdsp.sample_rate = 0; // Rate of 0 indicates time constant drives DMA timing           
                     // sbdsp.sample_step = sbdsp.sample_rate * 65535ul / OUTPUT_SAMPLERATE;                    
                     // sbdsp.sample_factor = (OUTPUT_SAMPLERATE / sbdsp.sample_rate)+5; //Estimate
@@ -442,8 +526,9 @@ void sbdsp_process(void) {
                     sbdsp.dav_dsp=0;
                 } else if (sbdsp.current_command_index==2) { // wSamplingRate.LowByte
                     sbdsp.sample_rate |= sbdsp.inbox;
+                    sbdsp.time_constant = 0;
                     // Default interval for 8-bit mono, will adjust when DMA starts
-                    sbdsp.dma_interval = 1000000ul / sbdsp.sample_rate;
+                    // sbdsp.dma_interval = 1000000ul / sbdsp.sample_rate;
                     sbdsp.dav_dsp=0;
                     sbdsp.current_command=0;
                     // printf("(0x40) DSP_SET_SAMPLING_RATE: %d %d\n\r", sbdsp.sample_rate, sbdsp.dma_interval);
@@ -472,9 +557,13 @@ void sbdsp_process(void) {
             sbdsp.dav_dsp=0;
             sbdsp.current_command=0;  
             sbdsp.autoinit=0;
-            sbdsp.dma_xfer_count = sbdsp.dma_block_size;
-            sbdsp.dma_xfer_count_rx=0;
-            sbdsp.dma_xfer_count_played=0;
+            sbdsp.dma_xfer_count = sbdsp.dma_block_size + 1;
+            sbdsp.dma_xfer_count_left = sbdsp.dma_xfer_count;
+            // sbdsp.dma_xfer_count_rx=0;
+            // sbdsp.dma_xfer_count_played=0;
+            sbdsp.dma_bytes_per_frame = sbdsp.dma_stereo ? 2 : 1;
+            sbdsp_set_dma_interval();
+            sbdsp.dma_done = false;
             sbdsp_dma_enable();            
             break;            
         case DSP_DMA_SINGLE:              
@@ -486,12 +575,15 @@ void sbdsp_process(void) {
                 else if(sbdsp.current_command_index==2) {
                     // printf("(0x14)DMA_SINGLE\n\r");                      
                     sbdsp.dma_xfer_count += (sbdsp.inbox << 8);
-                    sbdsp.dma_xfer_count_rx=0;                    
-                    sbdsp.dma_xfer_count_played=0;
+                    // sbdsp.dma_xfer_count_rx=0;                    
+                    // sbdsp.dma_xfer_count_played=0;
                     sbdsp.dav_dsp=0;
                     sbdsp.current_command=0;  
                     sbdsp.autoinit=0;                                  
                     //printf("Sample Count:%u\n",sbdsp.dma_xfer_count);                                        
+                    sbdsp.dma_bytes_per_frame = sbdsp.dma_stereo ? 2 : 1;
+                    sbdsp_set_dma_interval();
+                    sbdsp.dma_done = false;
                     sbdsp_dma_enable();                                                                                                                            
                 }
                 sbdsp.current_command_index++;
@@ -551,7 +643,7 @@ void sbdsp_process(void) {
             if(sbdsp.dav_dsp) {
                 if(sbdsp.current_command_index==1) {
                     // sbdsp.cur_sample_l = sbdsp.cur_sample_r = (int16_t)(sbdsp.inbox) - 0x80 << 5;
-                    sbdsp.cur_sample.data16[0] = sbdsp.cur_sample.data16[1] = ((int16_t)(sbdsp.inbox) - 0x80) << 8;
+                    sbdsp.cur_sample.data16[0] = sbdsp.cur_sample.data16[1] = (sbdsp.inbox << 8) ^ 0x8000;
                     sbdsp.dav_dsp=0;
                     sbdsp.current_command=0;
                 }
@@ -619,24 +711,33 @@ void sbdsp_process(void) {
                     // printf("%x\n", sbdsp.inbox);
                     // printf("(0xbx/0xcx)DMA_IO\n\r");
                     sbdsp.dma_sample_count |= (sbdsp.inbox << 8);
+                    sbdsp.dma_xfer_count = sbdsp.dma_sample_count + 1;
                     if (sbdsp.dma_16bit) {
                         // sbdsp.dma_sample_count += 1;
                         // sbdsp.dma_sample_count <<= 1;
-                        sbdsp.dma_xfer_count = ((sbdsp.dma_sample_count + 1) << 1) - 1;
-                        sbdsp.dma_interval >>= 1;
-                    } else {
-                        sbdsp.dma_xfer_count = sbdsp.dma_sample_count;
+                        sbdsp.dma_xfer_count <<= 1;
+                        // sbdsp.dma_interval >>= 1;
                     }
                     if (sbdsp.dma_stereo) {
-                        sbdsp.dma_interval >>= 1;
+                        // sbdsp.dma_interval >>= 1;
                     }
                     // sbdsp.dma_interval = 10;
-                    sbdsp.dma_xfer_count_rx = 0;
-                    sbdsp.dma_xfer_count_played = 0;
+                    // sbdsp.dma_xfer_count_rx = 0;
+                    // sbdsp.dma_xfer_count_played = 0;
+                    sbdsp.dma_xfer_count_left = sbdsp.dma_xfer_count;
                     sbdsp.dav_dsp = 0;
                     sbdsp.current_command = 0;  
+                    sbdsp.dma_done = false;
                     sbdsp.speaker_on = true;
-                    // printf("starting DMA: autoinit %d stereo %d 16b %d signed %d sample count %d dma count %d interval %d", sbdsp.autoinit, sbdsp.dma_stereo, sbdsp.dma_16bit, sbdsp.dma_signed, sbdsp.dma_sample_count, sbdsp.dma_xfer_count, sbdsp.dma_interval);
+                    sbdsp.dma_bytes_per_frame = 1;
+                    if (sbdsp.dma_16bit) {
+                        sbdsp.dma_bytes_per_frame <<= 1;
+                    }
+                    if (sbdsp.dma_stereo) {
+                        sbdsp.dma_bytes_per_frame <<= 1;
+                    }
+                    sbdsp_set_dma_interval();
+                    // printf("starting DMA: autoinit %d stereo %d 16b %d signed %d sample count %d dma count %d interval %d bytes per frame %d", sbdsp.autoinit, sbdsp.dma_stereo, sbdsp.dma_16bit, sbdsp.dma_signed, sbdsp.dma_sample_count, sbdsp.dma_xfer_count, sbdsp.dma_interval, sbdsp.dma_bytes_per_frame);
                     sbdsp_dma_enable();
                 }
                 sbdsp.current_command_index++;
@@ -664,11 +765,13 @@ static uint32_t DSP_Reset_EventHandler(Bitu val) {
 
     sbdsp.dma_block_size=0x7FF; //default per 2.01
     sbdsp.dma_xfer_count=0;
-    sbdsp.dma_xfer_count_rx=0;              
-    sbdsp.dma_xfer_count_played=0;
+    sbdsp.dma_xfer_count_left=0;
+    // sbdsp.dma_xfer_count_rx=0;              
+    // sbdsp.dma_xfer_count_played=0;
     sbdsp.dma_stereo = false;
     sbdsp.dma_signed = false;
     sbdsp.speaker_on = false;
+    sbdsp.dma_done = false;
     sbdsp.dac_resume_pending = false;
     return 0;
 }
@@ -775,6 +878,8 @@ void sbdsp_write(uint8_t address, uint8_t value) {
             if(sbdsp.dav_dsp) printf("WARN - DAV_DSP OVERWRITE\n");
             sbdsp.inbox = value;
             sbdsp.dav_dsp = 1;            
+
+            putchar(sbdsp.inbox);
             break;            
         case DSP_RESET:
             sbdsp_reset(value);

@@ -60,10 +60,19 @@ M62429* m62429;
 
 #ifdef SOUND_SB
 static uint16_t sb_port_test;
-extern void sbdsp_write(uint8_t address, uint8_t value);
-extern uint8_t sbdsp_read(uint8_t address);
-extern void sbdsp_init();
-extern void sbdsp_process();
+// extern void sbdsp_write(uint8_t address, uint8_t value);
+// extern uint8_t sbdsp_read(uint8_t address);
+// extern void sbdsp_init();
+// extern void sbdsp_process();
+static uint16_t wss_port_test;
+// static constexpr int wss_dma[4] = { 0, 0, 1, 3 };
+// static constexpr int wss_irq[8] = { 5, 7, 9, 10, 11, 12, 14, 15 }; /* W95 only uses 7-9, others may be wrong */
+// ad1848_setdma(&wss->ad1848, wss_dma[val & 3]);
+// ad1848_setirq(&wss->ad1848, wss_irq[(val >> 3) & 7]);
+static uint8_t wss_config = 0b00000110; // DMA 1 and IRQ 5
+extern void ad1848_write(uint8_t address, uint8_t data);
+extern uint8_t ad1848_read(uint8_t address);
+extern void ad1848_init();
 #endif
 #ifdef SOUND_OPL
 #include "opl.h"
@@ -550,32 +559,49 @@ __force_inline void handle_iow(void) {
     } else // if follows down below
 #endif // SOUND_GUS
 #ifdef SOUND_SB
-    if ((port >> 4) == sb_port_test) {      
-        switch (port - settings.SB.basePort) {
-        // OPL ports
-        case 0x8:
+    // if ((port >> 4) == sb_port_test) {      
+    //     switch (port - settings.SB.basePort) {
+    //     // OPL ports
+    //     case 0x8:
+    //         // Fast write
+    //         pio_sm_put(pio0, IOW_PIO_SM, IO_END);
+    //         opl_buffer.cmds[opl_buffer.head++] = {
+    //             OPL_REGISTER_PORT,
+    //             (uint8_t)(iow_read & 0xFF)
+    //         };
+    //         // Fast write - return early as we've already written 0x0u to the PIO
+    //         return;
+    //         break;
+    //     case 0x9:
+    //         pio_sm_put(pio0, IOW_PIO_SM, IO_WAIT);
+    //         opl_buffer.cmds[opl_buffer.head++] = {
+    //             OPL_DATA_PORT,
+    //             (uint8_t)(iow_read & 0xFF)
+    //         };
+    //         break;
+    //     // DSP ports
+    //     default:
+    //         pio_sm_put(pio0, IOW_PIO_SM, IO_WAIT);                        
+    //         sbdsp_process();
+    //         sbdsp_write(port & 0xF,iow_read & 0xFF);       
+    //         sbdsp_process();                                         
+    //         break;
+    //     } 
+    // } else // if follows down below
+    if ((port >> 4) == 0x13) {      
+        switch (port & 0xf) {
+        // WSS ports
+        case 0 ... 3:
             // Fast write
             pio_sm_put(pio0, IOW_PIO_SM, IO_END);
-            opl_buffer.cmds[opl_buffer.head++] = {
-                OPL_REGISTER_PORT,
-                (uint8_t)(iow_read & 0xFF)
-            };
+            wss_config = iow_read & 0xff;
             // Fast write - return early as we've already written 0x0u to the PIO
             return;
             break;
-        case 0x9:
-            pio_sm_put(pio0, IOW_PIO_SM, IO_WAIT);
-            opl_buffer.cmds[opl_buffer.head++] = {
-                OPL_DATA_PORT,
-                (uint8_t)(iow_read & 0xFF)
-            };
-            break;
-        // DSP ports
+        // AD1848 ports
         default:
             pio_sm_put(pio0, IOW_PIO_SM, IO_WAIT);                        
-            sbdsp_process();
-            sbdsp_write(port & 0xF,iow_read & 0xFF);       
-            sbdsp_process();                                         
+            ad1848_write(port & 0x3, iow_read & 0xFF);       
             break;
         } 
     } else // if follows down below
@@ -730,18 +756,32 @@ __force_inline void handle_ior(void) {
     } else // if follows down below
 #endif
 #if defined(SOUND_SB)
-    if ((port >> 4) == sb_port_test) {
+    // if ((port >> 4) == sb_port_test) {
+    //     pio_sm_put(pio0, IOR_PIO_SM, IO_WAIT);
+    //     if (port - settings.SB.basePort == 0x8) {
+    //         // wait for OPL buffer to process
+    //         while (opl_buffer.tail != opl_buffer.head) {
+    //             tight_loop_contents();
+    //         }
+    //         pio_sm_put(pio0, IOR_PIO_SM, IOR_SET_VALUE | OPL_Pico_PortRead(OPL_REGISTER_PORT));
+    //     } else {
+    //         sbdsp_process();
+    //         pio_sm_put(pio0, IOR_PIO_SM, IOR_SET_VALUE | sbdsp_read(port & 0xF));        
+    //         sbdsp_process();
+    //     }
+    // } else // if follows down below
+    if ((port >> 4) == 0x13) {
         pio_sm_put(pio0, IOR_PIO_SM, IO_WAIT);
-        if (port - settings.SB.basePort == 0x8) {
-            // wait for OPL buffer to process
-            while (opl_buffer.tail != opl_buffer.head) {
-                tight_loop_contents();
-            }
-            pio_sm_put(pio0, IOR_PIO_SM, IOR_SET_VALUE | OPL_Pico_PortRead(OPL_REGISTER_PORT));
-        } else {
-            sbdsp_process();
-            pio_sm_put(pio0, IOR_PIO_SM, IOR_SET_VALUE | sbdsp_read(port & 0xF));        
-            sbdsp_process();
+        switch (port & 0xf) {
+        case 0 ... 2: // interface register
+            pio_sm_put(pio0, IOR_PIO_SM, IOR_SET_VALUE | (4 | (wss_config & 0x40)));
+            break;
+        case 3: // chip ID register
+            pio_sm_put(pio0, IOR_PIO_SM, IOR_SET_VALUE | 4);
+            break;
+        default:
+            pio_sm_put(pio0, IOR_PIO_SM, IOR_SET_VALUE | ad1848_read(port & 0x3));        
+            break;
         }
     } else // if follows down below
 #endif
@@ -1011,7 +1051,8 @@ int main()
 
 #ifdef SOUND_SB
     puts("Initializing SoundBlaster DSP");
-    sbdsp_init();
+    // sbdsp_init();
+    ad1848_init();
 #endif // SOUND_SB
 #ifdef SOUND_OPL
     puts("Creating OPL");
