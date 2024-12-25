@@ -30,7 +30,7 @@
 .program dma_write
 .side_set 1 opt                         ; sideset bit is ADS
 restart:
-    set pins, 0                         ; deassert DRQ
+    set pins, 0          side 0b0       ; deassert DRQ, muxes back to addr if canceled
 .wrap_target
     out x, 32                           ; wait to trigger DMA operation
     set pins, 1                         ; assert DRQ
@@ -88,7 +88,7 @@ static inline void dma_write_program_init(PIO pio, uint sm, uint offset) {
 .program dma_write_multi
 .side_set 1 opt                         ; sideset bit is ADS
 restart:
-    set pins, 0                         ; deassert DRQ
+    set pins, 0          side 0b0       ; deassert DRQ, muxes back to addr if canceled
 .wrap_target
     out x, 32                           ; wait to trigger DMA operation - X has number of bytes to xfer minus 1
     set pins, 1                         ; assert DRQ
@@ -110,14 +110,14 @@ deassert_drq:
 ;.program dma_write_multi
 ;.side_set 1 opt                         ; sideset bit is ADS
 ;restart:
-;    set pins, 0                         ; deassert DRQ
+;    set pins, 0          side 0b0       ; deassert DRQ, muxes back to addr if canceled
 ;.wrap_target
 ;    out x, 32                           ; wait to trigger DMA operation - X has number of bytes to xfer minus 1
 ;dma_loop:
 ;    set pins, 1                         ; assert DRQ
 ;    wait 1 gpio DACK_PIN                ; DACK faling edge - no sideset up to this point as it could interfere with isa_io.pio
-;    wait 0 gpio IOW_PIN  side 0b1       ; wait for IOW assert, muxes to data
 ;    set pins, 0                         ; deassert DRQ
+;    wait 0 gpio IOW_PIN  side 0b1       ; wait for IOW assert, muxes to data
 ;    wait 1 gpio IOW_PIN  side 0b1       ; wait for IOW deassert
 ;    in pins, 8           side 0b0       ; input data, muxes back to addr
 ;    wait 0 gpio DACK_PIN                ; wait for DACK deassert - necessary, otherwise could still be asserted next dma_loop
@@ -131,7 +131,7 @@ static inline void dma_write_multi_program_init(PIO pio, uint sm, uint offset) {
     // Set up AD0 bus as input
     sm_config_set_in_pins(&c, AD0_PIN);
     // Autopush - default 4 bytes but can be reconfigured at runtime
-    sm_config_set_in_shift(&c, true, true, 32);
+    sm_config_set_in_shift(&c, true, true, 8);
 
     // Autopull 32 bits (loop count)
     sm_config_set_out_shift(&c, false, true /* autopull */, 32);

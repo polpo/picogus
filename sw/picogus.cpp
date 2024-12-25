@@ -69,7 +69,8 @@ static uint16_t wss_port_test;
 // static constexpr int wss_irq[8] = { 5, 7, 9, 10, 11, 12, 14, 15 }; /* W95 only uses 7-9, others may be wrong */
 // ad1848_setdma(&wss->ad1848, wss_dma[val & 3]);
 // ad1848_setirq(&wss->ad1848, wss_irq[(val >> 3) & 7]);
-static uint8_t wss_config = 0b00000110; // DMA 1 and IRQ 5
+// static uint8_t wss_config = 0b00000110; // DMA 1 and IRQ 5
+static uint8_t wss_config = 0b00001010; // DMA 1 and IRQ 5
 extern void ad1848_write(uint8_t address, uint8_t data);
 extern uint8_t ad1848_read(uint8_t address);
 extern void ad1848_init();
@@ -589,19 +590,24 @@ __force_inline void handle_iow(void) {
     //     } 
     // } else // if follows down below
     if ((port >> 4) == 0x13) {      
+        uint8_t x = iow_read & 0xff;
+        pio_sm_put(pio0, IOW_PIO_SM, IO_WAIT);
+        printf("w %x %02x\n", port, x);
         switch (port & 0xf) {
         // WSS ports
         case 0 ... 3:
             // Fast write
-            pio_sm_put(pio0, IOW_PIO_SM, IO_END);
-            wss_config = iow_read & 0xff;
+            // pio_sm_put(pio0, IOW_PIO_SM, IO_END);
+            // wss_config = iow_read & 0xff;
             // Fast write - return early as we've already written 0x0u to the PIO
-            return;
+            // return;
             break;
         // AD1848 ports
         default:
-            pio_sm_put(pio0, IOW_PIO_SM, IO_WAIT);                        
-            ad1848_write(port & 0x3, iow_read & 0xFF);       
+            {
+            // pio_sm_put(pio0, IOW_PIO_SM, IO_WAIT);
+            ad1848_write(port & 0x3, x);
+            }
             break;
         } 
     } else // if follows down below
@@ -773,14 +779,23 @@ __force_inline void handle_ior(void) {
     if ((port >> 4) == 0x13) {
         pio_sm_put(pio0, IOR_PIO_SM, IO_WAIT);
         switch (port & 0xf) {
-        case 0 ... 2: // interface register
-            pio_sm_put(pio0, IOR_PIO_SM, IOR_SET_VALUE | (4 | (wss_config & 0x40)));
+        case 0: // interface register
+            // pio_sm_put(pio0, IOR_PIO_SM, IOR_SET_VALUE | (4 | (wss_config & 0x40)));
+            pio_sm_put(pio0, IOR_PIO_SM, IOR_SET_VALUE | wss_config);
+            printf("r %x %02x\n", port, wss_config);
+            break;
+        case 1 ... 2:
+            pio_sm_put(pio0, IOR_PIO_SM, IOR_SET_VALUE | 0xff);
+            printf("r %x %02x\n", port, 0xff);
             break;
         case 3: // chip ID register
-            pio_sm_put(pio0, IOR_PIO_SM, IOR_SET_VALUE | 4);
+            pio_sm_put(pio0, IOR_PIO_SM, IOR_SET_VALUE | 0x04);
+            printf("r %x %02x\n", port, 0x04);
             break;
         default:
-            pio_sm_put(pio0, IOR_PIO_SM, IOR_SET_VALUE | ad1848_read(port & 0x3));        
+            x = ad1848_read(port & 0x3);
+            printf("r %x %02x\n", port, x);
+            pio_sm_put(pio0, IOR_PIO_SM, IOR_SET_VALUE | x);        
             break;
         }
     } else // if follows down below
