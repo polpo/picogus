@@ -71,26 +71,33 @@ typedef struct ad1848_t {
     } regs;
 
     uint8_t idx_addr;   // Register index address
-    uint8_t status;
+
+    union {
+        struct {
+            bool irq_pending: 1;    // IRQ pending
+            bool prdy:        1;    // Playback register data ready
+            uint8_t pulplr:   2;    // Playback upper/lower left/right flags
+            bool sour:        1;    // Sample over/unerrun
+            uint8_t :         3;    // Unimplemented capture status bits 
+        };
+        uint8_t data;
+    } status;
 
     bool play;
     bool mce;           // Mode change enable - mutes output during mode changes
     bool trd;           // Transfer request disable
     bool aci;
     bool irq_enabled;
-    bool irq_pending;
 
     uint8_t frame_bytes;
     uint8_t frame_bytes_pio_rcvd;
     uint16_t current_count;
     uint16_t frame_interval;
     uint16_t current_count_left;
-    bool dma_enabled;
+    bool playback_enabled;
     bool playback_16bit, playback_signed, playback_stereo;
-    uint8_t pulplr;
 
     bool ppio;
-    bool prdy;
 
     uint16_t sample_rate;
 
@@ -109,9 +116,8 @@ static ad1848_t ad1848 = {
         .iface = 0b00001000,
         .misc  = 0b00001010
     },
-    .status = 0b11000000,
+    .status = { .data = 0b11001100 },
     .frame_interval = 125,
-    .pulplr = 0x3,
     .sample_rate = 8000
 }; // all other values to 0
 
@@ -125,38 +131,30 @@ static PIC_TimerEvent AD1848_PIO_Event = {
     .handler = AD1848_PIO_EventHandler,
 };
 
-static __force_inline void ad1848_dma_disable() {
-    ad1848.dma_enabled=false;
-    PIC_RemoveEvent(&AD1848_DMA_Event);
-    DMA_Cancel_Write(&dma_config);
+static __force_inline void ad1848_playback_stop() {
+    ad1848.playback_enabled=false;
+    if (!ad1848.ppio) {
+        PIC_RemoveEvent(&AD1848_DMA_Event);
+        DMA_Cancel_Write(&dma_config);
+    } else {
+        PIC_RemoveEvent(&AD1848_PIO_Event);
+    }
     ad1848.cur_sample.data32 = 0;
 }
 
-static __force_inline void ad1848_pio_disable() {
-    PIC_RemoveEvent(&AD1848_PIO_Event);
-    ad1848.cur_sample.data32 = 0;
-}
 
-// TODO change to playback_enable
-static __force_inline void ad1848_dma_enable() {
+static __force_inline void ad1848_playback_start() {
     putchar('e');
     putchar('\n');
-    if(!ad1848.dma_enabled) {
-        ad1848.dma_enabled=true;
-        // Set autopush bits to number of bits per audio frame. 32 will get masked to 0 by this operation which is correct behavior
-        DMA_Multi_Set_Push_Threshold(&dma_config, ad1848.frame_bytes << 3);
-        PIC_AddEvent(&AD1848_DMA_Event, ad1848.frame_interval/* + 1000*/, 0);
-    }
-
-}
-
-static __force_inline void ad1848_pio_enable() {
-    putchar('p');
-    putchar('\n');
-    if(!ad1848.dma_enabled) {
-        ad1848.dma_enabled=true;
-        // Set autopush bits to number of bits per audio frame. 32 will get masked to 0 by this operation which is correct behavior
-        PIC_AddEvent(&AD1848_PIO_Event, ad1848.frame_interval/* + 1000*/, 0);
+    if(!ad1848.playback_enabled) {
+        ad1848.playback_enabled=true;
+        if (!ad1848.ppio) {
+            // Set autopush bits to number of bits per audio frame. 32 will get masked to 0 by this operation which is correct behavior
+            DMA_Multi_Set_Push_Threshold(&dma_config, ad1848.frame_bytes << 3);
+            PIC_AddEvent(&AD1848_DMA_Event, ad1848.frame_interval/* + 1000*/, 0);
+        } else {
+            PIC_AddEvent(&AD1848_PIO_Event, ad1848.frame_interval/* + 1000*/, 0);
+        }
     }
 
 }
@@ -183,17 +181,13 @@ static __force_inline ad1848_finishEvent() {
         return ad1848.frame_interval + (trim ? 1 : 0);
     } else {
         putchar('%');
-        ad1848.irq_pending = true;
+        ad1848.status.irq_pending = true;
         if (ad1848.irq_enabled) {
             PIC_ActivateIRQ();
         }
         ad1848.current_count_left = ad1848.current_count;
         if (ad1848.trd) {
-            if (ad1848.ppio) {
-                ad1848_pio_disable();
-            } else {
-                ad1848_dma_disable();
-            }
+            ad1848_playback_stop();
             return 0;
         } else {
             return ad1848.frame_interval;
@@ -227,8 +221,7 @@ static void ad1848_dma_isr(void) {
             ad1848.cur_sample.data32 = ad1848.playback_signed ? next_sample.data32 : next_sample.data32 ^ 0x80008000;
         }
     } else {
-        // TODO 16 bit mono
-        // 8 bit mono
+        // both 16 and 8 bit mono the same
         sample32 next_sample;
         next_sample.data16[0] = next_sample.data16[1] = dma_data >> 16;
         ad1848.cur_sample.data32 = ad1848.playback_signed ? next_sample.data32 : next_sample.data32 ^ 0x80008000;
@@ -237,30 +230,30 @@ static void ad1848_dma_isr(void) {
 
 
 static uint32_t AD1848_PIO_EventHandler(Bitu val) {
-    ad1848.prdy = true;
+    ad1848.status.prdy = true;
+    ad1848.status.sour = (ad1848.frame_bytes_pio_rcvd < ad1848.frame_bytes);
     ad1848.frame_bytes_pio_rcvd = 0;
     return ad1848_finishEvent();
 }
 
 
 static void ad1848_pio_handle(uint8_t data) {
-    ad1848.prdy = true;
     if (ad1848.playback_stereo) {
         if (ad1848.playback_16bit) {
-            ad1848.pulplr = ad1848.current_count_left & 0x3;
+            ad1848.status.pulplr = ad1848.current_count_left & 0x3;
         } else {
-            ad1848.pulplr = 0x2 | (ad1848.current_count_left & 0x1);
+            ad1848.status.pulplr = 0x2 | (ad1848.current_count_left & 0x1);
         }
     } else {
         if (ad1848.playback_16bit) {
-            ad1848.pulplr = 0x2 | (ad1848.current_count_left & 0x1);
+            ad1848.status.pulplr = 0x2 | (ad1848.current_count_left & 0x1);
         } else {
-            ad1848.pulplr = 0x3;
+            ad1848.status.pulplr = 0x3;
         }
     }
-    ad1848.ad1848.frame_bytes_pio_rcvd++;
+    ad1848.frame_bytes_pio_rcvd++;
     if (ad1848.frame_bytes_pio_rcvd >= ad1848.frame_bytes) {
-        ad1848.prdy = false;
+        ad1848.status.prdy = false;
     }
 }
 
@@ -306,7 +299,7 @@ uint8_t ad1848_read(uint8_t port) {
             return ad1848.regs.idx[ad1848.idx_addr];
         case 2:
             // putchar('r'); putchar('s');
-            return ad1848.status | (ad1848.pulplr << 2) | (ad1848.irq_pending ? 1 : 0) | (ad1848.prdy ? 0x2 : 0);
+            return ad1848.status.data;
         case 3:
             break; // PIO audio capture not supported
     }
@@ -378,23 +371,14 @@ void ad1848_write(uint8_t port, uint8_t data) {
                     break;
                 case 9:
                     // putchar(data);
-                    ad1848.ppio = (data & 0x40)
                     if (!ad1848.play && (data & 1)) { // start playback
+                        ad1848.ppio = (data & 0x40);
                         ad1848.play = true;
                         printf("start sr %u intvl %u 16b %u st %u bpf %u ct %u ppio %u\n", ad1848.sample_rate, ad1848.frame_interval, ad1848.playback_16bit, ad1848.playback_stereo, ad1848.frame_bytes, ad1848.current_count, ad1848.ppio);
-                        if (ad1848.ppio) {
-                            ad1848_pio_enable();
-                        } else {
-                            ad1848_dma_enable();
-                        }
-                    } else {
-                    if (ad1848.play && !(data & 1)) { // stop playback
+                        ad1848_playback_start();
+                    } else if (ad1848.play && !(data & 1)) { // stop playback
                         ad1848.play = false;
-                        if (ad1848.ppio) {
-                            ad1848_pio_disable();
-                        } else {
-                            ad1848_dma_disable();
-                        }
+                        ad1848_playback_stop();
                     }
                     break;
                 case 10:
@@ -407,10 +391,10 @@ void ad1848_write(uint8_t port, uint8_t data) {
             break;
         case 2:
             // putchar('w'); putchar('s');
-            ad1848.irq_pending = false;
+            ad1848.status.irq_pending = false;
             PIC_DeActivateIRQ();
-            if (ad1848.play && ad1848.trd && !ad1848.ppio) {
-                ad1848_dma_enable();
+            if (ad1848.play && ad1848.trd) {
+                ad1848_playback_start();
             }
             break;
         case 3:
