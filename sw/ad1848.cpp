@@ -77,7 +77,7 @@ typedef struct ad1848_t {
             bool irq_pending: 1;    // IRQ pending
             bool prdy:        1;    // Playback register data ready
             uint8_t pulplr:   2;    // Playback upper/lower left/right flags
-            bool sour:        1;    // Sample over/unerrun
+            bool sour:        1;    // Sample over/underrun
             uint8_t :         3;    // Unimplemented capture status bits 
         };
         uint8_t data;
@@ -121,6 +121,7 @@ static ad1848_t ad1848 = {
     .sample_rate = 8000
 }; // all other values to 0
 
+static bool drq = false;
 
 static uint32_t AD1848_DMA_EventHandler(Bitu val);
 static PIC_TimerEvent AD1848_DMA_Event = {
@@ -131,11 +132,35 @@ static PIC_TimerEvent AD1848_PIO_Event = {
     .handler = AD1848_PIO_EventHandler,
 };
 
+static const uint8_t pulplr_bits[] = {
+    0b01,
+    0b11,
+    0b00,
+    0b10
+};
+// Calculate playback upper/lower left/right flags for PPIO
+static __force_inline void ad1848_pulplr_calc(void) {
+    if (ad1848.playback_stereo) {
+        if (ad1848.playback_16bit) {
+            ad1848.status.pulplr = pulplr_bits[ad1848.frame_bytes_pio_rcvd & 0x3];
+        } else {
+            ad1848.status.pulplr = pulplr_bits[(ad1848.frame_bytes_pio_rcvd & 0x1) << 1];
+        }
+    } else {
+        if (ad1848.playback_16bit) {
+            ad1848.status.pulplr = pulplr_bits[ad1848.frame_bytes_pio_rcvd & 0x1];
+        } else {
+            ad1848.status.pulplr = 0x3;
+        }
+    }
+}
+
 static __force_inline void ad1848_playback_stop() {
-    ad1848.playback_enabled=false;
+    ad1848.playback_enabled = false;
     if (!ad1848.ppio) {
         PIC_RemoveEvent(&AD1848_DMA_Event);
         DMA_Cancel_Write(&dma_config);
+        drq = false;
     } else {
         PIC_RemoveEvent(&AD1848_PIO_Event);
     }
@@ -144,19 +169,22 @@ static __force_inline void ad1848_playback_stop() {
 
 
 static __force_inline void ad1848_playback_start() {
-    putchar('e');
-    putchar('\n');
+    // putchar('e');
+    // putchar('\n');
     if(!ad1848.playback_enabled) {
-        ad1848.playback_enabled=true;
+        ad1848.playback_enabled = true;
         if (!ad1848.ppio) {
             // Set autopush bits to number of bits per audio frame. 32 will get masked to 0 by this operation which is correct behavior
             DMA_Multi_Set_Push_Threshold(&dma_config, ad1848.frame_bytes << 3);
             PIC_AddEvent(&AD1848_DMA_Event, ad1848.frame_interval/* + 1000*/, 0);
         } else {
+            ad1848.status.prdy = true;
+            ad1848.status.sour = false;
+            ad1848.frame_bytes_pio_rcvd = 0;
+            ad1848_pulplr_calc();
             PIC_AddEvent(&AD1848_PIO_Event, ad1848.frame_interval/* + 1000*/, 0);
         }
     }
-
 }
 
 static uint32_t interval_avg;
@@ -168,8 +196,6 @@ static __force_inline uint32_t simple_filter(uint32_t x, uint32_t y)
 }
 
 
-static bool drq = false;
-
 
 static __force_inline ad1848_finishEvent() {
     static uint32_t trim = 0;
@@ -180,7 +206,6 @@ static __force_inline ad1848_finishEvent() {
         trim = (interval_avg < interval_target) ? 1000 : 0;
         return ad1848.frame_interval + (trim ? 1 : 0);
     } else {
-        putchar('%');
         ad1848.status.irq_pending = true;
         if (ad1848.irq_enabled) {
             PIC_ActivateIRQ();
@@ -188,8 +213,10 @@ static __force_inline ad1848_finishEvent() {
         ad1848.current_count_left = ad1848.current_count;
         if (ad1848.trd) {
             ad1848_playback_stop();
+            // putchar('&');
             return 0;
         } else {
+            // putchar('%');
             return ad1848.frame_interval;
         }
     }
@@ -199,14 +226,14 @@ static __force_inline ad1848_finishEvent() {
 
 static uint32_t AD1848_DMA_EventHandler(Bitu val) {
     DMA_Multi_Start_Write(&dma_config, ad1848.frame_bytes);
+    drq = true;
     return ad1848_finishEvent();
-    ad1848.current_count_left--;
 }
 
 static void ad1848_dma_isr(void) {
     // putchar('*');
     // while (!pio_sm_is_rx_fifo_empty(dma_config.pio, dma_config.sm)) {
-    // drq = false;
+    drq = false;
     const uint32_t dma_data = DMA_Complete_Write(&dma_config);
     // printf("dma %x ", dma_data);
     if (ad1848.playback_stereo) {
@@ -233,25 +260,13 @@ static uint32_t AD1848_PIO_EventHandler(Bitu val) {
     ad1848.status.prdy = true;
     ad1848.status.sour = (ad1848.frame_bytes_pio_rcvd < ad1848.frame_bytes);
     ad1848.frame_bytes_pio_rcvd = 0;
+    ad1848_pulplr_calc();
     return ad1848_finishEvent();
 }
 
-
 static void ad1848_pio_handle(uint8_t data) {
-    if (ad1848.playback_stereo) {
-        if (ad1848.playback_16bit) {
-            ad1848.status.pulplr = ad1848.current_count_left & 0x3;
-        } else {
-            ad1848.status.pulplr = 0x2 | (ad1848.current_count_left & 0x1);
-        }
-    } else {
-        if (ad1848.playback_16bit) {
-            ad1848.status.pulplr = 0x2 | (ad1848.current_count_left & 0x1);
-        } else {
-            ad1848.status.pulplr = 0x3;
-        }
-    }
     ad1848.frame_bytes_pio_rcvd++;
+    ad1848_pulplr_calc();
     if (ad1848.frame_bytes_pio_rcvd >= ad1848.frame_bytes) {
         ad1848.status.prdy = false;
     }
@@ -294,7 +309,7 @@ uint8_t ad1848_read(uint8_t port) {
             if (ad1848.idx_addr == 11) {
                 // putchar('0');
                 // return 0x0;
-                return (drq ? 0x10 : 0) | (ad1848.aci ? 0x20 : 0);
+                return (drq ? 0x10 : 0) | (ad1848.aci ? 0x20 : 0) | (ad1848.status.sour ? 0x40 : 0);
             }
             return ad1848.regs.idx[ad1848.idx_addr];
         case 2:
@@ -342,7 +357,7 @@ void ad1848_write(uint8_t port, uint8_t data) {
             break;
         case 1:
             // putchar('w'); putchar(ad1848.idx_addr + 0x30);
-            if(ad1848.idx_addr == 12)
+            if (ad1848.idx_addr == 12)
                 return;
             if (ad1848.idx_addr != 11) {
                 ad1848.regs.idx[ad1848.idx_addr] = data;
@@ -372,9 +387,10 @@ void ad1848_write(uint8_t port, uint8_t data) {
                 case 9:
                     // putchar(data);
                     if (!ad1848.play && (data & 1)) { // start playback
+                        PIC_DeActivateIRQ();
                         ad1848.ppio = (data & 0x40);
                         ad1848.play = true;
-                        printf("start sr %u intvl %u 16b %u st %u bpf %u ct %u ppio %u\n", ad1848.sample_rate, ad1848.frame_interval, ad1848.playback_16bit, ad1848.playback_stereo, ad1848.frame_bytes, ad1848.current_count, ad1848.ppio);
+                        // printf("start sr %u intvl %u 16b %u st %u bpf %u ct %u ppio %u\n", ad1848.sample_rate, ad1848.frame_interval, ad1848.playback_16bit, ad1848.playback_stereo, ad1848.frame_bytes, ad1848.current_count, ad1848.ppio);
                         ad1848_playback_start();
                     } else if (ad1848.play && !(data & 1)) { // stop playback
                         ad1848.play = false;
