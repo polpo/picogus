@@ -56,6 +56,8 @@ __force_inline extern uint32_t DMA_Complete_Write(dma_inst_t* dma) {
 __force_inline extern void DMA_Cancel_Write(dma_inst_t* dma) {
     if (pio_sm_get_pc(dma->pio, dma->sm) != dma->offset+1) {
         pio_sm_exec(dma->pio, dma->sm, pio_encode_jmp(dma->offset));
+        pio_sm_clear_fifos(dma->pio, dma->sm);
+        pio_sm_restart(dma->pio, dma->sm);
     }
 }
 
