@@ -5,7 +5,7 @@ cmake_minimum_required(VERSION 3.13)
 set(PICO_BOARD_HEADER_DIRS ${CMAKE_CURRENT_LIST_DIR})
 if(NOT PICO_BOARD)
     set(PICO_BOARD "picogus2")
-    message("PICO_BOARD not set, defaulting to ${PROJECT_TYPE}")
+    message("PICO_BOARD not set, defaulting to ${PICO_BOARD}")
 endif()
 set(PICO_COPY_TO_RAM 1)
 
@@ -19,7 +19,7 @@ set(PICO_COPY_TO_RAM 1)
 include(pico_sdk_import.cmake)
 
 project(picogus
-    VERSION "2.2.0"
+    VERSION "2.2.99"
     LANGUAGES C CXX ASM
 )
 
@@ -27,10 +27,6 @@ set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
 
 include(pico_extras_import.cmake)
-
-# Tell the Pico SDK to use our local tinyusb instead of the one included in the SDK
-# This is needed to support tusb_xinput
-set(PICO_TINYUSB_PATH ${CMAKE_CURRENT_LIST_DIR}/tinyusb)
 
 #set(PICO_DEOPTIMIZED_DEBUG "1")
 #set(CMAKE_BUILD_TYPE "Debug")

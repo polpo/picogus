@@ -5,8 +5,8 @@ jobs:
       runs-on: ubuntu-22.04
       env: 
         BUILD_TYPE: "Release"
-        PICOSDK_VER: "develop"  # Temporarily use "release" branch
-        PICOEXTRA_VER: "sdk-2.1.0"
+        PICOSDK_VER: "2.1.1"
+        PICOEXTRA_VER: "sdk-2.1.1"
         # The Pico-SDK will listen to these environment vars
         PICOTOOL_FETCH_FROM_GIT_PATH: ${{github.workspace}}/pico/picotool
         PICO_SDK_PATH: ${{github.workspace}}/pico/pico-sdk
@@ -21,7 +21,7 @@ jobs:
       - name: Install Arm GNU Toolchain (arm-none-eabi-gcc)
         uses: carlosperate/arm-none-eabi-gcc-action@v1
         with:
-          release: '13.3.Rel1'
+          release: '14.2.Rel1'
 
       # Since we reference stable versions of Pico-SDK and pico-extras, we can cache their downloads.
       # If this were to reference changing branches (like "master"), this caching step must be removed!!!
