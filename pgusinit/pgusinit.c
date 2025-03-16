@@ -455,7 +455,7 @@ int main(int argc, char* argv[]) {
     outp(CONTROL_PORT, MODE_MAGIC); // Select magic string register
     if (inp(DATA_PORT_HIGH) != 0xDD) {
         err_pigus();
-        //return 99;
+        return 99;
     };
     printf("PicoGUS detected: ");
     print_firmware_string();
