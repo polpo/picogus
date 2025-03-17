@@ -66,6 +66,8 @@ static inline void dma_write_program_init(PIO pio, uint sm, uint offset) {
 
     // Config DMA pins
     sm_config_set_set_pins(&c, DRQ_PIN, 1);
+    pio_gpio_init(pio, TC_PIN); // Required on RP2350
+    pio_gpio_init(pio, DACK_PIN); // Required on RP2350
     pio_gpio_init(pio, DRQ_PIN);
     pio_gpio_init(pio, TC_PIN); // Required on RP2350
     pio_gpio_init(pio, DACK_PIN); // Required on RP2350

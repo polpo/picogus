@@ -862,7 +862,6 @@ __force_inline bool ior_has_data() {
     return !(pio0->fstat & ior_rxempty);
 }
 
-// #include "hardware/structs/xip_ctrl.h"
 int main()
 {
 #ifdef ASYNC_UART

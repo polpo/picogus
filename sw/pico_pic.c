@@ -51,5 +51,9 @@ void PIC_RemoveEvent(PIC_TimerEvent* event) {
 
 void PIC_Init() {
     alarm_pool = alarm_pool_create(2, PICO_TIME_DEFAULT_ALARM_POOL_MAX_TIMERS);
+#ifdef PICO_RP2040
+    irq_set_priority(TIMER_IRQ_2, PICO_HIGHEST_IRQ_PRIORITY);
+#else
     irq_set_priority(TIMER0_IRQ_2, PICO_HIGHEST_IRQ_PRIORITY);
+#endif
 }
