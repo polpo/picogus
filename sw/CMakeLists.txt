@@ -174,8 +174,8 @@ function(config_target TARGET_NAME MULTIFW)
     pico_enable_stdio_semihosting(${TARGET_NAME} 0)
 endfunction()
 
-# add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/tusb_xinput)
-# add_subdirectory(rp2040-psram)
+add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/tusb_xinput)
+add_subdirectory(rp2040-psram)
 add_subdirectory(opl)
 add_subdirectory(ne2000)
 
@@ -192,25 +192,30 @@ function(build_gus TARGET_NAME MULTIFW)
     )
     target_compile_definitions(${TARGET_NAME} PRIVATE
         SOUND_GUS=1
-        # PSRAM=1
-        # TEST_PSRAM=1
-        # PSRAM_ASYNC=1
-        # #PSRAM_ASYNC_DMA_IRQ=1
-        # PSRAM_SPINLOCK=1
-        # # PSRAM_MUTEX=1
-        # # PSRAM_WAITDMA=1
-        # PSRAM_CORE0=1
-        # PSRAM_PIN_CS=1
-        # PSRAM_PIN_SCK=2
-        # PSRAM_PIN_MOSI=3
-        # PSRAM_PIN_MISO=0
-        PSRAM_RP2350=1
         # POLLING_DMA=1
         INTERP_CLAMP=1
         # INTERP_LINEAR=1
         SCALE_22K_TO_44K=1
         # FORCE_28CH_27CH=1
     )
+    if (PSRAM_XIP)
+        target_compile_definitions(${TARGET_NAME} PRIVATE
+            PSRAM_XIP=1
+        )
+    else()
+        target_compile_definitions(${TARGET_NAME} PRIVATE
+            PSRAM=1
+            TEST_PSRAM=1
+            PSRAM_ASYNC=1
+            PSRAM_SPINLOCK=1
+            PSRAM_CORE0=1
+            PSRAM_PIN_CS=1
+            PSRAM_PIN_SCK=2
+            PSRAM_PIN_MOSI=3
+            PSRAM_PIN_MISO=0
+        )
+        target_link_libraries(${TARGET_NAME} rp2040-psram)
+    endif()
     pico_generate_pio_header(${TARGET_NAME} ${CMAKE_CURRENT_LIST_DIR}/isa_dma.pio)
     target_link_libraries(${TARGET_NAME} hardware_interp)
 endfunction()
