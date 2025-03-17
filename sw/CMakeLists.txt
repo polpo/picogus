@@ -28,10 +28,6 @@ set(CMAKE_CXX_STANDARD 17)
 
 include(pico_extras_import.cmake)
 
-set(PICO_BOARD_HEADER_DIRS ${CMAKE_CURRENT_LIST_DIR})
-set(PICO_BOARD pimoroni_pico_plus2_rp2350)
-set(PICO_COPY_TO_RAM 1)
-
 #set(PICO_DEOPTIMIZED_DEBUG "1")
 #set(CMAKE_BUILD_TYPE "Debug")
 set(CMAKE_BUILD_TYPE "Release")
