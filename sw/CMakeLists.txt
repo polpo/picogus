@@ -38,6 +38,8 @@ if(NOT PROJECT_TYPE)
     message("PROJECT_TYPE not set, defaulting to ${PROJECT_TYPE}")
 endif()
 
+set(PICO_TINYUSB_PATH /Users/ian/src/tinyusb-wbcbz7)
+
 # Initialise the Raspberry Pi Pico SDK
 pico_sdk_init()
 
@@ -174,6 +176,7 @@ add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/tusb_xinput)
 add_subdirectory(rp2040-psram)
 add_subdirectory(opl)
 add_subdirectory(ne2000)
+add_subdirectory(cdrom)
 
 ################################################################################
 # Build GUS firmware
@@ -214,7 +217,7 @@ endfunction()
 # Build SB firmware
 function(build_sb TARGET_NAME MULTIFW)
     set(USB_JOYSTICK TRUE)
-    set(SOUND_MPU TRUE)
+    set(SOUND_MPU FALSE)
     set(SOUND_OPL TRUE)
     config_target(${TARGET_NAME} ${MULTIFW})
     pico_set_program_name(${TARGET_NAME} "picogus-sb")
@@ -222,11 +225,26 @@ function(build_sb TARGET_NAME MULTIFW)
         sbdsp.cpp
         sbplay.cpp
         isa_dma.c
+        audio_fifo.c
+        mke/mke.c
+        cdrom/msc_app.c
     )
+    target_link_libraries(${TARGET_NAME} cdrom)
     target_compile_definitions(${TARGET_NAME} PRIVATE
         SOUND_SB=1
         SOUND_DSP=1
+        CDROM=1
     )
+    target_sources(${TARGET_NAME} PRIVATE
+        ${PICO_TINYUSB_PATH}/lib/fatfs/source/ff.c
+        ${PICO_TINYUSB_PATH}/lib/fatfs/source/ffsystem.c
+        ${PICO_TINYUSB_PATH}/lib/fatfs/source/ffunicode.c
+    )
+    target_include_directories(${TARGET_NAME} PRIVATE
+        ${PICO_TINYUSB_PATH}/lib/fatfs/source/
+    )
+
+  #PICO_TINYUSB_PATH
     pico_generate_pio_header(${TARGET_NAME} ${CMAKE_CURRENT_LIST_DIR}/isa_dma.pio)
 endfunction()
 

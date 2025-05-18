@@ -74,6 +74,16 @@ extern "C" unsigned int OPL_Pico_PortRead(opl_port_t);
 cms_buffer_t opl_buffer = { {0}, 0, 0 };
 #endif
 
+#ifdef CDROM
+extern "C" void MKE_WRITE(uint16_t address, uint8_t value);
+extern "C" uint8_t MKE_READ(uint16_t address);
+extern "C" void mke_init();
+
+#define CDROM_NUM 1
+#include "cdrom/cdrom.h"
+cdrom_t cdrom[CDROM_NUM];
+#endif
+
 #ifdef SOUND_GUS
 #include "gus-x.cpp"
 
@@ -493,7 +503,7 @@ void processSettings(void) {
     settings.startupMode = INVALID_MODE;
 #endif
 #ifdef SOUND_SB
-    sb_port_test = settings.SB.basePort >> 4;
+    sb_port_test = settings.SB.basePort >> 5;
 #endif
 #ifdef SOUND_GUS
     gus_port_test = settings.GUS.basePort >> 4 | 0x10;
@@ -550,7 +560,7 @@ __force_inline void handle_iow(void) {
     } else // if follows down below
 #endif // SOUND_GUS
 #ifdef SOUND_SB
-    if ((port >> 4) == sb_port_test) {      
+    if ((port >> 5) == sb_port_test) {      
         switch (port - settings.SB.basePort) {
         // OPL ports
         case 0x8:
@@ -571,6 +581,11 @@ __force_inline void handle_iow(void) {
             };
             break;
         // DSP ports
+        case 0x10 ... 0x13:
+            pio_sm_put(pio0, IOW_PIO_SM, IO_WAIT);
+            // putchar('w');
+            MKE_WRITE(port, iow_read & 0xFF);
+            break; 
         default:
             pio_sm_put(pio0, IOW_PIO_SM, IO_WAIT);                        
             sbdsp_process();
@@ -730,18 +745,26 @@ __force_inline void handle_ior(void) {
     } else // if follows down below
 #endif
 #if defined(SOUND_SB)
-    if ((port >> 4) == sb_port_test) {
+    if ((port >> 5) == sb_port_test) {
         pio_sm_put(pio0, IOR_PIO_SM, IO_WAIT);
-        if (port - settings.SB.basePort == 0x8) {
+        switch (port - settings.SB.basePort) {
+        case 0x8:
             // wait for OPL buffer to process
             while (opl_buffer.tail != opl_buffer.head) {
                 tight_loop_contents();
             }
             pio_sm_put(pio0, IOR_PIO_SM, IOR_SET_VALUE | OPL_Pico_PortRead(OPL_REGISTER_PORT));
-        } else {
+            break;
+        case 0x10 ... 0x13:
+            pio_sm_put(pio0, IOW_PIO_SM, IO_WAIT);
+            // putchar('r');
+            pio_sm_put(pio0, IOR_PIO_SM, IOR_SET_VALUE | MKE_READ(port));        
+            break; 
+        default:
             sbdsp_process();
             pio_sm_put(pio0, IOR_PIO_SM, IOR_SET_VALUE | sbdsp_read(port & 0xF));        
             sbdsp_process();
+            break;
         }
     } else // if follows down below
 #endif
@@ -1019,6 +1042,10 @@ int main()
     multicore_launch_core1(&play_adlib);
 #endif
 
+#ifdef CDROM
+    mke_init();
+#endif
+
 #ifdef SOUND_GUS
     puts("Creating GUS");
     GUS_OnReset();
@@ -1137,5 +1164,6 @@ extern void PIC_DeActivateIRQ(void);
 #ifdef POLLING_DMA
         process_dma();
 #endif
+        // cdrom_tasks(&cdrom[0]);        
     }
 }
