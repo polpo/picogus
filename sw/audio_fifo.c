@@ -8,6 +8,7 @@
 #include "audio_fifo.h"
 /* #include "pico/stdlib.h" */
 #include <string.h>
+#include <stdio.h>
 
 // No more global instance here
 
@@ -45,6 +46,7 @@ void fifo_reset(audio_fifo_t *fifo) {
 // Add a sample to the FIFO (called by producer)
 bool fifo_add_sample(audio_fifo_t *fifo, audio_sample_t sample) {
     if (fifo->state != FIFO_STATE_RUNNING || fifo->samples_in_fifo == AUDIO_FIFO_SIZE) {
+        /* printf("%u\n", fifo->samples_in_fifo); */
         return false;
     }
     fifo->buffer[fifo->write_idx] = sample;
@@ -53,7 +55,6 @@ bool fifo_add_sample(audio_fifo_t *fifo, audio_sample_t sample) {
     return true;
 }
 
-#include <stdio.h>
 // Add multiple samples to the FIFO
 bool fifo_add_samples(audio_fifo_t *fifo, const audio_sample_t *samples_buffer, uint32_t num_samples_to_add) {
     // Check basic conditions
@@ -125,6 +126,6 @@ fifo_state_t fifo_get_state(audio_fifo_t *fifo) {
 
 // Set the FIFO state
 void fifo_set_state(audio_fifo_t *fifo, fifo_state_t new_state) {
-    printf("state: %u\n", new_state);
+    /* printf("state: %u\n", new_state); */
     fifo->state = new_state;
 }

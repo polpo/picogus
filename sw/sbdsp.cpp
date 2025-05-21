@@ -165,7 +165,7 @@ static int16_t __force_inline dma_interval_trim() {
 
 void __force_inline sbdsp_fifo_rx(uint8_t byte) {
     if (!fifo_add_sample(&sbdsp.audio_fifo, (int16_t)(byte ^ 0x80) << 8)) {
-        putchar('O');
+        // putchar('O');
         // printf("%d", dma_interval_trim());
         // printf("OVERRUN");
     }
@@ -264,7 +264,8 @@ static PIC_TimerEvent DSP_DMA_Event = {
 static __force_inline void sbdsp_dma_disable() {
     sbdsp.dma_enabled=false;    
     PIC_RemoveEvent(&DSP_DMA_Event);  
-    // fifo_set_state(&sbdsp.audio_fifo, FIFO_STATE_STOPPED); // sbdsp.cur_sample = 0;  // zero current sample
+    // fifo_set_state(&sbdsp.audio_fifo, FIFO_STATE_STOPPED);
+    sbdsp.cur_sample = 0;  // zero current sample
     // putchar('S');
 }
 
@@ -305,7 +306,7 @@ static uint32_t DSP_DMA_EventHandler(Bitu val) {
 
 static void sbdsp_dma_isr(void) {
     const uint32_t dma_data = DMA_Complete_Write(&dma_config);    
-    // sbdsp.cur_sample = (int16_t)(dma_data & 0xFF) - 0x80 << 5;
+    // sbdsp.cur_sample = (int16_t)((dma_data & 0xFF) ^ 0x80) << 8;
     sbdsp_fifo_rx(dma_data & 0xFF);
 }
 
@@ -318,11 +319,9 @@ static PIC_TimerEvent DSP_DAC_Resume_event = {
     .handler = DSP_DAC_Resume_eventHandler,
 };
 
-/*
 int16_t sbdsp_sample() {
     return (sbdsp.speaker_on & ~sbdsp.dac_resume_pending) ? sbdsp.cur_sample : 0;
 }
-*/
 
 int16_t sbdsp_muted() {
     return (!sbdsp.speaker_on || sbdsp.dac_resume_pending);
@@ -405,7 +404,7 @@ void sbdsp_process(void) {
                     */
                     sbdsp.dma_interval = 256 - sbdsp.time_constant;
                     sbdsp.sample_rate = 1000000ul / sbdsp.dma_interval;           
-                    sbdsp.dma_interval_trim = MAX(1, sbdsp.dma_interval >> 2);
+                    sbdsp.dma_interval_trim = MAX(1, sbdsp.dma_interval >> 3);
                     // printf("interval: %u rate: %u, trim: %u\n", sbdsp.dma_interval, sbdsp.sample_rate, sbdsp.dma_interval_trim);
                     // sbdsp.sample_step = sbdsp.sample_rate * 65535ul / OUTPUT_SAMPLERATE;                    
                     // sbdsp.sample_factor = (OUTPUT_SAMPLERATE / sbdsp.sample_rate)+5; //Estimate
@@ -413,8 +412,6 @@ void sbdsp_process(void) {
                     // sbdsp.dma_transfer_size = 4;
                     
                     //sbdsp.i2s_buffer_size = ((OUTPUT_SAMPLERATE * 65535ul) / sbdsp.sample_rate * sbdsp.dma_buffer_size) >> 16;
-                    
-                    
                     sbdsp.dav_dsp=0;
                     sbdsp.current_command=0;                    
                 }    

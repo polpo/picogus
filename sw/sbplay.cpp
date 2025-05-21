@@ -34,7 +34,7 @@ extern "C" void OPL_Pico_simple(int16_t *buffer, uint32_t nsamples);
 extern "C" void OPL_Pico_PortWrite(opl_port_t, unsigned int);
 
 #ifdef SOUND_SB
-// extern int16_t sbdsp_sample();
+extern int16_t sbdsp_sample();
 // extern uint8_t sbdsp_fifo_tx();
 // extern uint16_t sbdsp_fifo_tx(uint8_t *buffer, uint16_t len);
 // extern int16_t sbdsp_sample();
@@ -202,7 +202,7 @@ void play_adlib() {
         struct audio_buffer *buffer = take_audio_buffer(ap, true);
         int16_t *samples = (int16_t *) buffer->buffer->bytes;
         // Do mixing with lerp
-        int32_t accum[2];
+        int32_t accum[2] = {0};
         for (int i = 0; i < SAMPLES_PER_BUFFER; ++i) {
             accum[0] = accum[1] = 0;
 
@@ -252,8 +252,9 @@ void play_adlib() {
                 opl_samples[opl_index & 0x1ff],
                 opl_samples[(opl_index + 1) & 0x1ff],
                 opl_frac);
+            accum[0] += opl_samples[opl_index & 0x1ff];
+            accum[1] += opl_samples[opl_index & 0x1ff];
             */
-            // int32_t opl_sample = 0;
 
             /*
             if (
@@ -266,25 +267,25 @@ void play_adlib() {
                 sbdsp_fifo_tx(sb_samples + sb_sample_idx, 128);
             }
             */
-            /*
             // int16_t sb_sample;
             if (!sb_left) {
                 // putchar('t');
                 uint32_t tmp_state = fifo_get_state(sb_fifo);
                 uint32_t num_samples;
                 if (tmp_state == FIFO_STATE_RUNNING && tmp_state != sb_state) {
-                    num_samples = 512;
+                    num_samples = AUDIO_FIFO_SIZE >> 1;
                     // putchar('!');
                 } else {
-                    num_samples = 128;
+                    num_samples = AUDIO_FIFO_SIZE >> 2;
                 }
                 if (fifo_take_samples(sb_fifo, num_samples)) {
                     // putchar('T');
                     sb_left = num_samples;
                     sb_state = tmp_state;
                 } else {
-                    if (sb_state == FIFO_STATE_RUNNING)
-                    putchar('U');
+                    if (sb_state == FIFO_STATE_RUNNING) {
+                    // putchar('U');
+                    }
                     // printf("%u\n", sb_fifo->samples_in_fifo);
                 }
             }
@@ -298,7 +299,6 @@ void play_adlib() {
                     // }
                     sb_left--;
                 }
-                sb_sample = sb_fifo->buffer[sb_index & AUDIO_FIFO_BITS];
                 sb_index_old = sb_index;
                 sb_frac = sb_pos & FRAC_MASK;
                 sb_ratio = fixed_ratio(sbdsp_sample_rate(), 44100);
@@ -306,32 +306,28 @@ void play_adlib() {
                 // sb_sample = (sb_left && !sbdsp_muted()) ? sb_fifo->buffer[sb_index] : 0;
                 // putchar('p');
                 if (!sbdsp_muted()) {
+                    sb_sample = sb_fifo->buffer[sb_index & AUDIO_FIFO_BITS];
                     // int16_t sb_sample = sb_fifo->buffer[sb_index & 127];
                     accum[0] += sb_sample;
                     accum[1] += sb_sample;
                 }
-            // } else {
-            //     sb_sample = 0;
             }
-            */
-            /*
-            // printf("%u %u", sb_index, sb_index_old);
-            if (sb_index != sb_index_old) {
-                sb_sample = (int16_t)(sbdsp_fifo_tx() - 0x80) << 8;
-            }
-            sb_index_old = sb_index;
-            // sb_sample = 0;
-            */
-            // int32_t sb_sample = (int16_t)(sb_samples[sb_index & 0xff] ^ 0x80) << 8;
-            // sb_sample = sbdsp_sample();
+
+
             samples[i << 1] = clamp16(accum[0]);
             samples[(i << 1) + 1] = clamp16(accum[1]);
-
-            /*
-            samples[i << 1] = opl_samples[opl_index & 0x1ff];
-            samples[(i << 1) + 1] = opl_samples[opl_index & 0x1ff];
-            */
         }
+
+        /* 
+        // bufferless SB
+        int16_t sb_sample = sbdsp_sample();
+        accum[0] += sb_sample;
+        accum[1] += sb_sample;
+
+        samples[0] = clamp16(accum[0]);
+        samples[1] = clamp16(accum[1]);
+        buffer->sample_count = 1;
+        */
         buffer->sample_count = SAMPLES_PER_BUFFER;
         give_audio_buffer(ap, buffer);
 #ifdef USB_STACK

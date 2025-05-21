@@ -172,7 +172,7 @@ typedef struct cdrom {
     uint32_t (*get_volume)(void *p, int channel);
     uint32_t (*get_channel)(void *p, int channel);
 
-    int16_t cd_buffer[BUF_SIZE];
+    // int16_t cd_buffer[BUF_SIZE];
     uint8_t audio_sector_buffer[RAW_SECTOR_SIZE];
     audio_sample_t *current_sector_samples;       // Convenience pointer: (audio_sample_t*)audio_sector_buffer
     int audio_sector_total_samples;                    // Samples available in current_sector_samples after a read

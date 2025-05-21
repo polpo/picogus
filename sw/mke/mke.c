@@ -106,10 +106,12 @@ void MKE_COMMAND(uint8_t value) {
             case CMD1_READSUBQ:                
                 cdrom_get_subq(&cdrom[0],(uint8_t *)&x);    
                 cdrom_fifo_clear(&cdrom[0].info_fifo);                                                            
-                /* cdrom_fifo_write_multiple(&cdrom[0].info_fifo, x, 11); */
+                cdrom_fifo_write_multiple(&cdrom[0].info_fifo, x, 11);
+                /*
                 for(i=0;i<11;i++) {                
                     cdrom_fifo_write(&cdrom[0].info_fifo,x[i]);                                
                 }
+                */
                 cdrom_output_status(&cdrom[0]);
                 break;
             case CMD1_SETMODE: //Returns 1
@@ -123,15 +125,8 @@ void MKE_COMMAND(uint8_t value) {
                 break;
             case CMD1_GETMODE://6
                 printf("GET MODE\n");
-                /*
                 uint8_t mode[5] = {[1] = 0x08};
                 cdrom_fifo_write_multiple(&cdrom[0].info_fifo, mode, 5);
-                */
-                cdrom_fifo_write(&cdrom[0].info_fifo,0x00);
-                cdrom_fifo_write(&cdrom[0].info_fifo,0x08);
-                cdrom_fifo_write(&cdrom[0].info_fifo,0x00);
-                cdrom_fifo_write(&cdrom[0].info_fifo,0x00);
-                cdrom_fifo_write(&cdrom[0].info_fifo,0x00);
                 cdrom_output_status(&cdrom[0]);
                 break;
             case CMD1_PAUSERESUME:                
@@ -141,39 +136,40 @@ void MKE_COMMAND(uint8_t value) {
             case CMD1_CAPACITY://6
                 printf("DISK CAPACITY\n");
                 cdrom_disc_capacity(&cdrom[0], (uint8_t *)&x);
-                /* cdrom_fifo_write_multiple(&cdrom[0].info_fifo, x, 5); */
-                for(i=0;i<5;i++) {
-                    printf("%02x ",x[i]);
-                    cdrom_fifo_write(&cdrom[0].info_fifo,x[i]);
-                }
-                printf("\n");
+                cdrom_fifo_write_multiple(&cdrom[0].info_fifo, x, 5);
                 cdrom_output_status(&cdrom[0]);
                 break;
             case CMD1_DISKINFO: //7
                 printf("DISK INFO\n");
                 cdrom_disc_info(&cdrom[0], (uint8_t *)&x);
-                /* cdrom_fifo_write_multiple(&cdrom[0].info_fifo, x, 6); */
+                cdrom_fifo_write_multiple(&cdrom[0].info_fifo, x, 6);
+                /*
                 for(i=0;i<6;i++) {
                     printf("%02x ",x[i]);
                     cdrom_fifo_write(&cdrom[0].info_fifo,x[i]);
                 }
                 printf("\n");
+                */
                 cdrom_output_status(&cdrom[0]);
                 break;
             case CMD1_READTOC:
-                cdrom_fifo_clear(&cdrom[0].info_fifo);                                                                            
+                cdrom_fifo_clear(&cdrom[0].info_fifo);
+                /*
                 printf("READ TOC:");  
                 for(i=0;i<6;i++) {
                     printf("%02x ",mke.command_buffer[i+1]);
                 }
                 printf(" | ");                                
+                */
                 cdrom_read_toc(&cdrom[0],(uint8_t *)&x,mke.command_buffer[2]);                
-                /* cdrom_fifo_write_multiple(&cdrom[0].info_fifo, x, 8); */
+                cdrom_fifo_write_multiple(&cdrom[0].info_fifo, x, 8);
+                /*
                 for(i=0;i<8;i++) {
                     printf("%02x ",x[i]);
                     cdrom_fifo_write(&cdrom[0].info_fifo,x[i]);
                 }
-                printf("\n");
+                */
+                /* printf("\n"); */
                 cdrom_output_status(&cdrom[0]);
                 break;
             case CMD1_PLAY_MSF:
@@ -205,39 +201,22 @@ void MKE_COMMAND(uint8_t value) {
             case CMD1_SESSINFO:
                 cdrom_fifo_clear(&cdrom[0].info_fifo);                                                                                                                
                 printf("CMD: READ SESSION INFO\n");
-                char session_info[6] = {0};
-                /* cdrom_fifo_write_multiple(&cdrom[0].info_fifo, session_info, 6); */
-                cdrom_fifo_write(&cdrom[0].info_fifo,0);
-                cdrom_fifo_write(&cdrom[0].info_fifo,0);
-                cdrom_fifo_write(&cdrom[0].info_fifo,0);
-                cdrom_fifo_write(&cdrom[0].info_fifo,0);
-                cdrom_fifo_write(&cdrom[0].info_fifo,0);
-                cdrom_fifo_write(&cdrom[0].info_fifo,0);
+                uint8_t session_info[6] = {0};
+                cdrom_fifo_write_multiple(&cdrom[0].info_fifo, session_info, 6);
                 cdrom_output_status(&cdrom[0]);
                 break;
             case CMD1_READ_UPC:
                 cdrom_fifo_clear(&cdrom[0].info_fifo);
                 printf("CMD: READ UPC\n");
-                char upc[8] = {[0] = 80};
-                /* cdrom_fifo_write_multiple(&cdrom[0].info_fifo, upc, 8); */
-                cdrom_fifo_write(&cdrom[0].info_fifo,0x80);
-                cdrom_fifo_write(&cdrom[0].info_fifo,0);
-                cdrom_fifo_write(&cdrom[0].info_fifo,0);
-                cdrom_fifo_write(&cdrom[0].info_fifo,0);
-                cdrom_fifo_write(&cdrom[0].info_fifo,0);
-                cdrom_fifo_write(&cdrom[0].info_fifo,0);
-                cdrom_fifo_write(&cdrom[0].info_fifo,0);
-                cdrom_fifo_write(&cdrom[0].info_fifo,0);
+                uint8_t upc[8] = {[0] = 80};
+                cdrom_fifo_write_multiple(&cdrom[0].info_fifo, upc, 8);
                 cdrom_output_status(&cdrom[0]);
                 break;
             case CMD1_READ_ERR:
                 cdrom_fifo_clear(&cdrom[0].info_fifo);                
                 printf("CMD: READ ERR\n");                
                 cdrom_read_errors(&cdrom[0],(uint8_t *)x);
-                /* cdrom_fifo_write_multiple(&cdrom[0].info_fifo, x, 8); */
-                for(i=0;i<8;i++) {
-                    cdrom_fifo_write(&cdrom[0].info_fifo,x[i]);
-                }
+                cdrom_fifo_write_multiple(&cdrom[0].info_fifo, x, 8);
                 cdrom_output_status(&cdrom[0]);
                 break;        
             case CMD1_READ_VER:
@@ -246,18 +225,8 @@ void MKE_COMMAND(uint8_t value) {
                 */
                 cdrom_fifo_clear(&cdrom[0].info_fifo);                
                 printf("CMD: READ VER\n");                                
-                /* char ver[] = "CR-5630.75"; */
-                /* cdrom_fifo_write_multiple(&cdrom[0].info_fifo, ver, 10); */
-                cdrom_fifo_write(&cdrom[0].info_fifo,'C');
-                cdrom_fifo_write(&cdrom[0].info_fifo,'R');
-                cdrom_fifo_write(&cdrom[0].info_fifo,'-');
-                cdrom_fifo_write(&cdrom[0].info_fifo,'5');
-                cdrom_fifo_write(&cdrom[0].info_fifo,'6');
-                cdrom_fifo_write(&cdrom[0].info_fifo,'3');
-                cdrom_fifo_write(&cdrom[0].info_fifo,'0');
-                cdrom_fifo_write(&cdrom[0].info_fifo,'.');
-                cdrom_fifo_write(&cdrom[0].info_fifo,'7');
-                cdrom_fifo_write(&cdrom[0].info_fifo,'5');
+                uint8_t ver[10] = "CR-5630.75";
+                cdrom_fifo_write_multiple(&cdrom[0].info_fifo, ver, 10);
                 cdrom_output_status(&cdrom[0]);
                 break;
             case CMD1_STATUS:

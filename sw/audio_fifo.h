@@ -12,7 +12,7 @@
 // #include "pico/sem.h"
 
 // Configuration
-#define AUDIO_FIFO_SIZE 256  // Must be power of 2
+#define AUDIO_FIFO_SIZE 1024  // Must be power of 2
 #define AUDIO_FIFO_BITS (AUDIO_FIFO_SIZE - 1)
 #define AUDIO_FIFO_START_THRESHOLD (AUDIO_FIFO_SIZE >> 1)  // Start playback when half full
 
