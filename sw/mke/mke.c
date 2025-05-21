@@ -1,4 +1,31 @@
 /*
+Title  : Panasonic MKE CDROM Emulation
+Date   : 2024-04-04
+Author : Kevin Moonlight <me@yyzkevin.com>
+
+Copyright (C) 2024 Kevin Moonlight
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal in
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
+of the Software, and to permit persons to whom the Software is furnished to do
+so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+SPDX-License-Identifier: MIT
+*/
+/*
 SB2CD I/O MAP (From SoundBlaster Programmers Guide Page 119)
 
 Base 0x250h     (250h to 255h)
@@ -27,13 +54,7 @@ Enable  (output)    = base + 3
 Info    (input)     = base
 Status  (input)     = base + 1
 Data    (input)     = base + 2  (base)
-
-
-
-
-
 */
-
 #include "mke.h"
 #include "../cdrom/cdrom.h"
 

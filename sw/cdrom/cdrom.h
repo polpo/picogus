@@ -8,9 +8,13 @@
  *
  *          Generic CD-ROM drive core header.
  *
- * Authors: Miran Grca, <mgrca8@gmail.com>
+ * Authors: Miran Grca, <mgrca8@gmail.com>,
+ *          Kevin Moonlight, <me@yyzkevin.com>
+ *          Ian Scott, <ian@polpo.org>
  *
  *          Copyright 2016-2019 Miran Grca.
+ *          Copyright (C) 2024 Kevin Moonlight
+ *          Copyright (C) 2025 Ian Scott
  */
 
 #ifndef EMU_CDROM_H

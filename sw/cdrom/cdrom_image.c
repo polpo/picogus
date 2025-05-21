@@ -13,10 +13,14 @@
  * Authors: RichardG867,
  *          Miran Grca, <mgrca8@gmail.com>
  *          bit,
+ *          Kevin Moonlight, <me@yyzkevin.com>
+ *          Ian Scott, <ian@polpo.org>
  *
  *          Copyright 2015-2019 Richardg867.
  *          Copyright 2015-2019 Miran Grca.
  *          Copyright 2017-2019 bit.
+ *          Copyright (C) 2024 Kevin Moonlight
+ *          Copyright (C) 2025 Ian Scott
  */
 #include <inttypes.h>
 #include <stdarg.h>

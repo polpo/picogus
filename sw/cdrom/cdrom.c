@@ -10,9 +10,13 @@
  *
  *
  *
- * Authors: Miran Grca, <mgrca8@gmail.com>
+ * Authors: Miran Grca, <mgrca8@gmail.com>,
+ *          Kevin Moonlight, <me@yyzkevin.com>
+ *          Ian Scott, <ian@polpo.org>
  *
  *          Copyright 2018-2021 Miran Grca.
+ *          Copyright (C) 2024 Kevin Moonlight
+ *          Copyright (C) 2025 Ian Scott
  */
 #include <inttypes.h>
 #include <stdarg.h>

@@ -11,9 +11,13 @@
  *
  * Authors: RichardG,
  *          Miran Grca, <mgrca8@gmail.com>
+ *          Kevin Moonlight, <me@yyzkevin.com>
+ *          Ian Scott, <ian@polpo.org>
  *
  *          Copyright 2016-2022 RichardG.
  *          Copyright 2016-2022 Miran Grca.
+ *          Copyright (C) 2024 Kevin Moonlight
+ *          Copyright (C) 2025 Ian Scott
  */
 #ifndef CDROM_IMAGE_H
 #define CDROM_IMAGE_H
