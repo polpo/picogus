@@ -99,7 +99,7 @@ jobs:
         working-directory: ${{github.workspace}}/pgusinit
         run: |
           mkdir -p $OUTPUT_DIR
-          make -f Makefile-cross INCLUDE="$WATCOM"/h
+          make INCLUDE="$WATCOM"/h
           cp pgusinit.exe $OUTPUT_DIR
 
       # will generate pgusinit.zip as downloadable artifact with pgusinit.exe

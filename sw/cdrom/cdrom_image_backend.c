@@ -75,7 +75,7 @@ static inline void frames_to_msf(uint32_t total_frames, uint8_t *pM, uint8_t *pS
 #define MAX_FILENAME_LENGTH 256
 #define CROSS_LEN           512
 
-static char temp_keyword[1024];
+static char temp_keyword[64];
 
 #ifdef ENABLE_CDROM_IMAGE_BACKEND_LOG
 int cdrom_image_backend_do_log = ENABLE_CDROM_IMAGE_BACKEND_LOG;
@@ -192,7 +192,7 @@ bin_init(const char *filename, int *error)
     
     if (tf == NULL) {
         *error = 1;
-        printf("can't malloc\n");
+        cdrom_image_backend_log("can't malloc\n");
         return NULL;
     }
 
@@ -202,9 +202,9 @@ bin_init(const char *filename, int *error)
     
     tf->fp = (FIL *) malloc(sizeof(FIL));
     FRESULT result = f_open(tf->fp, tf->fn, FA_READ);
-    printf("CDROM: binary_open(%s) = %08lx, result %d\n", tf->fn, tf->fp, result);
+    cdrom_image_backend_log("CDROM: binary_open(%s) = %08lx, result %d\n", tf->fn, tf->fp, result);
     FSIZE_t len = f_size(tf->fp);
-    printf("file size: %u", len);
+    cdrom_image_backend_log("file size: %u", len);
 
     /* if (f_stat(tf->fn, &stats) != 0) { */
     /*     #<{(| Use a blank structure if stat failed. |)}># */
@@ -215,7 +215,7 @@ bin_init(const char *filename, int *error)
     /* #<{(| Set the function pointers. |)}># */
     /* if (!*error) { */
     if (result == FR_OK) {
-        printf("all good\n");
+        cdrom_image_backend_log("all good\n");
         tf->read       = bin_read;
         tf->get_length = bin_get_length;
         tf->close      = bin_close;
@@ -941,19 +941,19 @@ cdi_load_cue(cd_img_t *cdi, const char *cuefile)
     putchar('a');
     /* fp = (FIL *) malloc(sizeof(FIL)); */
     FRESULT result = f_open(&fp, cuefile, FA_READ);      
-    printf("result: %u\n", result);
+    cdrom_image_backend_log("result: %u\n", result);
     if (result != FR_OK)
         return 0;
 
     FSIZE_t len = f_size(&fp);
-    printf("file size: %u", len);
+    cdrom_image_backend_log("file size: %u", len);
 
     success = 0;
     /* while (f_gets(buf, sizeof buf, &fp)) { */
     /*     puts(buf); */
     /* } */
     /* int err = f_error(&fp); */
-    /* printf("error: %u", err); */
+    /* cdrom_image_backend_log("error: %u", err); */
     /* return 0; */
     for (;;) {
         line = buf;
@@ -961,11 +961,11 @@ cdi_load_cue(cd_img_t *cdi, const char *cuefile)
         //if (feof(fp) || fgets(buf, sizeof(buf), fp) == NULL || ferror(fp))
 
         if(f_eof(&fp)) {
-           printf("eof\n");
+           cdrom_image_backend_log("eof\n");
            break;
         } 
         if (f_gets(buf, sizeof(buf), &fp) == NULL) {
-            printf("no more read\n");
+            cdrom_image_backend_log("no more read\n");
             break;        
         }
         puts(buf);
@@ -984,7 +984,7 @@ cdi_load_cue(cd_img_t *cdi, const char *cuefile)
         }
 
         success = cdi_cue_get_keyword(&command, &line);
-        printf("command: %s\n", command);
+        cdrom_image_backend_log("command: %s\n", command);
 
         if (!strcmp(command, "TRACK")) {            
             if (can_add_track) {                            
@@ -1132,7 +1132,7 @@ cdi_load_cue(cd_img_t *cdi, const char *cuefile)
             putchar('7');
             if (error) {
 /* #ifdef ENABLE_CDROM_IMAGE_BACKEND_LOG */
-                printf("CUE: cannot open fille '%s' in cue sheet!\n",
+                cdrom_image_backend_log("CUE: cannot open fille '%s' in cue sheet!\n",
                                         filename);
 /* #endif */
                 if (trk.file != NULL) {

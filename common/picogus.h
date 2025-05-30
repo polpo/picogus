@@ -53,22 +53,33 @@ static const char *modenames[9] = {
 #define MODE_TANDYPORT  0x08 // Tandy Base port
 #define MODE_CMSPORT    0x09 // CMS Base port
 #define MODE_JOYEN      0x0f // enable joystick
+
 #define MODE_GUSBUF     0x10 // Audio buffer size
 #define MODE_GUSDMA     0x11 // DMA interval
 #define MODE_GUS44K     0x12 // Force 44k
+
 #define MODE_WTVOL      0x20 // Wavetable mixer volume
 #define MODE_MPUDELAY   0x21 // MPU sysex delay
 #define MODE_MPUFAKE    0x22 // MPU fake all notes off
+
 #define MODE_OPLWAIT    0x30 // Adlib speed sensitive fix
+
 #define MODE_MOUSEPORT  0x40 // Mouse Base port
 #define MODE_MOUSEPROTO 0x41 // Mouse protocol
 #define MODE_MOUSERATE  0x42 // Mouse report rate
 #define MODE_MOUSESEN   0x43 // Mouse sensitivity
+
 #define MODE_NE2KPORT   0x50 // NE2000 Base port
 #define MODE_WIFISSID   0x51 // WiFi SSID
 #define MODE_WIFIPASS   0x52 // WiFi password
 #define MODE_WIFIAPPLY  0x53 // apply WiFi settings
 #define MODE_WIFISTAT   0x54 // WiFi status
+
+#define MODE_CDPORT     0x60 // CD base port
+#define MODE_CDSTATUS   0x61 // Get CD image command status
+#define MODE_CDIMAGES   0x62 // List CD images
+#define MODE_CDLOAD     0x63 // Load CD image or get loaded image
+#define MODE_CDSELECT   0x64 // Select next/prev loaded image
 
 #define MODE_DEFAULTS   0xE0 // Select reset to defaults register
 #define MODE_SAVE       0xE1 // Select save settings register

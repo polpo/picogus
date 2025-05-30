@@ -73,6 +73,9 @@ typedef struct Settings {
         char ssid[33];
         char password[64];
     } WiFi;
+    struct {
+        uint16_t basePort;
+    } CD;
 } Settings;
 
 

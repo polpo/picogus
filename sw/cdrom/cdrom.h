@@ -75,6 +75,23 @@ extern "C" {
 /* To shut up the GCC compilers. */
 struct cdrom;
 
+typedef enum
+{
+    CD_COMMAND_NONE,
+    CD_COMMAND_IMAGE_LOAD,
+    CD_COMMAND_IMAGE_LOAD_INDEX,
+    CD_COMMAND_IMAGE_EJECT,
+    CD_COMMAND_IMAGE_LIST
+} cdrom_image_command_t;
+
+typedef enum
+{
+    CD_STATUS_ERROR = -1,
+    CD_STATUS_IDLE,
+    CD_STATUS_BUSY,
+    CD_STATUS_READY,
+} cdrom_image_status_t;
+
 typedef struct subchannel_t {
     uint8_t attr;
     uint8_t track;
@@ -134,9 +151,10 @@ typedef struct cdrom {
 
 
     uint8_t media_changed;        
-    uint8_t req_image_load;
+    cdrom_image_command_t image_command;
+    cdrom_image_status_t image_status;
+    uint8_t image_data;
     uint8_t disk_loaded;
-
 
     uint8_t cd_status; /* Struct variable reserved for
                           media status. */
@@ -149,8 +167,9 @@ typedef struct cdrom {
     int   is_dir;
     void *priv;
 
-    char image_path[1024];
-    //char prev_image_path[1024];
+    char **image_list;
+    int image_count;
+    char image_path[256];
 
     uint32_t sound_on;
     uint32_t cdrom_capacity;

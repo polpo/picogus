@@ -32,6 +32,8 @@
 
 #include "msc_app.h"
 
+#include "cdrom_image_manager.h"
+extern cdrom_t cdrom[CDROM_NUM];
 
 //------------- Elm Chan FatFS -------------//
 static FATFS fatfs[CFG_TUH_DEVICE_MAX]; // for simplicity only support 1 LUN per device
@@ -89,19 +91,22 @@ static bool inquiry_complete_cb(uint8_t dev_addr, tuh_msc_complete_data_t const 
   if ( f_mount(&fatfs[drive_num], drive_path, 1) != FR_OK )
   {
     puts("mount failed");
+    return false;
   }
 
   // change to newly mounted drive
   if (f_chdir(drive_path) != FR_OK) {
     puts("chdir failed");
+    return false;
   }
 
   // print the drive label
-//  char label[34];
-//  if ( FR_OK == f_getlabel(drive_path, label, NULL) )
-//  {
-//    puts(label);
-//  }
+  uint32_t serial;
+  if ( FR_OK != f_getlabel(drive_path, NULL, &serial) ) {
+      return false;
+  }
+  cdman_set_serial(serial);
+  /* cdman_load_image_index(&cdrom[0], 1); */
 
   return true;
 }
@@ -124,6 +129,8 @@ void tuh_msc_umount_cb(uint8_t dev_addr)
   drive_path[0] += drive_num;
 
   f_unmount(drive_path);
+
+  cdman_unload_image(&cdrom[0]);
 
 //  if ( phy_disk == f_get_current_drive() )
 //  { // active drive is unplugged --> change to other drive

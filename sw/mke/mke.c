@@ -60,6 +60,7 @@ Data    (input)     = base + 2  (base)
 
 #include <stdio.h>
 
+#define mke_log(fmt, ...)
 
 #define MKE_STATUS_FIFO_SIZE    256
 #define MKE_DATA_FIFO_SIZE    16
@@ -95,7 +96,7 @@ void MKE_COMMAND(uint8_t value) {
     }
 
     if(mke.command_buffer[0] == CMD1_ABORT) {
-        printf("CMD_ABORT\n");
+        mke_log("CMD_ABORT\n");
         cdrom_fifo_clear(&cdrom[0].info_fifo);
         mke.command_buffer[0]=0;
         mke.command_buffer_pending=7;
@@ -106,13 +107,13 @@ void MKE_COMMAND(uint8_t value) {
         switch(mke.command_buffer[0]) { 
             case 06: //TRAY OUT
                 cdrom_fifo_clear(&cdrom[0].info_fifo);
-                printf("TRAY OUT\n");
+                mke_log("TRAY OUT\n");
                 cdrom_output_status(&cdrom[0]);
                 mke.tray_open=true;
                 break;
             case 07: //TRAY IN
                 cdrom_fifo_clear(&cdrom[0].info_fifo);                
-                printf("TRAY IN\n");
+                mke_log("TRAY IN\n");
                 cdrom_output_status(&cdrom[0]);                                
                 mke.tray_open=false;
                 break;
@@ -137,15 +138,15 @@ void MKE_COMMAND(uint8_t value) {
                 break;
             case CMD1_SETMODE: //Returns 1
                 cdrom_fifo_clear(&cdrom[0].info_fifo);                                                                            
-                printf("CMD: SET MODE:");
+                mke_log("CMD: SET MODE:");
                 for(i=0;i<6;i++) {
-                    printf("%02x ",mke.command_buffer[i+1]);
+                    mke_log("%02x ",mke.command_buffer[i+1]);
                 }
-                printf("\n");                
+                mke_log("\n");                
                 cdrom_output_status(&cdrom[0]);
                 break;
             case CMD1_GETMODE://6
-                printf("GET MODE\n");
+                mke_log("GET MODE\n");
                 uint8_t mode[5] = {[1] = 0x08};
                 cdrom_fifo_write_multiple(&cdrom[0].info_fifo, mode, 5);
                 cdrom_output_status(&cdrom[0]);
@@ -155,51 +156,51 @@ void MKE_COMMAND(uint8_t value) {
                 cdrom_output_status(&cdrom[0]);
                 break;
             case CMD1_CAPACITY://6
-                printf("DISK CAPACITY\n");
+                mke_log("DISK CAPACITY\n");
                 cdrom_disc_capacity(&cdrom[0], (uint8_t *)&x);
                 cdrom_fifo_write_multiple(&cdrom[0].info_fifo, x, 5);
                 cdrom_output_status(&cdrom[0]);
                 break;
             case CMD1_DISKINFO: //7
-                printf("DISK INFO\n");
+                mke_log("DISK INFO\n");
                 cdrom_disc_info(&cdrom[0], (uint8_t *)&x);
                 cdrom_fifo_write_multiple(&cdrom[0].info_fifo, x, 6);
                 /*
                 for(i=0;i<6;i++) {
-                    printf("%02x ",x[i]);
+                    mke_log("%02x ",x[i]);
                     cdrom_fifo_write(&cdrom[0].info_fifo,x[i]);
                 }
-                printf("\n");
+                mke_log("\n");
                 */
                 cdrom_output_status(&cdrom[0]);
                 break;
             case CMD1_READTOC:
                 cdrom_fifo_clear(&cdrom[0].info_fifo);
                 /*
-                printf("READ TOC:");  
+                mke_log("READ TOC:");  
                 for(i=0;i<6;i++) {
-                    printf("%02x ",mke.command_buffer[i+1]);
+                    mke_log("%02x ",mke.command_buffer[i+1]);
                 }
-                printf(" | ");                                
+                mke_log(" | ");                                
                 */
                 cdrom_read_toc(&cdrom[0],(uint8_t *)&x,mke.command_buffer[2]);                
                 cdrom_fifo_write_multiple(&cdrom[0].info_fifo, x, 8);
                 /*
                 for(i=0;i<8;i++) {
-                    printf("%02x ",x[i]);
+                    mke_log("%02x ",x[i]);
                     cdrom_fifo_write(&cdrom[0].info_fifo,x[i]);
                 }
                 */
-                /* printf("\n"); */
+                /* mke_log("\n"); */
                 cdrom_output_status(&cdrom[0]);
                 break;
             case CMD1_PLAY_MSF:
                 cdrom_fifo_clear(&cdrom[0].info_fifo);                                                                                            
-                printf("PLAY MSF:");  
+                mke_log("PLAY MSF:");  
                 for(i=0;i<6;i++) {
-                    printf("%02x ",mke.command_buffer[i+1]);
+                    mke_log("%02x ",mke.command_buffer[i+1]);
                 }
-                printf("\n");                
+                mke_log("\n");                
                 cdrom_audio_playmsf(&cdrom[0],
                     mke.command_buffer[1],
                     mke.command_buffer[2],
@@ -212,30 +213,30 @@ void MKE_COMMAND(uint8_t value) {
                 break;            
             case CMD1_SEEK :
                 cdrom_fifo_clear(&cdrom[0].info_fifo);                                                                                                
-                printf("SEEK MSF:");  //TODO: DOES THIS IMPACT CURRENT PLAY LENGTH?
+                mke_log("SEEK MSF:");  //TODO: DOES THIS IMPACT CURRENT PLAY LENGTH?
                 for(i=0;i<6;i++) {
-                    printf("%02x ",mke.command_buffer[i+1]);
+                    mke_log("%02x ",mke.command_buffer[i+1]);
                 }
                 cdrom_seek(&cdrom[0],mke.command_buffer[1],mke.command_buffer[2],mke.command_buffer[3]);
                 cdrom_output_status(&cdrom[0]);
                 break;            
             case CMD1_SESSINFO:
                 cdrom_fifo_clear(&cdrom[0].info_fifo);                                                                                                                
-                printf("CMD: READ SESSION INFO\n");
+                mke_log("CMD: READ SESSION INFO\n");
                 uint8_t session_info[6] = {0};
                 cdrom_fifo_write_multiple(&cdrom[0].info_fifo, session_info, 6);
                 cdrom_output_status(&cdrom[0]);
                 break;
             case CMD1_READ_UPC:
                 cdrom_fifo_clear(&cdrom[0].info_fifo);
-                printf("CMD: READ UPC\n");
+                mke_log("CMD: READ UPC\n");
                 uint8_t upc[8] = {[0] = 80};
                 cdrom_fifo_write_multiple(&cdrom[0].info_fifo, upc, 8);
                 cdrom_output_status(&cdrom[0]);
                 break;
             case CMD1_READ_ERR:
                 cdrom_fifo_clear(&cdrom[0].info_fifo);                
-                printf("CMD: READ ERR\n");                
+                mke_log("CMD: READ ERR\n");                
                 cdrom_read_errors(&cdrom[0],(uint8_t *)x);
                 cdrom_fifo_write_multiple(&cdrom[0].info_fifo, x, 8);
                 cdrom_output_status(&cdrom[0]);
@@ -245,7 +246,7 @@ void MKE_COMMAND(uint8_t value) {
                 SB2CD Expects 12 bytes, but drive only returns 11.
                 */
                 cdrom_fifo_clear(&cdrom[0].info_fifo);                
-                printf("CMD: READ VER\n");                                
+                mke_log("CMD: READ VER\n");                                
                 uint8_t ver[10] = "CR-5630.75";
                 cdrom_fifo_write_multiple(&cdrom[0].info_fifo, ver, 10);
                 cdrom_output_status(&cdrom[0]);
@@ -255,7 +256,7 @@ void MKE_COMMAND(uint8_t value) {
                 cdrom_output_status(&cdrom[0]);                
                 break;
             default:
-                printf("MKE: Unknown Commnad [%02x]\n",mke.command_buffer[0]);
+                mke_log("MKE: Unknown Commnad [%02x]\n",mke.command_buffer[0]);
         }
         mke.command_buffer[0]=0;
     }
@@ -268,10 +269,10 @@ void MKE_COMMAND(uint8_t value) {
 
 void MKE_WRITE(uint16_t address, uint8_t value) {    
     if(mke.enable_register && ((address & 0xF) != 3)) {
-        //printf("Ignore Write Unit %u\n",mke.enable_register);
+        //mke_log("Ignore Write Unit %u\n",mke.enable_register);
         return;
     }
-    //printf("MKE WRITE: %02x => %03x\n",value,address);
+    //mke_log("MKE WRITE: %02x => %03x\n",value,address);
     switch(address & 0xF) {
         case 0:
             MKE_COMMAND(value);
@@ -279,36 +280,37 @@ void MKE_WRITE(uint16_t address, uint8_t value) {
         case 1:            
             mke.data_select=value;
             break;
+        /*
         case 2:
             switch(value) {
                 case 1:
                     sprintf(cdrom[0].image_path,"MECH2_16B.CUE");
                     break;
                 case 2:
-                    sprintf(cdrom[0].image_path,"MOC1.cue");
+                    sprintf(cdrom[0].image_path,"descent-ii.cue");
                     break;
-                /*
                 case 3:
-                    sprintf(cdrom[0].image_path,"war2.cue");
+                    sprintf(cdrom[0].image_path,"Loom (USA).cue");
                     break;
                 case 4:
-                    sprintf(cdrom[0].image_path,"myst.iso");
+                    sprintf(cdrom[0].image_path,"MYST.cue");
                     break;
                 case 5:
                     sprintf(cdrom[0].image_path,"megarace.iso");
                     break;
-                */
                 default:
                     sprintf(cdrom[0].image_path,"");
                     break;
             }                        
-            cdrom[0].req_image_load=1;
+            cdrom[0].req_command = CD_COMMAND_IMAGE_LOAD;
                        printf("loaded %s\n", cdrom[0].image_path); 
             break;
+        */
         case 3:
             mke.enable_register=value;
             break;
         default:
+            printf("w %03x %02x\n", address, value);
             break;
     }    
 }
@@ -349,6 +351,7 @@ uint8_t MKE_READ(uint16_t address) {
                 return mke.enable_register;
                 break;
         default:
+            /* mke_log("MKE Unknown Read Address: %03x\n",address); */
             printf("MKE Unknown Read Address: %03x\n",address);
             break;
     }
@@ -357,11 +360,11 @@ uint8_t MKE_READ(uint16_t address) {
       
 
 
-void mke_init() {        
+void mke_init() {
     cdrom_fifo_init(&cdrom[0].data_fifo,2048+2048+32);
     cdrom_fifo_init(&cdrom[0].info_fifo,32);
     cdrom_audio_fifo_init(&cdrom[0]);
-    printf("FIFOS, INFO=%p   DATA=%p\n",cdrom[0].info_fifo,cdrom[0].data_fifo);
+    mke_log("FIFOS, INFO=%p   DATA=%p\n",cdrom[0].info_fifo,cdrom[0].data_fifo);
 
     mke.command_buffer_pending=7;
     cdrom[0].sound_on=1;

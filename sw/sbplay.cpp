@@ -166,9 +166,10 @@ void play_adlib() {
     struct audio_buffer_pool *ap = init_audio();
 
     // uint8_t sb_samples[512] = {128};
-    //
     audio_fifo_t* sb_fifo = sbdsp_fifo_peek();
+#ifdef CDROM
     audio_fifo_t* cd_fifo = cdrom_audio_fifo_peek(&cdrom[0]);
+#endif
 
     // int16_t sb_sample = 0;
     uint32_t sb_ratio = 0;
@@ -205,7 +206,7 @@ void play_adlib() {
         int32_t accum[2] = {0};
         for (int i = 0; i < SAMPLES_PER_BUFFER; ++i) {
             accum[0] = accum[1] = 0;
-
+#ifdef CDROM
             if (!cd_left) {
                 // if (cdrom_audio_callback_old(&cdrom[0], cd_samples, 1024)) {
                 if (cdrom_audio_callback(&cdrom[0], AUDIO_FIFO_SIZE) && fifo_take_samples(cd_fifo, AUDIO_FIFO_SIZE)) {
@@ -221,6 +222,7 @@ void play_adlib() {
                 cd_index = (cd_index + 2) & AUDIO_FIFO_BITS;
                 cd_left -= 2;
             }
+#endif
             /*
             uint32_t opl_index = (opl_pos >> FRAC_BITS);
             // uint32_t opl_index = i;
@@ -284,7 +286,7 @@ void play_adlib() {
                     sb_state = tmp_state;
                 } else {
                     if (sb_state == FIFO_STATE_RUNNING) {
-                    // putchar('U');
+                    putchar('U');
                     }
                     // printf("%u\n", sb_fifo->samples_in_fifo);
                 }

@@ -1,16 +1,8 @@
-obj = pgusinit.obj
-bin = pgusinit.exe
+CC = wcl
+CFLAGS = -bcl=dos -za99 -os
 
-CC = wcc
-CFLAGS = -za99
-LD = wlink
+pgusinit.exe: pgusinit.c
+	$(CC) $(CFLAGS) $<
 
-$(bin): $(obj)
-	$(LD) name $@ file { $(obj) }
-
-.c.obj:
-	$(CC) -fo=$@ $(CFLAGS) $<
-
-clean: .symbolic
-	del *.obj
-	del $(bin)
+clean:
+	rm -f pgusinit.o pgusinit.exe

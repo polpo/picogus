@@ -29,9 +29,9 @@
 #include "86box_compat.h"
 #include "cdrom.h"
 #include "cdrom_image.h"
+#include "cdrom_image_manager.h"
 #include "pico/multicore.h"
 #include "hardware/structs/timer.h"
-
 
 
 /* The addresses sent from the guest are absolute, ie. a LBA of 0 corresponds to a MSF of 00:00:00. Otherwise, the counter displayed by the guest is wrong:
@@ -139,27 +139,43 @@ bcd2bin(uint8_t x)
 }
 */
 
-void cdrom_tasks(cdrom_t *dev) {    
-    if(dev->req_image_load) {   
-        if(dev->disk_loaded) {
-            dev->disk_loaded=0;
-            dev->media_changed=1;
+void cdrom_tasks(cdrom_t *dev) {
+    // Will almost always be CD_COMMAND_NONE, so use __builtin_expect to tell the compiler
+    switch (__builtin_expect(dev->image_command, CD_COMMAND_NONE)) {
+    case CD_COMMAND_NONE:
+        cdrom_read_data(dev);
+        break;
+    case CD_COMMAND_IMAGE_LIST:
+        dev->image_list = cdman_list_images(&dev->image_count);
+        dev->image_command = CD_COMMAND_NONE;
+        dev->image_status = dev->image_list ? CD_STATUS_READY : CD_STATUS_ERROR;
+        break;
+    case CD_COMMAND_IMAGE_LOAD_INDEX:
+        cdman_load_image_index(dev, dev->image_data);
+        break;
+    case CD_COMMAND_IMAGE_LOAD:
+        printf("loading");
+        if (dev->disk_loaded) {
+            dev->disk_loaded = 0;
+            dev->media_changed = 1;
             cdrom_image_close(dev);
             printf("Disk Removed.\n");     
-            cdrom_error(dev,0x11);   //media changed
+            cdrom_error(dev, 0x11);   //media changed
         }
-        if(dev->image_path[0]) {
+        if (dev->image_path[0]) {
             printf("Opening %s...",dev->image_path);
-            cdrom_image_open(dev,dev->image_path);
+            if (cdrom_image_open(dev,dev->image_path)) {
+                dev->image_status = CD_STATUS_ERROR;
+                break;
+            }
             printf("Done.\n");
-            dev->disk_loaded=1;
-            dev->media_changed=1;
-            dev->req_image_load=0;
-            cdrom_error(dev,0x11);   //media changed
+            dev->disk_loaded = 1;
+            dev->media_changed = 1;
+            cdrom_error(dev, 0x11);   //media changed
         }                    
-    }
-    else {        
-        cdrom_read_data(dev);
+        dev->image_command = CD_COMMAND_NONE;
+        dev->image_status = CD_STATUS_IDLE;
+        break;
     }
 }
 
@@ -651,6 +667,7 @@ void __inline cdrom_read_data(cdrom_t *dev) {
     TODO, need to handle  when multiple blocks are requested.
     */   
     if(dev->req_total) {
+    /* while(dev->req_total) { */
         if(cdrom_fifo_level(&dev->data_fifo) >= 2048) return;//need to be empty.        
         pos = MSFtoLBA(dev->req_m,dev->req_s,dev->req_f) - 150;    
         pos += dev->req_cur;

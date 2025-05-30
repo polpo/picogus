@@ -75,13 +75,17 @@ cms_buffer_t opl_buffer = { {0}, 0, 0 };
 #endif
 
 #ifdef CDROM
+static uint16_t cdrom_port_test;
 extern "C" void MKE_WRITE(uint16_t address, uint8_t value);
 extern "C" uint8_t MKE_READ(uint16_t address);
 extern "C" void mke_init();
 
 #define CDROM_NUM 1
 #include "cdrom/cdrom.h"
+#include "cdrom/cdrom_image_manager.h"
 cdrom_t cdrom[CDROM_NUM];
+
+static uint32_t cur_read_idx;
 #endif
 
 #ifdef SOUND_GUS
@@ -214,6 +218,26 @@ __force_inline void select_picogus(uint8_t value) {
     case MODE_WIFIAPPLY:
     case MODE_WIFISTAT:
         break;
+    case MODE_CDPORT: // CMS Base port
+        basePort_low = 0;
+        break;
+    case MODE_CDSTATUS:
+        break;
+    case MODE_CDIMAGES:
+#ifdef CDROM
+        if (cdrom[0].image_status != CD_STATUS_READY) {
+            cdrom[0].image_status = CD_STATUS_BUSY;
+            cdrom[0].image_command = CD_COMMAND_IMAGE_LIST;
+            puts("cdimages start");
+        }
+        puts("cdimages read");
+        cur_read = 0;
+        cur_read_idx = 0;
+#endif
+        break;
+    case MODE_CDLOAD:
+    case MODE_CDSELECT:
+        break;
     case MODE_SAVE: // Select save settings register
     case MODE_REBOOT: // Select reboot register
     case MODE_DEFAULTS: // Select reset to defaults register
@@ -238,6 +262,7 @@ __force_inline void write_picogus_low(uint8_t value) {
     case MODE_TANDYPORT: // Tandy Base port
     case MODE_CMSPORT: // CMS Base port
     case MODE_MOUSEPORT:  // USB Mouse port (0 - disabled)
+    case MODE_CDPORT:  // USB Mouse port (0 - disabled)
         basePort_low = value;
         break;
     case MODE_MOUSESEN:  // USB Mouse Sensitivity (8.8 fixedpoint)
@@ -357,6 +382,21 @@ __force_inline void write_picogus_high(uint8_t value) {
         multicore_fifo_push_blocking(FIFO_WIFI_STATUS);
 #endif
         break;
+    case MODE_CDPORT: // CD Base port
+        settings.CD.basePort = (value || basePort_low) ? ((value << 8) | basePort_low) : 0xFFFF;
+#ifdef CDROM
+        cdrom_port_test = settings.CD.basePort >> 4;
+#endif
+        break;
+#ifdef CDROM
+    case MODE_CDLOAD: // Load CD image
+        cdrom[0].image_data = value;
+        cdrom[0].image_status = CD_STATUS_BUSY;
+        cdrom[0].image_command = CD_COMMAND_IMAGE_LOAD_INDEX;
+        break;
+    case MODE_CDSELECT:
+        break;
+#endif
     // For multifw
     case MODE_BOOTMODE:
         settings.startupMode = value;
@@ -400,6 +440,8 @@ __force_inline uint8_t read_picogus_low(void) {
         return settings.Mouse.sensitivity & 0xFF;
     case MODE_NE2KPORT:  // NE2000 Base port (0 - disabled)
         return settings.NE2K.basePort == 0xFFFF ? 0 : (settings.NE2K.basePort & 0xFF);
+    case MODE_CDPORT: // SB Base port
+        return settings.CD.basePort == 0xFFFF ? 0 : (settings.CD.basePort & 0xFF);
     default:
         return 0x0;
     }
@@ -471,6 +513,29 @@ __force_inline uint8_t read_picogus_high(void) {
         return 0;
 #endif
         break;
+    case MODE_CDPORT: // SB Base port
+        return settings.CD.basePort == 0xFFFF ? 0 : (settings.CD.basePort >> 8);
+#ifdef CDROM
+    case MODE_CDSTATUS:
+        printf("cdstatus %x\n", cdrom[0].image_status);
+        return cdrom[0].image_status;
+    case MODE_CDIMAGES:
+        if (cur_read_idx == cdrom[0].image_count) { // If end of the images
+            cur_read_idx = cur_read = 0;
+            cdrom[0].image_status = CD_STATUS_IDLE;
+            cdman_list_images_free(cdrom[0].image_list, cdrom[0].image_count);
+            return 0x04; // EOT
+        }
+        ret = cdrom[0].image_list[cur_read_idx][cur_read++];
+        putchar(ret);
+        if (ret == 0) { // Null terminated
+            ++cur_read_idx;
+            cur_read = 0;
+        }
+        return ret;
+    case MODE_CDLOAD: // Load CD image
+        return cdman_current_image_index();
+#endif
     case MODE_HWTYPE: // Hardware version
         return BOARD_TYPE;
     case MODE_FLASH:
@@ -503,7 +568,7 @@ void processSettings(void) {
     settings.startupMode = INVALID_MODE;
 #endif
 #ifdef SOUND_SB
-    sb_port_test = settings.SB.basePort >> 5;
+    sb_port_test = settings.SB.basePort >> 4;
 #endif
 #ifdef SOUND_GUS
     gus_port_test = settings.GUS.basePort >> 4 | 0x10;
@@ -515,6 +580,10 @@ void processSettings(void) {
     sermouse_set_protocol(settings.Mouse.protocol);
     sermouse_set_report_rate_hz(settings.Mouse.reportRate);
     sermouse_set_sensitivity(settings.Mouse.sensitivity);
+#endif
+#ifdef CDROM
+    cdrom_port_test = settings.CD.basePort >> 4;
+    printf("cdrom base port: %x\n", settings.CD.basePort);
 #endif
     if (BOARD_TYPE == PICOGUS_2) {
         m62429->setVolume(M62429_BOTH, settings.Global.waveTableVolume);
@@ -560,7 +629,7 @@ __force_inline void handle_iow(void) {
     } else // if follows down below
 #endif // SOUND_GUS
 #ifdef SOUND_SB
-    if ((port >> 5) == sb_port_test) {      
+    if ((port >> 4) == sb_port_test) {
         switch (port - settings.SB.basePort) {
         // OPL ports
         case 0x8:
@@ -581,11 +650,6 @@ __force_inline void handle_iow(void) {
             };
             break;
         // DSP ports
-        case 0x10 ... 0x13:
-            pio_sm_put(pio0, IOW_PIO_SM, IO_WAIT);
-            // putchar('w');
-            MKE_WRITE(port, iow_read & 0xFF);
-            break; 
         default:
             pio_sm_put(pio0, IOW_PIO_SM, IO_WAIT);                        
             sbdsp_process();
@@ -595,6 +659,13 @@ __force_inline void handle_iow(void) {
         } 
     } else // if follows down below
 #endif // SOUND_SB
+#ifdef CDROM
+    if ((port >> 4) == cdrom_port_test) {      
+        pio_sm_put(pio0, IOW_PIO_SM, IO_WAIT);
+        // putchar('w');
+        MKE_WRITE(port, iow_read & 0xFF);
+    } else // if follows down below
+#endif
 #if defined(SOUND_OPL)
     if (port == settings.SB.oplBasePort) {
         // Fast write
@@ -745,7 +816,7 @@ __force_inline void handle_ior(void) {
     } else // if follows down below
 #endif
 #if defined(SOUND_SB)
-    if ((port >> 5) == sb_port_test) {
+    if ((port >> 4) == sb_port_test) {
         pio_sm_put(pio0, IOR_PIO_SM, IO_WAIT);
         switch (port - settings.SB.basePort) {
         case 0x8:
@@ -755,17 +826,20 @@ __force_inline void handle_ior(void) {
             }
             pio_sm_put(pio0, IOR_PIO_SM, IOR_SET_VALUE | OPL_Pico_PortRead(OPL_REGISTER_PORT));
             break;
-        case 0x10 ... 0x13:
-            pio_sm_put(pio0, IOW_PIO_SM, IO_WAIT);
-            // putchar('r');
-            pio_sm_put(pio0, IOR_PIO_SM, IOR_SET_VALUE | MKE_READ(port));        
-            break; 
         default:
             sbdsp_process();
             pio_sm_put(pio0, IOR_PIO_SM, IOR_SET_VALUE | sbdsp_read(port & 0xF));        
             sbdsp_process();
             break;
         }
+    } else // if follows down below
+#endif
+#if defined(CDROM)
+    if ((port >> 4) == cdrom_port_test) {
+    // if ((port >> 4) == 0x23) {
+        pio_sm_put(pio0, IOR_PIO_SM, IO_WAIT);
+        pio_sm_put(pio0, IOR_PIO_SM, IOR_SET_VALUE | MKE_READ(port));
+        // putchar('r');
     } else // if follows down below
 #endif
 #if defined(SOUND_OPL)
