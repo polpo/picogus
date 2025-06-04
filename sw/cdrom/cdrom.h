@@ -147,9 +147,6 @@ typedef struct cdrom {
     volatile uint8_t req_cur;
     volatile uint8_t req_total;
 
-    uint8_t req_buf[2050];//wasteful need to consolidate
-
-
     uint8_t media_changed;        
     cdrom_image_command_t image_command;
     cdrom_image_status_t image_status;

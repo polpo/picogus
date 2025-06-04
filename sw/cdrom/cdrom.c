@@ -671,13 +671,10 @@ void __inline cdrom_read_data(cdrom_t *dev) {
         if(cdrom_fifo_level(&dev->data_fifo) >= 2048) return;//need to be empty.        
         pos = MSFtoLBA(dev->req_m,dev->req_s,dev->req_f) - 150;    
         pos += dev->req_cur;
-        dev->ops->read_sector(dev, CD_READ_DATA, dev->req_buf, pos);
-        /*
-        for(int x=0;x<2048;x++) {
-            cdrom_fifo_write(&dev->data_fifo,dev->req_buf[x]);
-        }
-        */
-        cdrom_fifo_write_multiple(&dev->data_fifo, dev->req_buf, 2048);
+        // Read CD sector directly from fatfs into data fifo - note this assumes
+        // 2048 byte sectors
+        dev->ops->read_sector(dev, CD_READ_DATA, dev->data_fifo.data + dev->data_fifo.tail, pos);
+        dev->data_fifo.tail = (dev->data_fifo.tail + 2048) & 4095;
         dev->req_cur++;
         if(dev->req_cur == dev->req_total) {
             cdrom_output_status(dev);

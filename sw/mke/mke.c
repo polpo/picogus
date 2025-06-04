@@ -122,7 +122,8 @@ void MKE_COMMAND(uint8_t value) {
                 cdrom[0].req_s=mke.command_buffer[2];
                 cdrom[0].req_f=mke.command_buffer[3];
                 cdrom[0].req_cur=0;            
-                cdrom[0].req_total=mke.command_buffer[6];                                                
+                cdrom[0].req_total=mke.command_buffer[6];
+                /* printf("r %u ", cdrom[0].req_total); */
                 cdrom_fifo_clear(&cdrom[0].info_fifo);                                                                                            
                 break;
             case CMD1_READSUBQ:                
@@ -361,7 +362,7 @@ uint8_t MKE_READ(uint16_t address) {
 
 
 void mke_init() {
-    cdrom_fifo_init(&cdrom[0].data_fifo,2048+2048+32);
+    cdrom_fifo_init(&cdrom[0].data_fifo,2048+2048);
     cdrom_fifo_init(&cdrom[0].info_fifo,32);
     cdrom_audio_fifo_init(&cdrom[0]);
     mke_log("FIFOS, INFO=%p   DATA=%p\n",cdrom[0].info_fifo,cdrom[0].data_fifo);
