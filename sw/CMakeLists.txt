@@ -61,6 +61,7 @@ add_compile_definitions(
     PICO_DEFAULT_UART=0
     PICO_DEFAULT_UART_TX_PIN=28
     PICO_DEFAULT_UART_RX_PIN=-1
+    PICO_DEFAULT_UART_BAUD_RATE=230400
     PICO_STDIO_USB_CONNECT_WAIT_TIMEOUT_MS=250
 )
 
@@ -234,6 +235,7 @@ function(build_sb TARGET_NAME MULTIFW)
         SOUND_SB=1
         SOUND_DSP=1
         CDROM=1
+        # SB_BUFFERLESS=1
     )
     target_sources(${TARGET_NAME} PRIVATE
         ${PICO_TINYUSB_PATH}/lib/fatfs/source/ff.c

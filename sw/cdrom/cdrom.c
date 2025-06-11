@@ -424,7 +424,7 @@ void cdrom_audio_fifo_init(cdrom_t *dev) {
     fifo_init(&dev->audio_fifo);
 }
 
-bool cdrom_audio_callback(cdrom_t *dev, uint32_t len) { // len is int
+bool cdrom_audio_callback(cdrom_t *dev, uint32_t len) {
     bool ret = true;
 
     if (dev->cd_status != CD_STATUS_PLAYING) {

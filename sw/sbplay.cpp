@@ -34,7 +34,9 @@ extern "C" void OPL_Pico_simple(int16_t *buffer, uint32_t nsamples);
 extern "C" void OPL_Pico_PortWrite(opl_port_t, unsigned int);
 
 #ifdef SOUND_SB
+#ifdef SB_BUFFERLESS
 extern int16_t sbdsp_sample();
+#else
 // extern uint8_t sbdsp_fifo_tx();
 // extern uint16_t sbdsp_fifo_tx(uint8_t *buffer, uint16_t len);
 // extern int16_t sbdsp_sample();
@@ -43,7 +45,8 @@ extern int16_t sbdsp_sample();
 extern uint16_t sbdsp_sample_rate();
 extern uint16_t sbdsp_muted();
 extern audio_fifo_t* sbdsp_fifo_peek();
-#endif
+#endif // SB_BUFFERLESS
+#endif // SOUND_SB
 #if defined(SOUND_SB) || defined(USB_MOUSE) || defined(SOUND_MPU)
 #include "pico_pic.h"
 #endif
@@ -165,8 +168,10 @@ void play_adlib() {
 
     struct audio_buffer_pool *ap = init_audio();
 
+#ifndef SB_BUFFERLESS
     // uint8_t sb_samples[512] = {128};
     audio_fifo_t* sb_fifo = sbdsp_fifo_peek();
+#endif
 #ifdef CDROM
     audio_fifo_t* cd_fifo = cdrom_audio_fifo_peek(&cdrom[0]);
 #endif
@@ -179,32 +184,33 @@ void play_adlib() {
     uint32_t sb_frac = 0;
     // uint32_t sb_sample_idx = 0x0;
     uint32_t sb_left = 0;
+
+#ifndef SB_BUFFERLESS
     uint32_t sb_state = FIFO_STATE_STOPPED;
+#endif
 
     uint32_t cd_left = 0;
     uint32_t cd_index = 0;
 
-    /*
     int16_t opl_samples[512] = {0};
     uint32_t opl_ratio = fixed_ratio(49716, 44100);
     printf("opl_ratio: %x ", opl_ratio);
     uint32_t opl_pos = 0;
     uint32_t opl_index = 0;
     uint32_t opl_sample_idx = 0x0;
-    */
 
     // int16_t cd_samples[1024] = {0};
 
-    bool opl_hi = false, opl_lo = false;
-
+    int32_t accum[2] = {0};
     for (;;) {
 
         // cdrom_audio_callback(&cdrom[0], cd_samples, 1024);
         struct audio_buffer *buffer = take_audio_buffer(ap, true);
         int16_t *samples = (int16_t *) buffer->buffer->bytes;
         // Do mixing with lerp
-        int32_t accum[2] = {0};
+#ifndef SB_BUFFERLESS
         for (int i = 0; i < SAMPLES_PER_BUFFER; ++i) {
+#endif
             accum[0] = accum[1] = 0;
 #ifdef CDROM
             if (!cd_left) {
@@ -212,6 +218,8 @@ void play_adlib() {
                 if (cdrom_audio_callback(&cdrom[0], AUDIO_FIFO_SIZE) && fifo_take_samples(cd_fifo, AUDIO_FIFO_SIZE)) {
                     cd_left = AUDIO_FIFO_SIZE;
                     // putchar('c');
+                } else {
+                    // putchar('f');
                 }
             }
             if (cd_left) {
@@ -223,7 +231,6 @@ void play_adlib() {
                 cd_left -= 2;
             }
 #endif
-            /*
             uint32_t opl_index = (opl_pos >> FRAC_BITS);
             // uint32_t opl_index = i;
             uint32_t opl_frac = opl_pos & FRAC_MASK;
@@ -236,6 +243,7 @@ void play_adlib() {
                 (!(opl_index & 0x100) && opl_sample_idx != 0x100)
             ) {
                 opl_sample_idx = (opl_index + 0x100) & 0x100;
+                /*
                 bool notfirst = false;
                 while (opl_buffer.tail != opl_buffer.head) {
                     if (!notfirst) {
@@ -248,6 +256,7 @@ void play_adlib() {
                     OPL_Pico_PortWrite((opl_port_t)cmd.addr, cmd.data);
                     ++opl_buffer.tail;
                 }
+                */
                 OPL_Pico_simple(opl_samples + opl_sample_idx, 256);
             }
             int32_t opl_sample = lerp_fixed(
@@ -256,20 +265,7 @@ void play_adlib() {
                 opl_frac);
             accum[0] += opl_samples[opl_index & 0x1ff];
             accum[1] += opl_samples[opl_index & 0x1ff];
-            */
-
-            /*
-            if (
-                sbdsp_fifo_level() >= 128 && (
-                ((sb_index & 0x80) && sb_sample_idx != 0x0) ||
-                (!(sb_index & 0x80) && sb_sample_idx != 0x80)
-            )) {
-                sb_ratio = fixed_ratio(sbdsp_sample_rate(), 44100);
-                sb_sample_idx = (sb_index + 0x80) & 0x80;
-                sbdsp_fifo_tx(sb_samples + sb_sample_idx, 128);
-            }
-            */
-            // int16_t sb_sample;
+#ifndef SB_BUFFERLESS
             if (!sb_left) {
                 // putchar('t');
                 uint32_t tmp_state = fifo_get_state(sb_fifo);
@@ -286,7 +282,7 @@ void play_adlib() {
                     sb_state = tmp_state;
                 } else {
                     if (sb_state == FIFO_STATE_RUNNING) {
-                    putchar('U');
+                        // putchar('U');
                     }
                     // printf("%u\n", sb_fifo->samples_in_fifo);
                 }
@@ -295,10 +291,6 @@ void play_adlib() {
                 sb_index = (sb_pos >> FRAC_BITS);
                 int16_t sb_sample;
                 if (sb_index_old != sb_index) {
-
-                    // fifo_take_samples(sb_fifo, 1);
-                    // if (fifo_take_samples(sb_fifo, 1)) {
-                    // }
                     sb_left--;
                 }
                 sb_index_old = sb_index;
@@ -314,23 +306,15 @@ void play_adlib() {
                     accum[1] += sb_sample;
                 }
             }
-
-
             samples[i << 1] = clamp16(accum[0]);
             samples[(i << 1) + 1] = clamp16(accum[1]);
         }
-
-        /* 
-        // bufferless SB
-        int16_t sb_sample = sbdsp_sample();
-        accum[0] += sb_sample;
-        accum[1] += sb_sample;
-
+        buffer->sample_count = SAMPLES_PER_BUFFER;
+#else // ifndef SB_BUFFERLESS
         samples[0] = clamp16(accum[0]);
         samples[1] = clamp16(accum[1]);
         buffer->sample_count = 1;
-        */
-        buffer->sample_count = SAMPLES_PER_BUFFER;
+#endif // ifndef SB_BUFFERLESS
         give_audio_buffer(ap, buffer);
 #ifdef USB_STACK
         // Service TinyUSB events

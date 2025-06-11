@@ -36,8 +36,8 @@
 extern cdrom_t cdrom[CDROM_NUM];
 
 //------------- Elm Chan FatFS -------------//
-static FATFS fatfs[CFG_TUH_DEVICE_MAX]; // for simplicity only support 1 LUN per device
-static volatile bool _disk_busy[CFG_TUH_DEVICE_MAX];
+static FATFS fatfs[CDROM_NUM]; // for simplicity only support 1 device
+static volatile bool _disk_busy[CDROM_NUM];
 
 // define the buffer to be place in USB/DMA memory with correct alignment/cache line size
 CFG_TUH_MEM_SECTION static struct {
@@ -47,7 +47,7 @@ CFG_TUH_MEM_SECTION static struct {
 
 bool msc_app_init(void)
 {
-  for(size_t i=0; i<CFG_TUH_DEVICE_MAX; i++) {
+  for(size_t i=0; i<CDROM_NUM; i++) {
     _disk_busy[i] = false;
   }
 
@@ -106,7 +106,7 @@ static bool inquiry_complete_cb(uint8_t dev_addr, tuh_msc_complete_data_t const 
       return false;
   }
   cdman_set_serial(serial);
-  /* cdman_load_image_index(&cdrom[0], 1); */
+  cdman_load_image_index(&cdrom[drive_num], 1);
 
   return true;
 }
@@ -115,7 +115,11 @@ static bool inquiry_complete_cb(uint8_t dev_addr, tuh_msc_complete_data_t const 
 void tuh_msc_mount_cb(uint8_t dev_addr)
 {
   printf("A MassStorage device is mounted\r\n");
-
+  if (dev_addr > 1) {
+      // Only handle a single drive for now
+      printf("Only a single USB drive is supported\n");
+      return;
+  }
   uint8_t const lun = 0;
   tuh_msc_inquiry(dev_addr, lun, &scsi_resp.inquiry, inquiry_complete_cb, 0);
 }
@@ -123,6 +127,11 @@ void tuh_msc_mount_cb(uint8_t dev_addr)
 void tuh_msc_umount_cb(uint8_t dev_addr)
 {
   printf("A MassStorage device is unmounted\r\n");
+  if (dev_addr > 1) {
+      // Only handle a single drive for now
+      printf("Only a single USB drive is supported\n");
+      return;
+  }
 
   uint8_t const drive_num = dev_addr-1;
   char drive_path[3] = "0:";
@@ -130,11 +139,11 @@ void tuh_msc_umount_cb(uint8_t dev_addr)
 
   f_unmount(drive_path);
 
-  cdman_unload_image(&cdrom[0]);
+  cdman_unload_image(&cdrom[drive_num]);
 
 //  if ( phy_disk == f_get_current_drive() )
 //  { // active drive is unplugged --> change to other drive
-//    for(uint8_t i=0; i<CFG_TUH_DEVICE_MAX; i++)
+//    for(uint8_t i=0; i<CDROM_NUM; i++)
 //    {
 //      if ( disk_is_ready(i) )
 //      {
@@ -248,5 +257,5 @@ DRESULT disk_ioctl (
       return RES_PARERR;
   }
 
-	return RES_OK;
+  return RES_OK;
 }

@@ -77,7 +77,7 @@ static const char *modenames[9] = {
 
 #define MODE_CDPORT     0x60 // CD base port
 #define MODE_CDSTATUS   0x61 // Get CD image command status
-#define MODE_CDIMAGES   0x62 // List CD images
+#define MODE_CDLIST     0x62 // List CD images
 #define MODE_CDLOAD     0x63 // Load CD image or get loaded image
 #define MODE_CDSELECT   0x64 // Select next/prev loaded image
 

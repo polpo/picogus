@@ -242,7 +242,7 @@ static bool print_cdimage_list(void) {
     uint8_t current_index = inp(DATA_PORT_HIGH);
     printf("Listing CD images on USB drive:\n");
     outp(CONTROL_PORT, 0xCC); // Knock on the door...
-    outp(CONTROL_PORT, MODE_CDIMAGES); // Select CD image list register
+    outp(CONTROL_PORT, MODE_CDLIST); // Select CD image list register
     delay(10);
     outp(CONTROL_PORT, 0xCC); // Knock on the door...
     outp(CONTROL_PORT, MODE_CDSTATUS); // Select CD image status register
@@ -262,7 +262,7 @@ static bool print_cdimage_list(void) {
         return false;
     }
     outp(CONTROL_PORT, 0xCC); // Knock on the door...
-    outp(CONTROL_PORT, MODE_CDIMAGES); // Select CD image list register
+    outp(CONTROL_PORT, MODE_CDLIST); // Select CD image list register
     char b[256], c, *p = b;
     uint8_t line = 1;
     while ((c = inp(DATA_PORT_HIGH)) != 4 /* ASCII EOT */) {
@@ -280,6 +280,21 @@ static bool print_cdimage_list(void) {
     }
     printf("Run \"pgusinit /cdload n\" to load the nth image in the above list.\n");
     return true;
+}
+
+
+static void print_cdimage_current(void) {
+    outp(CONTROL_PORT, 0xCC); // Knock on the door...
+    outp(CONTROL_PORT, MODE_FWSTRING); // Select firmware string register
+
+    char firmware_string[256] = {0};
+    for (uint8_t i = 0; i < 255; ++i) {
+        firmware_string[i] = inp(DATA_PORT_HIGH);
+        if (!firmware_string[i]) {
+            break;
+        }
+    }
+    printf("Firmware version: %s\n", firmware_string);
 }
 
 

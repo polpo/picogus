@@ -281,32 +281,6 @@ void MKE_WRITE(uint16_t address, uint8_t value) {
         case 1:            
             mke.data_select=value;
             break;
-        /*
-        case 2:
-            switch(value) {
-                case 1:
-                    sprintf(cdrom[0].image_path,"MECH2_16B.CUE");
-                    break;
-                case 2:
-                    sprintf(cdrom[0].image_path,"descent-ii.cue");
-                    break;
-                case 3:
-                    sprintf(cdrom[0].image_path,"Loom (USA).cue");
-                    break;
-                case 4:
-                    sprintf(cdrom[0].image_path,"MYST.cue");
-                    break;
-                case 5:
-                    sprintf(cdrom[0].image_path,"megarace.iso");
-                    break;
-                default:
-                    sprintf(cdrom[0].image_path,"");
-                    break;
-            }                        
-            cdrom[0].req_command = CD_COMMAND_IMAGE_LOAD;
-                       printf("loaded %s\n", cdrom[0].image_path); 
-            break;
-        */
         case 3:
             mke.enable_register=value;
             break;
