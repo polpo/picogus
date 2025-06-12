@@ -227,7 +227,8 @@ extern double  cdrom_seek_time(cdrom_t *dev);
 extern void    cdrom_stop(cdrom_t *dev);
 extern int     cdrom_is_pre(cdrom_t *dev, uint32_t lba);
 extern bool    cdrom_audio_callback(cdrom_t *dev, uint32_t len);
-extern int     cdrom_audio_callback_old(cdrom_t *dev, int16_t *output, int len);
+extern uint32_t cdrom_audio_callback_simple(cdrom_t *dev, int16_t *buffer, uint32_t len);
+// extern int     cdrom_audio_callback_old(cdrom_t *dev, int16_t *output, int len);
 // extern int     cdrom_audio_callback_add(cdrom_t *dev, int16_t *output, int len);
 
 extern uint8_t cdrom_audio_track_search(cdrom_t *dev, uint32_t pos, int type, uint8_t playbit);

@@ -23,8 +23,54 @@
 #include "mouse/sermouse.h"
 
 // #include <string.h>
+#ifdef CDROM
+#include "cdrom/cdrom.h"
+extern cdrom_t cdrom[CDROM_NUM];
+#include "pico/audio_i2s.h"
+#include "audio_fifo.h"
+#endif
 
 #include "pico_pic.h"
+
+#ifdef CDROM
+#define SAMPLES_PER_BUFFER 256
+
+struct audio_buffer_pool *init_audio() {
+
+    static audio_format_t audio_format = {
+            .sample_freq = 44100,
+            .format = AUDIO_BUFFER_FORMAT_PCM_S16,
+            .channel_count = 2,
+    };
+
+    static struct audio_buffer_format producer_format = {
+            .format = &audio_format,
+            .sample_stride = 4
+    };
+
+    struct audio_buffer_pool *producer_pool = audio_new_producer_pool(&producer_format, 2,
+                                                                      SAMPLES_PER_BUFFER); // todo correct size
+    bool __unused ok;
+    const struct audio_format *output_format;
+    struct audio_i2s_config config = {
+            .data_pin = PICO_AUDIO_I2S_DATA_PIN,
+            .clock_pin_base = PICO_AUDIO_I2S_CLOCK_PIN_BASE,
+            .dma_channel = 6,
+            .pio_sm = 3,
+    };
+
+    output_format = audio_i2s_setup(&audio_format, &config);
+    if (!output_format) {
+        panic("PicoAudio: Unable to open audio device.\n");
+    }
+
+    //ok = audio_i2s_connect(producer_pool);
+    ok = audio_i2s_connect_extra(producer_pool, false, 0, 0, NULL);
+    assert(ok);
+    audio_i2s_set_enabled(true);
+    return producer_pool;
+}
+#endif // CDROM
 
 void play_usb() {
     puts("starting core 1 USB");
@@ -39,7 +85,39 @@ void play_usb() {
     // init host stack on configured roothub port
     tuh_init(BOARD_TUH_RHPORT);
 
+#ifdef CDROM
+    struct audio_buffer_pool *ap = init_audio();
+    audio_fifo_t* cd_fifo = cdrom_audio_fifo_peek(&cdrom[0]);
+#endif
     for (;;) {
+#ifdef CDROM
+        struct audio_buffer *buffer = take_audio_buffer(ap, true);
+        int16_t *samples = (int16_t *) buffer->buffer->bytes;
+        /*
+        for (int i = 0; i < SAMPLES_PER_BUFFER; ++i) {
+            accum[0] = accum[1] = 0;
+            if (!cd_left) {
+                if (cdrom_audio_callback(&cdrom[0], AUDIO_FIFO_SIZE) && fifo_take_samples(cd_fifo, AUDIO_FIFO_SIZE)) {
+                    cd_left = AUDIO_FIFO_SIZE;
+                    // putchar('c');
+                } else {
+                    // putchar('f');
+                }
+            }
+            if (cd_left) {
+                samples[i << 1] += cd_fifo->buffer[cd_index & AUDIO_FIFO_BITS];
+                samples[(i << 1) + 1] += cd_fifo->buffer[(cd_index + 1) & AUDIO_FIFO_BITS];
+                cd_index = (cd_index + 2) & AUDIO_FIFO_BITS;
+                cd_left -= 2;
+            }
+        }
+        buffer->sample_count = SAMPLES_PER_BUFFER;
+        give_audio_buffer(ap, buffer);
+        */
+        buffer->sample_count = cdrom_audio_callback_simple(&cdrom[0], samples, SAMPLES_PER_BUFFER << 1) >> 1;
+        give_audio_buffer(ap, buffer);
+        cdrom_tasks(&cdrom[0]);
+#endif // CDROM
         // tinyusb host task
         tuh_task();
 

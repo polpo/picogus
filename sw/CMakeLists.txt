@@ -93,7 +93,7 @@ function(config_target TARGET_NAME MULTIFW)
         set_linker_script(${TARGET_NAME} ${CMAKE_BINARY_DIR}/${TARGET_NAME}.ld)
     endif()
 
-    if(USB_JOYSTICK OR USB_MOUSE)
+    if(USB_JOYSTICK OR USB_MOUSE OR CDROM)
         set(USB_STACK TRUE)
     endif()
     if (USB_STACK)
@@ -118,6 +118,23 @@ function(config_target TARGET_NAME MULTIFW)
             mouse/sermouse.cpp
         )
     endif()
+    if(CDROM)
+        target_link_libraries(${TARGET_NAME} cdrom)
+        target_sources(${TARGET_NAME} PRIVATE
+            mke/mke.c
+            cdrom/msc_app.c
+            audio_fifo.c
+        )
+        target_compile_definitions(${TARGET_NAME} PRIVATE CDROM=1)
+        target_sources(${TARGET_NAME} PRIVATE
+            ${PICO_TINYUSB_PATH}/lib/fatfs/source/ff.c
+            ${PICO_TINYUSB_PATH}/lib/fatfs/source/ffsystem.c
+            ${PICO_TINYUSB_PATH}/lib/fatfs/source/ffunicode.c
+        )
+        target_include_directories(${TARGET_NAME} PRIVATE
+            ${PICO_TINYUSB_PATH}/lib/fatfs/source/
+        )
+    endif()
 
     target_sources(${TARGET_NAME} PRIVATE
         M62429/M62429.cpp
@@ -130,6 +147,7 @@ function(config_target TARGET_NAME MULTIFW)
         target_sources(${TARGET_NAME} PRIVATE mpu401/mpu401.c mpu401/midi.c)
         target_compile_definitions(${TARGET_NAME} PRIVATE SOUND_MPU=1)
     endif()
+
 
     if(SOUND_OPL)
         target_compile_definitions(${TARGET_NAME} PRIVATE
@@ -220,33 +238,19 @@ function(build_sb TARGET_NAME MULTIFW)
     set(USB_JOYSTICK TRUE)
     set(SOUND_MPU FALSE)
     set(SOUND_OPL TRUE)
+    set(CDROM TRUE)
     config_target(${TARGET_NAME} ${MULTIFW})
     pico_set_program_name(${TARGET_NAME} "picogus-sb")
     target_sources(${TARGET_NAME} PRIVATE
         sbdsp.cpp
         sbplay.cpp
         isa_dma.c
-        audio_fifo.c
-        mke/mke.c
-        cdrom/msc_app.c
     )
-    target_link_libraries(${TARGET_NAME} cdrom)
     target_compile_definitions(${TARGET_NAME} PRIVATE
         SOUND_SB=1
         SOUND_DSP=1
-        CDROM=1
         # SB_BUFFERLESS=1
     )
-    target_sources(${TARGET_NAME} PRIVATE
-        ${PICO_TINYUSB_PATH}/lib/fatfs/source/ff.c
-        ${PICO_TINYUSB_PATH}/lib/fatfs/source/ffsystem.c
-        ${PICO_TINYUSB_PATH}/lib/fatfs/source/ffunicode.c
-    )
-    target_include_directories(${TARGET_NAME} PRIVATE
-        ${PICO_TINYUSB_PATH}/lib/fatfs/source/
-    )
-
-  #PICO_TINYUSB_PATH
     pico_generate_pio_header(${TARGET_NAME} ${CMAKE_CURRENT_LIST_DIR}/isa_dma.pio)
 endfunction()
 
@@ -319,6 +323,7 @@ function(build_usb TARGET_NAME MULTIFW)
     set(USB_JOYSTICK TRUE)
     set(USB_MOUSE TRUE)
     set(SOUND_MPU TRUE)
+    set(CDROM TRUE)
     config_target(${TARGET_NAME} ${MULTIFW})
     pico_set_program_name(${TARGET_NAME} "picogus-usb")
     target_compile_definitions(${TARGET_NAME} PRIVATE
