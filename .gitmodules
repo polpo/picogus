@@ -4,3 +4,7 @@
 [submodule "sw/tusb_xinput"]
 	path = sw/tusb_xinput
 	url = https://github.com/Ryzee119/tusb_xinput
+[submodule "sw/tinyusb"]
+	path = sw/tinyusb
+	url = https://github.com/wbcbz7/tinyusb
+	branch = rp2040-epx-only

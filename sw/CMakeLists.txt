@@ -38,7 +38,7 @@ if(NOT PROJECT_TYPE)
     message("PROJECT_TYPE not set, defaulting to ${PROJECT_TYPE}")
 endif()
 
-set(PICO_TINYUSB_PATH /Users/ian/src/tinyusb-wbcbz7)
+set(PICO_TINYUSB_PATH ${CMAKE_CURRENT_LIST_DIR}/tinyusb)
 
 # Initialise the Raspberry Pi Pico SDK
 pico_sdk_init()
@@ -127,9 +127,9 @@ function(config_target TARGET_NAME MULTIFW)
         )
         target_compile_definitions(${TARGET_NAME} PRIVATE CDROM=1)
         target_sources(${TARGET_NAME} PRIVATE
-            ${PICO_TINYUSB_PATH}/lib/fatfs/source/ff.c
-            ${PICO_TINYUSB_PATH}/lib/fatfs/source/ffsystem.c
-            ${PICO_TINYUSB_PATH}/lib/fatfs/source/ffunicode.c
+            ${CMAKE_CURRENT_LIST_DIR}/fatfs/source/ff.c
+            ${CMAKE_CURRENT_LIST_DIR}/fatfs/source/ffsystem.c
+            ${CMAKE_CURRENT_LIST_DIR}/fatfs/source/ffunicode.c
         )
         target_include_directories(${TARGET_NAME} PRIVATE
             ${PICO_TINYUSB_PATH}/lib/fatfs/source/
