@@ -245,6 +245,7 @@ function(build_sb TARGET_NAME MULTIFW)
         sbdsp.cpp
         sbplay.cpp
         isa_dma.c
+        audio_fifo.c
     )
     target_compile_definitions(${TARGET_NAME} PRIVATE
         SOUND_SB=1

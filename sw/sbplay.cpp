@@ -33,15 +33,15 @@
 extern "C" void OPL_Pico_simple(int16_t *buffer, uint32_t nsamples);
 extern "C" void OPL_Pico_PortWrite(opl_port_t, unsigned int);
 
-#ifdef SOUND_SB
-#ifdef SB_BUFFERLESS
+#include "audio_fifo.h"
+#if SOUND_SB
+#if SB_BUFFERLESS
 extern int16_t sbdsp_sample();
-#else
+#else // SB_BUFFERLESS
 // extern uint8_t sbdsp_fifo_tx();
 // extern uint16_t sbdsp_fifo_tx(uint8_t *buffer, uint16_t len);
 // extern int16_t sbdsp_sample();
 // extern uint16_t sbdsp_fifo_level();
-#include "audio_fifo.h"
 extern uint16_t sbdsp_sample_rate();
 extern uint16_t sbdsp_muted();
 extern audio_fifo_t* sbdsp_fifo_peek();
@@ -51,10 +51,10 @@ extern audio_fifo_t* sbdsp_fifo_peek();
 #include "pico_pic.h"
 #endif
 
-#ifdef CDROM
+#if CDROM
 #include "cdrom/cdrom.h"
 extern cdrom_t cdrom[CDROM_NUM];
-#endif
+#endif // CDROM
 
 #include "clamp.h"
 
@@ -168,14 +168,16 @@ void play_adlib() {
 
     struct audio_buffer_pool *ap = init_audio();
 
-#ifndef SB_BUFFERLESS
+#if SOUND_SB && !SB_BUFFERLESS
     // uint8_t sb_samples[512] = {128};
     audio_fifo_t* sb_fifo = sbdsp_fifo_peek();
+    uint32_t sb_state = FIFO_STATE_STOPPED;
 #endif
 #ifdef CDROM
     audio_fifo_t* cd_fifo = cdrom_audio_fifo_peek(&cdrom[0]);
 #endif
 
+#ifdef SOUND_SB
     // int16_t sb_sample = 0;
     uint32_t sb_ratio = 0;
     uint32_t sb_pos = 0;
@@ -184,15 +186,12 @@ void play_adlib() {
     uint32_t sb_frac = 0;
     // uint32_t sb_sample_idx = 0x0;
     uint32_t sb_left = 0;
-
-#ifndef SB_BUFFERLESS
-    uint32_t sb_state = FIFO_STATE_STOPPED;
 #endif
 
     uint32_t cd_left = 0;
     uint32_t cd_index = 0;
 
-    int16_t opl_samples[512] = {0};
+    int16_t opl_samples[SAMPLES_PER_BUFFER * 2] = {0};
     uint32_t opl_ratio = fixed_ratio(49716, 44100);
     printf("opl_ratio: %x ", opl_ratio);
     uint32_t opl_pos = 0;
@@ -208,11 +207,11 @@ void play_adlib() {
         struct audio_buffer *buffer = take_audio_buffer(ap, true);
         int16_t *samples = (int16_t *) buffer->buffer->bytes;
         // Do mixing with lerp
-#ifndef SB_BUFFERLESS
+#if !SB_BUFFERLESS
         for (int i = 0; i < SAMPLES_PER_BUFFER; ++i) {
-#endif
+#endif // !SB_BUFFERLESS
             accum[0] = accum[1] = 0;
-#ifdef CDROM
+#if CDROM
             if (!cd_left) {
                 // if (cdrom_audio_callback_old(&cdrom[0], cd_samples, 1024)) {
                 if (cdrom_audio_callback(&cdrom[0], AUDIO_FIFO_SIZE) && fifo_take_samples(cd_fifo, AUDIO_FIFO_SIZE)) {
@@ -230,7 +229,7 @@ void play_adlib() {
                 cd_index = (cd_index + 2) & AUDIO_FIFO_BITS;
                 cd_left -= 2;
             }
-#endif
+#endif // CDROM
             uint32_t opl_index = (opl_pos >> FRAC_BITS);
             // uint32_t opl_index = i;
             uint32_t opl_frac = opl_pos & FRAC_MASK;
@@ -238,6 +237,7 @@ void play_adlib() {
 
             // printf("%x %x\n", opl_index, opl_frac);
 
+#if !SB_BUFFERLESS // don't support OPL in bufferless for now
             if (
                 ((opl_index & 0x100) && opl_sample_idx != 0x0) ||
                 (!(opl_index & 0x100) && opl_sample_idx != 0x100)
@@ -257,7 +257,7 @@ void play_adlib() {
                     ++opl_buffer.tail;
                 }
                 */
-                OPL_Pico_simple(opl_samples + opl_sample_idx, 256);
+                OPL_Pico_simple(opl_samples + opl_sample_idx, SAMPLES_PER_BUFFER);
             }
             int32_t opl_sample = lerp_fixed(
                 opl_samples[opl_index & 0x1ff],
@@ -265,7 +265,7 @@ void play_adlib() {
                 opl_frac);
             accum[0] += opl_samples[opl_index & 0x1ff];
             accum[1] += opl_samples[opl_index & 0x1ff];
-#ifndef SB_BUFFERLESS
+#if SOUND_SB
             if (!sb_left) {
                 // putchar('t');
                 uint32_t tmp_state = fifo_get_state(sb_fifo);
@@ -306,15 +306,16 @@ void play_adlib() {
                     accum[1] += sb_sample;
                 }
             }
+#endif // SOUND_SB
             samples[i << 1] = clamp16(accum[0]);
             samples[(i << 1) + 1] = clamp16(accum[1]);
         }
         buffer->sample_count = SAMPLES_PER_BUFFER;
-#else // ifndef SB_BUFFERLESS
+#else // !SB_BUFFERLESS
         samples[0] = clamp16(accum[0]);
         samples[1] = clamp16(accum[1]);
         buffer->sample_count = 1;
-#endif // ifndef SB_BUFFERLESS
+#endif // !SB_BUFFERLESS
         give_audio_buffer(ap, buffer);
 #ifdef USB_STACK
         // Service TinyUSB events
