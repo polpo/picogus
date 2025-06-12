@@ -27,7 +27,6 @@
 #include "cdrom/cdrom.h"
 extern cdrom_t cdrom[CDROM_NUM];
 #include "pico/audio_i2s.h"
-#include "audio_fifo.h"
 #endif
 
 #include "pico_pic.h"
@@ -87,35 +86,21 @@ void play_usb() {
 
 #ifdef CDROM
     struct audio_buffer_pool *ap = init_audio();
-    audio_fifo_t* cd_fifo = cdrom_audio_fifo_peek(&cdrom[0]);
 #endif
     for (;;) {
 #ifdef CDROM
-        struct audio_buffer *buffer = take_audio_buffer(ap, true);
-        int16_t *samples = (int16_t *) buffer->buffer->bytes;
-        /*
-        for (int i = 0; i < SAMPLES_PER_BUFFER; ++i) {
-            accum[0] = accum[1] = 0;
-            if (!cd_left) {
-                if (cdrom_audio_callback(&cdrom[0], AUDIO_FIFO_SIZE) && fifo_take_samples(cd_fifo, AUDIO_FIFO_SIZE)) {
-                    cd_left = AUDIO_FIFO_SIZE;
-                    // putchar('c');
-                } else {
-                    // putchar('f');
-                }
+        if (cdrom[0].cd_status == CD_STATUS_PLAYING) {
+            struct audio_buffer *buffer = take_audio_buffer(ap, true);
+            int16_t *samples = (int16_t *) buffer->buffer->bytes;
+            buffer->sample_count = cdrom_audio_callback_simple(&cdrom[0], samples, SAMPLES_PER_BUFFER << 1) >> 1;
+            if (buffer->sample_count == 0) {
+                // If we got no samples back, playback stopped so output a sample of silence
+                // (give_audio_buffer does not tolerate 0 samples, so we have to emit 1)
+                samples[0] = samples[1] = 0;
+                buffer->sample_count = 1;
             }
-            if (cd_left) {
-                samples[i << 1] += cd_fifo->buffer[cd_index & AUDIO_FIFO_BITS];
-                samples[(i << 1) + 1] += cd_fifo->buffer[(cd_index + 1) & AUDIO_FIFO_BITS];
-                cd_index = (cd_index + 2) & AUDIO_FIFO_BITS;
-                cd_left -= 2;
-            }
+            give_audio_buffer(ap, buffer);
         }
-        buffer->sample_count = SAMPLES_PER_BUFFER;
-        give_audio_buffer(ap, buffer);
-        */
-        buffer->sample_count = cdrom_audio_callback_simple(&cdrom[0], samples, SAMPLES_PER_BUFFER << 1) >> 1;
-        give_audio_buffer(ap, buffer);
         cdrom_tasks(&cdrom[0]);
 #endif // CDROM
         // tinyusb host task
