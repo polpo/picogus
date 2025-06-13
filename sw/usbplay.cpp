@@ -92,7 +92,7 @@ void play_usb() {
         if (cdrom[0].cd_status == CD_STATUS_PLAYING) {
             struct audio_buffer *buffer = take_audio_buffer(ap, true);
             int16_t *samples = (int16_t *) buffer->buffer->bytes;
-            buffer->sample_count = cdrom_audio_callback_simple(&cdrom[0], samples, SAMPLES_PER_BUFFER << 1) >> 1;
+            buffer->sample_count = cdrom_audio_callback_simple(&cdrom[0], samples, SAMPLES_PER_BUFFER << 1, false) >> 1;
             if (buffer->sample_count == 0) {
                 // If we got no samples back, playback stopped so output a sample of silence
                 // (give_audio_buffer does not tolerate 0 samples, so we have to emit 1)

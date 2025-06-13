@@ -554,7 +554,7 @@ bool cdrom_audio_callback(cdrom_t *dev, uint32_t len) {
     return ret;
 }
 
-uint32_t cdrom_audio_callback_simple(cdrom_t *dev, int16_t *buffer, uint32_t len) {
+uint32_t cdrom_audio_callback_simple(cdrom_t *dev, int16_t *buffer, uint32_t len, bool pad) {
     if (dev->cd_status != CD_STATUS_PLAYING) {
         return 0;
     }
@@ -608,16 +608,17 @@ uint32_t cdrom_audio_callback_simple(cdrom_t *dev, int16_t *buffer, uint32_t len
         dev->audio_sector_consumed_samples += samples_to_transfer;
     } // End while (fifo_level < len && ret)
 
-    return samples_produced;
-    /*
-    // If we provided fewer samples than requested, fill the remainder of buffer with silence.
-    if (samples_produced < len) {
-        cdrom_log("CD-ROM %i: Outputting %u samples, padding %u with silence.\n",
-                  dev->id, samples_produced, (len - samples_produced));
-        memset(buffer + samples_produced, 0, (size_t)(len - samples_produced) * sizeof(int16_t));
+    if (!pad) {
+        return samples_produced;
+    } else {
+        // If we provided fewer samples than requested, fill the remainder of buffer with silence.
+        if (samples_produced < len) {
+            cdrom_log("CD-ROM %i: Outputting %u samples, padding %u with silence.\n",
+                      dev->id, samples_produced, (len - samples_produced));
+            memset(buffer + samples_produced, 0, (size_t)(len - samples_produced) * sizeof(int16_t));
+        }
+        return len;
     }
-    return len;
-    */
 
     /*
     cdrom_log("CD-ROM %i: Audio cb. FIFO level: %u. Staging: %d/%d. Ret %d\n",

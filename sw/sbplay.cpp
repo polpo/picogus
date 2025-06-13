@@ -175,6 +175,8 @@ void play_adlib() {
 #endif
 #ifdef CDROM
     audio_fifo_t* cd_fifo = cdrom_audio_fifo_peek(&cdrom[0]);
+    int16_t cd_samples[SAMPLES_PER_BUFFER * 2];
+    bool has_samples;
 #endif
 
 #ifdef SOUND_SB
@@ -207,11 +209,17 @@ void play_adlib() {
         struct audio_buffer *buffer = take_audio_buffer(ap, true);
         int16_t *samples = (int16_t *) buffer->buffer->bytes;
         // Do mixing with lerp
+        has_samples = cdrom_audio_callback_simple(&cdrom[0], cd_samples, SAMPLES_PER_BUFFER << 1, true);
 #if !SB_BUFFERLESS
         for (int i = 0; i < SAMPLES_PER_BUFFER; ++i) {
 #endif // !SB_BUFFERLESS
             accum[0] = accum[1] = 0;
 #if CDROM
+            if (has_samples) {
+                accum[0] += cd_samples[i << 1];
+                accum[1] += cd_samples[(i << 1) + 1];
+            }
+            /*
             if (!cd_left) {
                 // if (cdrom_audio_callback_old(&cdrom[0], cd_samples, 1024)) {
                 if (cdrom_audio_callback(&cdrom[0], AUDIO_FIFO_SIZE) && fifo_take_samples(cd_fifo, AUDIO_FIFO_SIZE)) {
@@ -229,6 +237,7 @@ void play_adlib() {
                 cd_index = (cd_index + 2) & AUDIO_FIFO_BITS;
                 cd_left -= 2;
             }
+            */
 #endif // CDROM
             uint32_t opl_index = (opl_pos >> FRAC_BITS);
             // uint32_t opl_index = i;
