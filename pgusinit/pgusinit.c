@@ -69,6 +69,12 @@ static void usage(card_mode_t mode, bool print_all) {
         printf("   /oplport x   - set the base port of the OPL2. Default: 388, 0 to disable\n");
         printf("   /oplwait 1|0 - wait on OPL2 write. Can fix speed-sensitive early AdLib games\n");
     }
+    if (mode == SB_MODE || mode == USB_MODE || print_all) {
+        printf("CD-ROM settings:\n");
+        printf("   /cdport x    - set the base port of the CD-ROM interface. Default: 230, 0 to disable\n");
+        printf("   /cdlist      - list CD images on the inserted USB drive and show loaded image\n");
+        printf("   /cdload n    - load image n in the list given by /cdlist. 0 to unload image\n");
+    }
     if (mode == TANDY_MODE || print_all) {
         //     "................................................................................\n"
         printf("Tandy settings:\n");
@@ -241,16 +247,14 @@ static bool print_cdimage_list(void) {
     outp(CONTROL_PORT, MODE_CDLOAD); // Get currently loaded index
     uint8_t current_index = inp(DATA_PORT_HIGH);
     printf("Listing CD images on USB drive:\n");
-    outp(CONTROL_PORT, 0xCC); // Knock on the door...
     outp(CONTROL_PORT, MODE_CDLIST); // Select CD image list register
     delay(10);
-    outp(CONTROL_PORT, 0xCC); // Knock on the door...
     outp(CONTROL_PORT, MODE_CDSTATUS); // Select CD image status register
     bool ready = false;
     for (uint16_t i = 0; i < 65535; ++i) {
         int8_t cd_status = inp(DATA_PORT_HIGH);
         if (cd_status == -1) {
-            printf("Error getting CD image list\n");
+            printf("Error getting CD image list (bad/no USB drive or no images on drive)\n");
             return false;
         } else if (cd_status == 2) {
             ready = true;
@@ -278,23 +282,29 @@ static bool print_cdimage_list(void) {
     } else {
 	printf("No image currently loaded.\n");
     }
-    printf("Run \"pgusinit /cdload n\" to load the nth image in the above list.\n");
+    printf("Run \"pgusinit /cdload n\" to load the nth image in the above list, 0 to unload.\n");
     return true;
 }
 
 
 static void print_cdimage_current(void) {
     outp(CONTROL_PORT, 0xCC); // Knock on the door...
-    outp(CONTROL_PORT, MODE_FWSTRING); // Select firmware string register
+    outp(CONTROL_PORT, MODE_CDSTATUS); // Select CD image status register
+    wait_for_read(0); // Wait for CD status to be idle
+    outp(CONTROL_PORT, MODE_CDNAME); // Select CD image name register
 
-    char firmware_string[256] = {0};
+    char cdname_string[256] = {0};
     for (uint8_t i = 0; i < 255; ++i) {
-        firmware_string[i] = inp(DATA_PORT_HIGH);
-        if (!firmware_string[i]) {
+        cdname_string[i] = inp(DATA_PORT_HIGH);
+        if (!cdname_string[i]) {
+            if (i == 0) {
+                printf("No CD image loaded\n");
+                return;
+            }
             break;
         }
     }
-    printf("Firmware version: %s\n", firmware_string);
+    printf("CD image loaded: %s\n", cdname_string);
 }
 
 
@@ -784,8 +794,9 @@ int main(int argc, char* argv[]) {
                 usage(mode, false);
                 return 3;
             }
-            outp(CONTROL_PORT, MODE_CDLOAD); // Select audio buffer register
+            outp(CONTROL_PORT, MODE_CDLOAD); // Select CD image load register
             outp(DATA_PORT_HIGH, tmp_uint8);
+            print_cdimage_current();
             return 0;
         } else {
             printf("Unknown option: %s\n", argv[i]);
@@ -893,6 +904,7 @@ int main(int argc, char* argv[]) {
         break;
     case USB_MODE:
         printf("Running in USB mode\n", tmp_uint16);
+        print_cdimage_current();
         break;
     case TANDY_MODE:
         outp(CONTROL_PORT, MODE_TANDYPORT); // Select port register
@@ -921,6 +933,7 @@ int main(int argc, char* argv[]) {
         } else {
             printf("(AdLib port disabled)\n");
         }
+        print_cdimage_current();
         break;
     case NE2000_MODE:
         outp(CONTROL_PORT, MODE_NE2KPORT); // Select port register

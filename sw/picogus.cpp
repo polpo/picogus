@@ -237,7 +237,9 @@ __force_inline void select_picogus(uint8_t value) {
 #endif
         break;
     case MODE_CDLOAD:
-    case MODE_CDSELECT:
+        break;
+    case MODE_CDNAME:
+        cur_read = 0;
         break;
     case MODE_SAVE: // Select save settings register
     case MODE_REBOOT: // Select reboot register
@@ -395,8 +397,6 @@ __force_inline void write_picogus_high(uint8_t value) {
         cdrom[0].image_status = CD_STATUS_BUSY;
         cdrom[0].image_command = CD_COMMAND_IMAGE_LOAD_INDEX;
         break;
-    case MODE_CDSELECT:
-        break;
 #endif
     // For multifw
     case MODE_BOOTMODE:
@@ -514,7 +514,7 @@ __force_inline uint8_t read_picogus_high(void) {
         return 0;
 #endif
         break;
-    case MODE_CDPORT: // SB Base port
+    case MODE_CDPORT: // CD Base port
         return settings.CD.basePort == 0xFFFF ? 0 : (settings.CD.basePort >> 8);
 #ifdef CDROM
     case MODE_CDSTATUS:
@@ -536,6 +536,12 @@ __force_inline uint8_t read_picogus_high(void) {
         return ret;
     case MODE_CDLOAD: // Load CD image
         return cdman_current_image_index();
+    case MODE_CDNAME: // Firmware string
+        ret = cdrom[0].image_path[cur_read++];
+        if (ret == 0) { // Null terminated
+            cur_read = 0;
+        }
+        return ret;
 #endif
     case MODE_HWTYPE: // Hardware version
         return BOARD_TYPE;
