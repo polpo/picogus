@@ -132,7 +132,7 @@ function(config_target TARGET_NAME MULTIFW)
             ${CMAKE_CURRENT_LIST_DIR}/fatfs/source/ffunicode.c
         )
         target_include_directories(${TARGET_NAME} PRIVATE
-            ${PICO_TINYUSB_PATH}/lib/fatfs/source/
+            ${CMAKE_CURRENT_LIST_DIR}/fatfs/source/
         )
     endif()
 
