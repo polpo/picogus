@@ -142,7 +142,7 @@ void cdman_list_images_free(char **fileList, int fileCount) {
     }
 }
 
-static uint8_t current_index;
+static uint8_t current_index, last_loaded_index;
 
 uint8_t cdman_current_image_index(void) {
     return current_index;
@@ -160,22 +160,18 @@ void cdman_load_image_index(cdrom_t *dev, int imageIndex) {
             // Wrap around index for autoadvance
             imageIndex = 1;
         }
-        cdman_load_image(dev, images[imageIndex - 1]);
+        strcpy(dev->image_path, images[imageIndex - 1]);
+        dev->image_command = CD_COMMAND_IMAGE_LOAD;
     }
     cdman_list_images_free(images, imageCount);
-    current_index = imageIndex;
-}
-
-
-void cdman_load_image(cdrom_t *dev, char *imageName) {
-    strcpy(dev->image_path, imageName);
-    dev->image_command = CD_COMMAND_IMAGE_LOAD;
+    current_index = last_loaded_index = imageIndex;
 }
 
 
 void cdman_unload_image(cdrom_t *dev) {
     dev->image_path[0] = 0;
     dev->image_command = CD_COMMAND_IMAGE_LOAD;
+    current_index = 0;
 }
 
 
@@ -191,7 +187,7 @@ void cdman_set_serial(cdrom_t *dev, uint32_t serial) {
     if (drive_serial == serial) {
         // If we are re-inserting the same drive, maybe advance the disc image
         printf("Inserting the same drive...\n");
-        cdman_load_image_index(dev, autoadvance ? (current_index + 1) : current_index);
+        cdman_load_image_index(dev, autoadvance ? (last_loaded_index + 1) : last_loaded_index);
     } else {
         drive_serial = serial;
         printf("New drive with serial %u inserted", serial);

@@ -24,8 +24,6 @@
 #include <stdbool.h>
 #include <stddef.h>
 
-#define CDROM_NUM                   1
-
 #define CD_STATUS_EMPTY             0
 #define CD_STATUS_DATA_ONLY         1
 #define CD_STATUS_PAUSED            2
@@ -133,7 +131,9 @@ typedef struct cdrom_fifo_t {
 } cdrom_fifo_t;
 
 
+#if USE_CD_AUDIO_FIFO
 #include "../audio_fifo.h"
+#endif
 
 typedef struct cdrom {
     uint8_t id;
@@ -194,13 +194,15 @@ typedef struct cdrom {
 
     // int16_t cd_buffer[BUF_SIZE];
     uint8_t audio_sector_buffer[RAW_SECTOR_SIZE];
-    audio_sample_t *current_sector_samples;       // Convenience pointer: (audio_sample_t*)audio_sector_buffer
-    int audio_sector_total_samples;                    // Samples available in current_sector_samples after a read
-    int audio_sector_consumed_samples;                 // Samples consumed from current_sector_samples
+    int16_t *current_sector_samples;       // Convenience pointer: (int16_t*)audio_sector_buffer
+    int audio_sector_total_samples;        // Samples available in current_sector_samples after a read
+    int audio_sector_consumed_samples;     // Samples consumed from current_sector_samples
+#if USE_CD_AUDIO_FIFO
     audio_fifo_t audio_fifo;
+#endif
 } cdrom_t;
 
-extern cdrom_t cdrom[CDROM_NUM];
+extern cdrom_t cdrom;
 
 extern void cdrom_error(cdrom_t *dev,uint8_t code);
 extern void cdrom_read_errors(cdrom_t *dev,uint8_t *b);
@@ -219,8 +221,10 @@ void cdrom_tasks(cdrom_t *dev);
 void cdrom_output_status(cdrom_t *dev);
 uint8_t cdrom_status(cdrom_t *dev);
 
+#if USE_CD_AUDIO_FIFO
 extern audio_fifo_t* cdrom_audio_fifo_peek(cdrom_t *dev);
 void cdrom_audio_fifo_init(cdrom_t *dev);
+#endif
 
 extern int     cdrom_lba_to_msf_accurate(int lba);
 extern double  cdrom_seek_time(cdrom_t *dev);
@@ -228,21 +232,12 @@ extern void    cdrom_stop(cdrom_t *dev);
 extern int     cdrom_is_pre(cdrom_t *dev, uint32_t lba);
 extern bool    cdrom_audio_callback(cdrom_t *dev, uint32_t len);
 extern uint32_t cdrom_audio_callback_simple(cdrom_t *dev, int16_t *buffer, uint32_t len, bool pad);
-// extern int     cdrom_audio_callback_old(cdrom_t *dev, int16_t *output, int len);
-// extern int     cdrom_audio_callback_add(cdrom_t *dev, int16_t *output, int len);
 
 extern uint8_t cdrom_audio_track_search(cdrom_t *dev, uint32_t pos, int type, uint8_t playbit);
 extern uint8_t cdrom_audio_track_search_pioneer(cdrom_t *dev, uint32_t pos, uint8_t playbit);
 extern uint8_t cdrom_audio_play_pioneer(cdrom_t *dev, uint32_t pos);
 extern uint8_t cdrom_audio_play_toshiba(cdrom_t *dev, uint32_t pos, int type);
 extern void    cdrom_audio_pause_resume(cdrom_t *dev, uint8_t resume);
-extern uint8_t cdrom_audio_scan(cdrom_t *dev, uint32_t pos, int type);
-extern uint8_t cdrom_get_audio_status_pioneer(cdrom_t *dev, uint8_t *b);
-extern uint8_t cdrom_get_audio_status_sony(cdrom_t *dev, uint8_t *b, int msf);
-extern uint8_t cdrom_get_current_subchannel(cdrom_t *dev, uint8_t *b, int msf);
-extern void    cdrom_get_current_subchannel_sony(cdrom_t *dev, uint8_t *b, int msf);
-extern void    cdrom_get_current_subcodeq(cdrom_t *dev, uint8_t *b);
-extern uint8_t cdrom_get_current_subcodeq_playstatus(cdrom_t *dev, uint8_t *b);
 
 //Kevin
 extern uint8_t  cdrom_read_toc(cdrom_t *dev, unsigned char *b, uint8_t track);
@@ -251,16 +246,6 @@ extern uint8_t  cdrom_disc_capacity(cdrom_t *dev,unsigned char *b);
 extern uint8_t cdrom_seek(cdrom_t *dev, int m, int s, int f);
 extern uint8_t cdrom_audio_playmsf(cdrom_t *dev, int m,int s, int f, int M, int S, int F);
 extern uint8_t cdrom_get_subq(cdrom_t *dev,uint8_t *b);
-
-extern void    cdrom_get_track_buffer(cdrom_t *dev, uint8_t *buf);
-extern void    cdrom_get_q(cdrom_t *dev, uint8_t *buf, int *curtoctrk, uint8_t mode);
-extern uint8_t cdrom_mitsumi_audio_play(cdrom_t *dev, uint32_t pos, uint32_t len);
-extern int     cdrom_readsector_raw(cdrom_t *dev, uint8_t *buffer, int sector, int ismsf,
-                                    int cdrom_sector_type, int cdrom_sector_flags, int *len, uint8_t vendor_type);
-
-
-
-extern void cdrom_debug(cdrom_t *dev);
 
 extern void cdrom_close_handler(uint8_t id);
 extern void cdrom_insert(uint8_t id);
@@ -282,9 +267,6 @@ extern int find_cdrom_for_scsi_id(uint8_t scsi_id);
 
 extern void cdrom_close(void);
 extern void cdrom_global_init(void);
-extern void cdrom_global_reset(void);
-extern void cdrom_hard_reset(void);
-extern void scsi_cdrom_drive_reset(int c);
 
 #ifdef __cplusplus
 }

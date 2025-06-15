@@ -33,11 +33,11 @@
 #include "msc_app.h"
 
 #include "cdrom_image_manager.h"
-extern cdrom_t cdrom[CDROM_NUM];
 
 //------------- Elm Chan FatFS -------------//
-static FATFS fatfs[CDROM_NUM]; // for simplicity only support 1 device
-static volatile bool _disk_busy[CDROM_NUM];
+static FATFS fatfs; // for simplicity only support 1 device
+static volatile bool _disk_busy;
+static uint8_t mounted_dev;
 
 // define the buffer to be place in USB/DMA memory with correct alignment/cache line size
 CFG_TUH_MEM_SECTION static struct {
@@ -47,128 +47,85 @@ CFG_TUH_MEM_SECTION static struct {
 
 bool msc_app_init(void)
 {
-  for(size_t i=0; i<CDROM_NUM; i++) {
-    _disk_busy[i] = false;
-  }
-
-  // disable stdout buffered for echoing typing command
-  #ifndef __ICCARM__ // TODO IAR doesn't support stream control ?
-  setbuf(stdout, NULL);
-  #endif
-
-  return true;
-}
-
-void msc_app_task(void)
-{
+    _disk_busy = false;
+    return true;
 }
 
 static bool inquiry_complete_cb(uint8_t dev_addr, tuh_msc_complete_data_t const * cb_data) {
-  msc_cbw_t const* cbw = cb_data->cbw;
-  msc_csw_t const* csw = cb_data->csw;
+    msc_cbw_t const* cbw = cb_data->cbw;
+    msc_csw_t const* csw = cb_data->csw;
 
-  if (csw->status != 0)
-  {
-    printf("Inquiry failed\r\n");
-    return false;
-  }
+    if (csw->status != 0) {
+        printf("Inquiry failed\r\n");
+        return false;
+    }
 
-  // Print out Vendor ID, Product ID and Rev
-  printf("%.8s %.16s rev %.4s\r\n", scsi_resp.inquiry.vendor_id, scsi_resp.inquiry.product_id, scsi_resp.inquiry.product_rev);
+    // Print out Vendor ID, Product ID and Rev
+    printf("%.8s %.16s rev %.4s\r\n", scsi_resp.inquiry.vendor_id, scsi_resp.inquiry.product_id, scsi_resp.inquiry.product_rev);
 
-  // Get capacity of device
-  uint32_t const block_count = tuh_msc_get_block_count(dev_addr, cbw->lun);
-  uint32_t const block_size = tuh_msc_get_block_size(dev_addr, cbw->lun);
+    // Get capacity of device
+    uint32_t const block_count = tuh_msc_get_block_count(dev_addr, cbw->lun);
+    uint32_t const block_size = tuh_msc_get_block_size(dev_addr, cbw->lun);
 
-  printf("Disk Size: %" PRIu32 " MB\r\n", block_count / ((1024*1024)/block_size));
-  // printf("Block Count = %lu, Block Size: %lu\r\n", block_count, block_size);
+    printf("Disk Size: %" PRIu32 " MB\r\n", block_count / ((1024*1024)/block_size));
+    // printf("Block Count = %lu, Block Size: %lu\r\n", block_count, block_size);
 
-  // For simplicity: we only mount 1 LUN per device
-  uint8_t const drive_num = dev_addr-1;
-  char drive_path[3] = "0:";
-  drive_path[0] += drive_num;
+    // For simplicity: we only mount 1 device
+    if (f_mount(&fatfs, "", 1) != FR_OK) {
+        puts("mount failed");
+        return false;
+    }
 
-  if ( f_mount(&fatfs[drive_num], drive_path, 1) != FR_OK )
-  {
-    puts("mount failed");
-    return false;
-  }
+    // get the drive serial so we can detect if it is reinserted
+    uint32_t serial;
+    if (FR_OK != f_getlabel("", NULL, &serial)) {
+        return false;
+    }
+    cdman_set_serial(&cdrom, serial);
 
-  // change to newly mounted drive
-  if (f_chdir(drive_path) != FR_OK) {
-    puts("chdir failed");
-    return false;
-  }
-
-  // print the drive label
-  uint32_t serial;
-  if ( FR_OK != f_getlabel(drive_path, NULL, &serial) ) {
-      return false;
-  }
-  cdman_set_serial(&cdrom[drive_num], serial);
-
-  return true;
+    return true;
 }
 
 //------------- IMPLEMENTATION -------------//
 void tuh_msc_mount_cb(uint8_t dev_addr)
 {
-  printf("A MassStorage device is mounted\r\n");
-  if (dev_addr > 1) {
-      // Only handle a single drive for now
-      printf("Only a single USB drive is supported\n");
-      return;
-  }
-  uint8_t const lun = 0;
-  tuh_msc_inquiry(dev_addr, lun, &scsi_resp.inquiry, inquiry_complete_cb, 0);
+    printf("A MassStorage device is mounted\r\n");
+    if (mounted_dev) {
+        // Only handle a single drive
+        printf("Only a single USB drive is supported\n");
+        return;
+    }
+    mounted_dev = dev_addr;  // may not actually be mounted, but does indicate the drive is inserted
+    uint8_t const lun = 0;
+    tuh_msc_inquiry(dev_addr, lun, &scsi_resp.inquiry, inquiry_complete_cb, 0);
 }
 
 void tuh_msc_umount_cb(uint8_t dev_addr)
 {
-  printf("A MassStorage device is unmounted\r\n");
-  if (dev_addr > 1) {
-      // Only handle a single drive for now
-      printf("Only a single USB drive is supported\n");
-      return;
-  }
+    (void)dev_addr;
+    printf("A MassStorage device is unmounted\r\n");
+    mounted_dev = 0;
 
-  uint8_t const drive_num = dev_addr-1;
-  char drive_path[3] = "0:";
-  drive_path[0] += drive_num;
+    f_unmount("");
 
-  f_unmount(drive_path);
-
-  cdman_unload_image(&cdrom[drive_num]);
-
-//  if ( phy_disk == f_get_current_drive() )
-//  { // active drive is unplugged --> change to other drive
-//    for(uint8_t i=0; i<CDROM_NUM; i++)
-//    {
-//      if ( disk_is_ready(i) )
-//      {
-//        f_chdrive(i);
-//        cli_init(); // refractor, rename
-//      }
-//    }
-//  }
+    cdman_unload_image(&cdrom);
 }
 
 //--------------------------------------------------------------------+
 // DiskIO
 //--------------------------------------------------------------------+
 
-static void wait_for_disk_io(BYTE pdrv)
+static void wait_for_disk_io(void)
 {
-  while(_disk_busy[pdrv])
-  {
-    tuh_task();
-  }
+    while (_disk_busy) {
+        tuh_task();
+    }
 }
 
 static bool disk_io_complete(uint8_t dev_addr, tuh_msc_complete_data_t const * cb_data)
 {
   (void) dev_addr; (void) cb_data;
-  _disk_busy[dev_addr-1] = false;
+  _disk_busy = false;
   return true;
 }
 
@@ -195,14 +152,14 @@ DRESULT disk_read (
 	UINT count		/* Number of sectors to read */
 )
 {
-	uint8_t const dev_addr = pdrv + 1;
-	uint8_t const lun = 0;
+    (void)pdrv;
+    uint8_t const lun = 0;
 
-	_disk_busy[pdrv] = true;
-	tuh_msc_read10(dev_addr, lun, buff, sector, (uint16_t) count, disk_io_complete, 0);
-	wait_for_disk_io(pdrv);
+    _disk_busy = true;
+    tuh_msc_read10(mounted_dev, lun, buff, sector, (uint16_t) count, disk_io_complete, 0);
+    wait_for_disk_io();
 
-	return RES_OK;
+    return RES_OK;
 }
 
 #if FF_FS_READONLY == 0
@@ -214,14 +171,14 @@ DRESULT disk_write (
 	UINT count			/* Number of sectors to write */
 )
 {
-	uint8_t const dev_addr = pdrv + 1;
-	uint8_t const lun = 0;
+    (void)pdrv;
+    uint8_t const lun = 0;
 
-	_disk_busy[pdrv] = true;
-	tuh_msc_write10(dev_addr, lun, buff, sector, (uint16_t) count, disk_io_complete, 0);
-	wait_for_disk_io(pdrv);
+    _disk_busy = true;
+    tuh_msc_write10(mounted_dev, lun, buff, sector, (uint16_t) count, disk_io_complete, 0);
+    wait_for_disk_io();
 
-	return RES_OK;
+    return RES_OK;
 }
 
 #endif
@@ -232,29 +189,28 @@ DRESULT disk_ioctl (
 	void *buff		/* Buffer to send/receive control data */
 )
 {
-  uint8_t const dev_addr = pdrv + 1;
-  uint8_t const lun = 0;
-  switch ( cmd )
-  {
+    (void)pdrv;
+    uint8_t const lun = 0;
+    switch (cmd) {
     case CTRL_SYNC:
-      // nothing to do since we do blocking
-      return RES_OK;
+        // nothing to do since we do blocking
+        return RES_OK;
 
     case GET_SECTOR_COUNT:
-      *((DWORD*) buff) = (WORD) tuh_msc_get_block_count(dev_addr, lun);
-      return RES_OK;
+        *((DWORD*) buff) = (WORD) tuh_msc_get_block_count(mounted_dev, lun);
+        return RES_OK;
 
     case GET_SECTOR_SIZE:
-      *((WORD*) buff) = (WORD) tuh_msc_get_block_size(dev_addr, lun);
-      return RES_OK;
+        *((WORD*) buff) = (WORD) tuh_msc_get_block_size(mounted_dev, lun);
+        return RES_OK;
 
     case GET_BLOCK_SIZE:
-      *((DWORD*) buff) = 1;    // erase block size in units of sector size
-      return RES_OK;
+        *((DWORD*) buff) = 1;    // erase block size in units of sector size
+        return RES_OK;
 
     default:
-      return RES_PARERR;
-  }
+        return RES_PARERR;
+    }
 
-  return RES_OK;
+    return RES_OK;
 }

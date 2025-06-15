@@ -81,10 +81,9 @@ extern "C" void MKE_WRITE(uint16_t address, uint8_t value);
 extern "C" uint8_t MKE_READ(uint16_t address);
 extern "C" void mke_init();
 
-#define CDROM_NUM 1
 #include "cdrom/cdrom.h"
 #include "cdrom/cdrom_image_manager.h"
-cdrom_t cdrom[CDROM_NUM];
+cdrom_t cdrom;
 
 static uint32_t cur_read_idx;
 #endif
@@ -226,9 +225,9 @@ __force_inline void select_picogus(uint8_t value) {
         break;
     case MODE_CDLIST:
 #ifdef CDROM
-        if (cdrom[0].image_status != CD_STATUS_READY) {
-            cdrom[0].image_status = CD_STATUS_BUSY;
-            cdrom[0].image_command = CD_COMMAND_IMAGE_LIST;
+        if (cdrom.image_status != CD_STATUS_READY) {
+            cdrom.image_status = CD_STATUS_BUSY;
+            cdrom.image_command = CD_COMMAND_IMAGE_LIST;
             puts("cdimages start");
         }
         puts("cdimages read");
@@ -394,9 +393,9 @@ __force_inline void write_picogus_high(uint8_t value) {
         break;
 #ifdef CDROM
     case MODE_CDLOAD: // Load CD image
-        cdrom[0].image_data = value;
-        cdrom[0].image_status = CD_STATUS_BUSY;
-        cdrom[0].image_command = CD_COMMAND_IMAGE_LOAD_INDEX;
+        cdrom.image_data = value;
+        cdrom.image_status = CD_STATUS_BUSY;
+        cdrom.image_command = CD_COMMAND_IMAGE_LOAD_INDEX;
         break;
 #endif
     case MODE_CDAUTOADV: // enable auto advance of CD image on USB reinsert
@@ -525,16 +524,16 @@ __force_inline uint8_t read_picogus_high(void) {
         return settings.CD.basePort == 0xFFFF ? 0 : (settings.CD.basePort >> 8);
 #ifdef CDROM
     case MODE_CDSTATUS:
-        printf("cdstatus %x\n", cdrom[0].image_status);
-        return cdrom[0].image_status;
+        printf("cdstatus %x\n", cdrom.image_status);
+        return cdrom.image_status;
     case MODE_CDLIST:
-        if (cur_read_idx == cdrom[0].image_count) { // If end of the images
+        if (cur_read_idx == cdrom.image_count) { // If end of the images
             cur_read_idx = cur_read = 0;
-            cdrom[0].image_status = CD_STATUS_IDLE;
-            cdman_list_images_free(cdrom[0].image_list, cdrom[0].image_count);
+            cdrom.image_status = CD_STATUS_IDLE;
+            cdman_list_images_free(cdrom.image_list, cdrom.image_count);
             return 0x04; // EOT
         }
-        ret = cdrom[0].image_list[cur_read_idx][cur_read++];
+        ret = cdrom.image_list[cur_read_idx][cur_read++];
         putchar(ret);
         if (ret == 0) { // Null terminated
             ++cur_read_idx;
@@ -544,7 +543,7 @@ __force_inline uint8_t read_picogus_high(void) {
     case MODE_CDLOAD: // Load CD image
         return cdman_current_image_index();
     case MODE_CDNAME: // Firmware string
-        ret = cdrom[0].image_path[cur_read++];
+        ret = cdrom.image_path[cur_read++];
         if (ret == 0) { // Null terminated
             cur_read = 0;
         }
@@ -1150,6 +1149,7 @@ int main()
 #endif
 
 #ifdef CDROM
+    cdrom_global_init();
     mke_init();
 #endif
 

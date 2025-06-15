@@ -53,7 +53,7 @@ extern audio_fifo_t* sbdsp_fifo_peek();
 
 #if CDROM
 #include "cdrom/cdrom.h"
-extern cdrom_t cdrom[CDROM_NUM];
+// extern cdrom_t cdrom;
 #endif // CDROM
 
 #include "clamp.h"
@@ -174,9 +174,8 @@ void play_adlib() {
     uint32_t sb_state = FIFO_STATE_STOPPED;
 #endif
 #ifdef CDROM
-    audio_fifo_t* cd_fifo = cdrom_audio_fifo_peek(&cdrom[0]);
     int16_t cd_samples[SAMPLES_PER_BUFFER * 2];
-    bool has_samples;
+    bool has_cd_samples;
 #endif
 
 #ifdef SOUND_SB
@@ -205,75 +204,61 @@ void play_adlib() {
     int32_t accum[2] = {0};
     for (;;) {
 
-        // cdrom_audio_callback(&cdrom[0], cd_samples, 1024);
+#if CDROM
+        has_cd_samples = cdrom_audio_callback_simple(&cdrom, cd_samples, SAMPLES_PER_BUFFER << 1, true);
+#endif
         struct audio_buffer *buffer = take_audio_buffer(ap, true);
         int16_t *samples = (int16_t *) buffer->buffer->bytes;
         // Do mixing with lerp
-        has_samples = cdrom_audio_callback_simple(&cdrom[0], cd_samples, SAMPLES_PER_BUFFER << 1, true);
+        //
 #if !SB_BUFFERLESS
         for (int i = 0; i < SAMPLES_PER_BUFFER; ++i) {
 #endif // !SB_BUFFERLESS
             accum[0] = accum[1] = 0;
 #if CDROM
-            if (has_samples) {
+            if (has_cd_samples) {
                 accum[0] += cd_samples[i << 1];
                 accum[1] += cd_samples[(i << 1) + 1];
             }
-            /*
-            if (!cd_left) {
-                // if (cdrom_audio_callback_old(&cdrom[0], cd_samples, 1024)) {
-                if (cdrom_audio_callback(&cdrom[0], AUDIO_FIFO_SIZE) && fifo_take_samples(cd_fifo, AUDIO_FIFO_SIZE)) {
-                    cd_left = AUDIO_FIFO_SIZE;
-                    // putchar('c');
-                } else {
-                    // putchar('f');
-                }
-            }
-            if (cd_left) {
-                accum[0] += cd_fifo->buffer[cd_index & AUDIO_FIFO_BITS];
-                accum[1] += cd_fifo->buffer[(cd_index + 1) & AUDIO_FIFO_BITS];
-                // accum[0] += cd_samples[cd_index & 1023];
-                // accum[1] += cd_samples[(cd_index + 1) & 1023];
-                cd_index = (cd_index + 2) & AUDIO_FIFO_BITS;
-                cd_left -= 2;
-            }
-            */
 #endif // CDROM
-            uint32_t opl_index = (opl_pos >> FRAC_BITS);
-            // uint32_t opl_index = i;
-            uint32_t opl_frac = opl_pos & FRAC_MASK;
-            opl_pos += opl_ratio;
+                uint32_t opl_index = (opl_pos >> FRAC_BITS);
+                // uint32_t opl_index = i;
+                uint32_t opl_frac = opl_pos & FRAC_MASK;
+                opl_pos += opl_ratio;
 
-            // printf("%x %x\n", opl_index, opl_frac);
+                // printf("%x %x\n", opl_index, opl_frac);
 
 #if !SB_BUFFERLESS // don't support OPL in bufferless for now
-            if (
-                ((opl_index & 0x100) && opl_sample_idx != 0x0) ||
-                (!(opl_index & 0x100) && opl_sample_idx != 0x100)
-            ) {
-                opl_sample_idx = (opl_index + 0x100) & 0x100;
-                /*
-                bool notfirst = false;
-                while (opl_buffer.tail != opl_buffer.head) {
-                    if (!notfirst) {
+                if (
+                    ((opl_index & SAMPLES_PER_BUFFER) && opl_sample_idx != 0x0) ||
+                    (!(opl_index & SAMPLES_PER_BUFFER) && opl_sample_idx != SAMPLES_PER_BUFFER)
+                ) {
+                    opl_sample_idx = (opl_index + SAMPLES_PER_BUFFER) & SAMPLES_PER_BUFFER;
+                    /*
+                    bool notfirst = false;
+                    while (opl_buffer.tail != opl_buffer.head) {
+                        if (!notfirst) {
 #ifndef PICOW
-                        gpio_xor_mask(LED_PIN);
+                            gpio_xor_mask(LED_PIN);
 #endif
-                        notfirst = true;
+                            notfirst = true;
+                        }
+                        auto cmd = opl_buffer.cmds[opl_buffer.tail];
+                        OPL_Pico_PortWrite((opl_port_t)cmd.addr, cmd.data);
+                        ++opl_buffer.tail;
                     }
-                    auto cmd = opl_buffer.cmds[opl_buffer.tail];
-                    OPL_Pico_PortWrite((opl_port_t)cmd.addr, cmd.data);
-                    ++opl_buffer.tail;
+                    */
+                    OPL_Pico_simple(opl_samples + opl_sample_idx, SAMPLES_PER_BUFFER);
                 }
-                */
-                OPL_Pico_simple(opl_samples + opl_sample_idx, SAMPLES_PER_BUFFER);
-            }
-            int32_t opl_sample = lerp_fixed(
-                opl_samples[opl_index & 0x1ff],
-                opl_samples[(opl_index + 1) & 0x1ff],
-                opl_frac);
-            accum[0] += opl_samples[opl_index & 0x1ff];
-            accum[1] += opl_samples[opl_index & 0x1ff];
+                int32_t opl_sample = lerp_fixed(
+                    opl_samples[opl_index & 0x1ff],
+                    opl_samples[(opl_index + 1) & 0x1ff],
+                    opl_frac);
+                accum[0] += opl_samples[opl_index & 0x1ff];
+                accum[1] += opl_samples[opl_index & 0x1ff];
+#if CDROM
+            //}
+#endif
 #if SOUND_SB
             if (!sb_left) {
                 // putchar('t');
@@ -341,7 +326,7 @@ void play_adlib() {
         send_midi_bytes(1);
 #endif
 #ifdef CDROM
-        cdrom_tasks(&cdrom[0]);
+        cdrom_tasks(&cdrom);
 #endif
     }
 }
