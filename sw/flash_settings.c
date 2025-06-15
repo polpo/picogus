@@ -71,7 +71,8 @@ static const Settings defaultSettings = {
         .password = {0}
     },
     .CD = {
-        .basePort = 0x230
+        .basePort = 0x230,
+        .autoAdvance = true
     }
 };
 

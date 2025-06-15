@@ -126,9 +126,9 @@ char** cdman_list_images(int *fileCount) {
 }
 
 /**
- * Helper function to free the array returned by listBinCueFiles
+ * Helper function to free the array returned by cdman_list_images
  * 
- * @param fileList: Array of strings returned by listBinCueFiles
+ * @param fileList: Array of strings returned by cdman_list_images
  * @param fileCount: Number of files in the array
  */
 void cdman_list_images_free(char **fileList, int fileCount) {
@@ -150,13 +150,16 @@ uint8_t cdman_current_image_index(void) {
 
 
 void cdman_load_image_index(cdrom_t *dev, int imageIndex) {
+    /* printf("Loading index %u (was %u)\n", imageIndex, current_index); */
     int imageCount;
     char** images = cdman_list_images(&imageCount);
-    if (imageIndex > imageCount) {
-        return;
-    } else if (imageIndex == 0) {
+    if (imageIndex == 0) {
         cdman_unload_image(dev);
     } else {
+        if (imageIndex > imageCount) {
+            // Wrap around index for autoadvance
+            imageIndex = 1;
+        }
         cdman_load_image(dev, images[imageIndex - 1]);
     }
     cdman_list_images_free(images, imageCount);
@@ -173,18 +176,25 @@ void cdman_load_image(cdrom_t *dev, char *imageName) {
 void cdman_unload_image(cdrom_t *dev) {
     dev->image_path[0] = 0;
     dev->image_command = CD_COMMAND_IMAGE_LOAD;
-    current_index = 0;
 }
 
 
 static uint32_t drive_serial;
+static bool autoadvance;
 
-void cdman_set_serial(uint32_t serial) {
+void cdman_set_autoadvance(bool setting) {
+    printf("setting autoadvance to %u\n", setting);
+    autoadvance = setting;
+}
+
+void cdman_set_serial(cdrom_t *dev, uint32_t serial) {
     if (drive_serial == serial) {
         // If we are re-inserting the same drive, maybe advance the disc image
         printf("Inserting the same drive...\n");
+        cdman_load_image_index(dev, autoadvance ? (current_index + 1) : current_index);
     } else {
         drive_serial = serial;
         printf("New drive with serial %u inserted", serial);
+        cdman_load_image_index(dev, 1);
     }
 }

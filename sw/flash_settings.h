@@ -75,6 +75,7 @@ typedef struct Settings {
     } WiFi;
     struct {
         uint16_t basePort;
+        bool autoAdvance : 1;
     } CD;
 } Settings;
 

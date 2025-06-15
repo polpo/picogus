@@ -237,6 +237,7 @@ __force_inline void select_picogus(uint8_t value) {
 #endif
         break;
     case MODE_CDLOAD:
+    case MODE_CDAUTOADV:
         break;
     case MODE_CDNAME:
         cur_read = 0;
@@ -398,6 +399,12 @@ __force_inline void write_picogus_high(uint8_t value) {
         cdrom[0].image_command = CD_COMMAND_IMAGE_LOAD_INDEX;
         break;
 #endif
+    case MODE_CDAUTOADV: // enable auto advance of CD image on USB reinsert
+        settings.CD.autoAdvance = value;
+#ifdef CDROM
+        cdman_set_autoadvance(settings.CD.autoAdvance);
+#endif
+        break;
     // For multifw
     case MODE_BOOTMODE:
         settings.startupMode = value;
@@ -543,6 +550,8 @@ __force_inline uint8_t read_picogus_high(void) {
         }
         return ret;
 #endif
+    case MODE_CDAUTOADV: // enable joystick
+        return settings.CD.autoAdvance;
     case MODE_HWTYPE: // Hardware version
         return BOARD_TYPE;
     case MODE_FLASH:
@@ -591,6 +600,7 @@ void processSettings(void) {
 #ifdef CDROM
     cdrom_port_test = settings.CD.basePort >> 4;
     printf("cdrom base port: %x\n", settings.CD.basePort);
+    cdman_set_autoadvance(settings.CD.autoAdvance);
 #endif
     if (BOARD_TYPE == PICOGUS_2) {
         m62429->setVolume(M62429_BOTH, settings.Global.waveTableVolume);
@@ -1261,6 +1271,5 @@ extern void PIC_DeActivateIRQ(void);
 #ifdef POLLING_DMA
         process_dma();
 #endif
-        // cdrom_tasks(&cdrom[0]);        
     }
 }

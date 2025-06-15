@@ -105,8 +105,7 @@ static bool inquiry_complete_cb(uint8_t dev_addr, tuh_msc_complete_data_t const 
   if ( FR_OK != f_getlabel(drive_path, NULL, &serial) ) {
       return false;
   }
-  cdman_set_serial(serial);
-  cdman_load_image_index(&cdrom[drive_num], 1);
+  cdman_set_serial(&cdrom[drive_num], serial);
 
   return true;
 }

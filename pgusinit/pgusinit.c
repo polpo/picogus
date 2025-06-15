@@ -33,23 +33,22 @@ static void banner(void) {
 
 static void usage(card_mode_t mode, bool print_all) {
     // Max line length @ 80 chars:
-    //     "................................................................................\n"
+    //     "...............................................................................\n"
     printf("Usage:\n");
     printf("   /?            - show this message (/?? to show options for all modes)\n");
     printf("   /flash fw.uf2 - program the PicoGUS with the firmware file fw.uf2\n");
     printf("   /mode x       - change card mode to x (gus, sb, mpu, tandy, cms, adlib, usb)\n");
     printf("   /save         - save settings to the card to persist on system boot\n");
     printf("   /defaults     - set all settings for all modes to defaults\n");
-    printf("   /wtvol x      - set volume of wavetable header. Scale 0-100, Default: 100\n");
-    printf("                   (for PicoGUS v2.0 boards only)\n");
+    printf("   /wtvol x      - set volume of WT header. 0-100, Default 100 (2.0 cards only)\n");
     printf("   /joy 1|0      - enable/disable USB joystick support, Default: 0\n");
-    //     "................................................................................\n"
+    //     "...............................................................................\n"
     printf("MPU-401 settings:\n");
     printf("   /mpuport x    - set the base port of the MPU-401. Default: 330, 0 to disable\n");
     printf("   /mpudelay 1|0 - delay SYSEX (for rev.0 Roland MT-32)\n");
     printf("   /mpufake 1|0  - fake all notes off (for Roland RA-50)\n");
     if (mode == GUS_MODE || print_all) {
-        //     "................................................................................\n"
+        //     "...............................................................................\n"
         printf("GUS settings:\n");
         printf("   /gusport x  - set the base port of the GUS. Default: 240\n");
         printf("   /gusbuf n   - set audio buffer to n samples. Default: 4, Min: 1, Max: 256\n");
@@ -60,7 +59,7 @@ static void usage(card_mode_t mode, bool print_all) {
         printf("   /gus44k 1|0 - Fixed 44.1kHz output for all active voice #s [EXPERIMENTAL]\n");
     }
     if (mode == SB_MODE || print_all) {
-        //     "................................................................................\n"
+        //     "...............................................................................\n"
         printf("Sound Blaster settings:\n");
         printf("   /sbport x    - set the base port of the Sound Blaster. Default: 220\n");
     }
@@ -71,22 +70,23 @@ static void usage(card_mode_t mode, bool print_all) {
     }
     if (mode == SB_MODE || mode == USB_MODE || print_all) {
         printf("CD-ROM settings:\n");
-        printf("   /cdport x    - set the base port of the CD-ROM interface. Default: 230, 0 to disable\n");
-        printf("   /cdlist      - list CD images on the inserted USB drive and show loaded image\n");
+        printf("   /cdport x    - set the base port of CD interface. Default: 230, 0 to disable\n");
+        printf("   /cdlist      - list CD images on the inserted USB drive\n");
         printf("   /cdload n    - load image n in the list given by /cdlist. 0 to unload image\n");
+        printf("   /cdauto 1|0  - auto-advance loaded image when same USB drive is reinserted\n");
     }
     if (mode == TANDY_MODE || print_all) {
-        //     "................................................................................\n"
+        //     "...............................................................................\n"
         printf("Tandy settings:\n");
         printf("   /tandyport x - set the base port of the Tandy 3-voice. Default: 2C0\n");
     }
     if (mode == CMS_MODE || print_all) {
-        //     "................................................................................\n"
+        //     "...............................................................................\n"
         printf("CMS settings:\n");
         printf("   /cmsport x - set the base port of the CMS. Default: 220\n");
     }
     if (mode == USB_MODE || mode == CMS_MODE || mode == TANDY_MODE || mode == ADLIB_MODE || print_all) {
-        //     "................................................................................\n"
+        //     "...............................................................................\n"
         printf("Serial Mouse settings:\n");
         printf("   /mousecom n - mouse COM port. Default: 0, Choices: 0 (disable), 1, 2, 3, 4\n");
         printf("   /mouseproto n - set mouse protocol. Default: 0 (Microsoft)\n");
@@ -97,7 +97,7 @@ static void usage(card_mode_t mode, bool print_all) {
         printf("   /mousesen n   - set mouse sensitivity (256 - 100%, 128 - 50%, 512 - 200%)\n");
     }
     if (mode == NE2000_MODE || print_all) {
-        //     "................................................................................\n"
+        //     "...............................................................................\n"
         printf("NE2000/WiFi settings:\n");
         printf("   /ne2kport x   - set the base port of the NE2000. Default: 300\n");
         printf("   /wifissid abc - set the WiFi SSID to abc\n");
@@ -798,6 +798,10 @@ int main(int argc, char* argv[]) {
             outp(DATA_PORT_HIGH, tmp_uint8);
             print_cdimage_current();
             return 0;
+        } else if (stricmp(argv[i], "/cdauto") == 0) {
+            process_bool_opt(tmp_uint8);
+            outp(CONTROL_PORT, MODE_CDAUTOADV); // Select CD image autoadvance register
+            outp(DATA_PORT_HIGH, tmp_uint8);
         } else {
             printf("Unknown option: %s\n", argv[i]);
             usage(mode, false);
@@ -905,6 +909,9 @@ int main(int argc, char* argv[]) {
     case USB_MODE:
         printf("Running in USB mode\n", tmp_uint16);
         print_cdimage_current();
+        outp(CONTROL_PORT, MODE_CDAUTOADV); // Select joystick enable register
+        tmp_uint8 = inp(DATA_PORT_HIGH);
+        printf("CD image auto-advance on USB reinsert %s\n", tmp_uint8 ? "enabled" : "disabled");
         break;
     case TANDY_MODE:
         outp(CONTROL_PORT, MODE_TANDYPORT); // Select port register
@@ -934,6 +941,9 @@ int main(int argc, char* argv[]) {
             printf("(AdLib port disabled)\n");
         }
         print_cdimage_current();
+        outp(CONTROL_PORT, MODE_CDAUTOADV); // Select joystick enable register
+        tmp_uint8 = inp(DATA_PORT_HIGH);
+        printf("CD image auto-advance on USB reinsert %s\n", tmp_uint8 ? "enabled" : "disabled");
         break;
     case NE2000_MODE:
         outp(CONTROL_PORT, MODE_NE2KPORT); // Select port register

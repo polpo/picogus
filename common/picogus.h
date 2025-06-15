@@ -80,6 +80,7 @@ static const char *modenames[9] = {
 #define MODE_CDLIST     0x62 // List CD images
 #define MODE_CDLOAD     0x63 // Load CD image or get loaded image index
 #define MODE_CDNAME     0x64 // Get name of loaded CD image
+#define MODE_CDAUTOADV  0x65 // Set autoadvance for CD image on USB reinsert
 
 #define MODE_DEFAULTS   0xE0 // Select reset to defaults register
 #define MODE_SAVE       0xE1 // Select save settings register
