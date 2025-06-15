@@ -57,6 +57,8 @@ typedef struct SMSF {
     uint8_t  fr;
 } TMSF;
 
+#define SZ_TBL 64
+
 /* Track file struct. */
 typedef struct track_file_t {
     int (*read)(void *priv, uint8_t *buffer, uint32_t seek, size_t count);
@@ -67,6 +69,8 @@ typedef struct track_file_t {
     char  fn[260];
     FIL *fp;
     void *priv;
+    // fast seek cluster link map table
+    uint32_t clmt[SZ_TBL];
 } track_file_t;
 
 typedef struct track_t {

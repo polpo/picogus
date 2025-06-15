@@ -216,6 +216,13 @@ bin_init(const char *filename, int *error)
     /* if (!*error) { */
     if (result == FR_OK) {
         cdrom_image_backend_log("all good\n");
+        // Set up fast seek for the file (avoids reading the FAT for each seek)
+        tf->fp->cltbl = tf->clmt;
+        tf->clmt[0] = SZ_TBL;
+        if (f_lseek(tf->fp, CREATE_LINKMAP) == FR_NOT_ENOUGH_CORE) {
+            // Size of clmt is too small for the file - it is too fragmented
+            cdrom_image_backend_log("File too fragmented for the cluster link map table. Falling back to slow seek\n");
+        }
         tf->read       = bin_read;
         tf->get_length = bin_get_length;
         tf->close      = bin_close;
