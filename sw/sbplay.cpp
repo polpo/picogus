@@ -31,7 +31,7 @@
 
 #include "opl.h"
 extern "C" void OPL_Pico_simple(int16_t *buffer, uint32_t nsamples);
-extern "C" void OPL_Pico_PortWrite(opl_port_t, unsigned int);
+extern "C" void OPL_Pico_WriteRegister(unsigned int reg_num, unsigned int value);
 
 #include "audio_fifo.h"
 #if SOUND_SB
@@ -192,7 +192,9 @@ void play_adlib() {
     uint32_t cd_left = 0;
     uint32_t cd_index = 0;
 
-    int16_t opl_samples[SAMPLES_PER_BUFFER * 2] = {0};
+    constexpr uint32_t OPL_SAMPLE_COUNT = 8;
+    constexpr uint32_t OPL_BUFFER_BITS = (OPL_SAMPLE_COUNT << 1) - 1;
+    int16_t opl_samples[OPL_SAMPLE_COUNT << 1] = {0};
     uint32_t opl_ratio = fixed_ratio(49716, 44100);
     printf("opl_ratio: %x ", opl_ratio);
     uint32_t opl_pos = 0;
@@ -203,7 +205,6 @@ void play_adlib() {
 
     int32_t accum[2] = {0};
     for (;;) {
-
 #if CDROM
         has_cd_samples = cdrom_audio_callback_simple(&cdrom, cd_samples, SAMPLES_PER_BUFFER << 1, true);
 #endif
@@ -221,44 +222,36 @@ void play_adlib() {
                 accum[1] += cd_samples[(i << 1) + 1];
             }
 #endif // CDROM
-                uint32_t opl_index = (opl_pos >> FRAC_BITS);
-                // uint32_t opl_index = i;
-                uint32_t opl_frac = opl_pos & FRAC_MASK;
-                opl_pos += opl_ratio;
-
-                // printf("%x %x\n", opl_index, opl_frac);
-
+            uint32_t opl_index = (opl_pos >> FRAC_BITS);
+            // uint32_t opl_index = i;
+            uint32_t opl_frac = opl_pos & FRAC_MASK;
+            opl_pos += opl_ratio;
 #if !SB_BUFFERLESS // don't support OPL in bufferless for now
-                if (
-                    ((opl_index & SAMPLES_PER_BUFFER) && opl_sample_idx != 0x0) ||
-                    (!(opl_index & SAMPLES_PER_BUFFER) && opl_sample_idx != SAMPLES_PER_BUFFER)
-                ) {
-                    opl_sample_idx = (opl_index + SAMPLES_PER_BUFFER) & SAMPLES_PER_BUFFER;
-                    /*
-                    bool notfirst = false;
-                    while (opl_buffer.tail != opl_buffer.head) {
-                        if (!notfirst) {
+            if (
+                ((opl_index & OPL_SAMPLE_COUNT) && opl_sample_idx != 0x0) ||
+                (!(opl_index & OPL_SAMPLE_COUNT) && opl_sample_idx != OPL_SAMPLE_COUNT)
+            ) {
+                opl_sample_idx = (opl_index + OPL_SAMPLE_COUNT) & OPL_SAMPLE_COUNT;
+                // bool notfirst = false;
+                while (opl_buffer.tail != opl_buffer.head) {
+                    // if (!notfirst) {
 #ifndef PICOW
-                            gpio_xor_mask(LED_PIN);
+                    //     gpio_xor_mask(LED_PIN);
 #endif
-                            notfirst = true;
-                        }
-                        auto cmd = opl_buffer.cmds[opl_buffer.tail];
-                        OPL_Pico_PortWrite((opl_port_t)cmd.addr, cmd.data);
-                        ++opl_buffer.tail;
-                    }
-                    */
-                    OPL_Pico_simple(opl_samples + opl_sample_idx, SAMPLES_PER_BUFFER);
+                    //     notfirst = true;
+                    // }
+                    auto cmd = opl_buffer.cmds[opl_buffer.tail];
+                    OPL_Pico_WriteRegister(cmd.addr, cmd.data);
+                    ++opl_buffer.tail;
                 }
-                int32_t opl_sample = lerp_fixed(
-                    opl_samples[opl_index & 0x1ff],
-                    opl_samples[(opl_index + 1) & 0x1ff],
-                    opl_frac);
-                accum[0] += opl_samples[opl_index & 0x1ff];
-                accum[1] += opl_samples[opl_index & 0x1ff];
-#if CDROM
-            //}
-#endif
+                OPL_Pico_simple(opl_samples + opl_sample_idx, OPL_SAMPLE_COUNT);
+            }
+            int32_t opl_sample = lerp_fixed(
+                opl_samples[opl_index & OPL_BUFFER_BITS],
+                opl_samples[(opl_index + 1) & OPL_BUFFER_BITS],
+                opl_frac);
+            accum[0] += opl_sample;
+            accum[1] += opl_sample;
 #if SOUND_SB
             if (!sb_left) {
                 // putchar('t');

@@ -69,10 +69,9 @@ extern void sbdsp_process();
 #include "opl.h"
 void play_adlib(void);
 extern "C" int OPL_Pico_Init(unsigned int);
-extern "C" void OPL_Pico_PortWrite(opl_port_t, unsigned int);
 extern "C" unsigned int OPL_Pico_PortRead(opl_port_t);
-// #include "cmd_buffers.h"
-// cms_buffer_t opl_buffer = { {0}, 0, 0 };
+#include "cmd_buffers.h"
+cms_buffer_t opl_buffer = { {0}, 0, 0 };
 #endif
 
 #ifdef CDROM
@@ -648,29 +647,18 @@ __force_inline void handle_iow(void) {
     if ((port >> 4) == sb_port_test) {
         switch (port - settings.SB.basePort) {
         // OPL ports
-        case 0x8 ... 0x9:
+        case 0x8:
             // Fast write
-            // pio_sm_put(pio0, IOW_PIO_SM, IO_END);
-            pio_sm_put(pio0, IOW_PIO_SM, IO_WAIT);
-            /*
-            opl_buffer.cmds[opl_buffer.head++] = {
-                OPL_REGISTER_PORT,
-                (uint8_t)(iow_read & 0xFF)
-            };
+            pio_sm_put(pio0, IOW_PIO_SM, IO_END);
+            // pio_sm_put(pio0, IOW_PIO_SM, IO_WAIT);
+            opl_buffer.cmds[opl_buffer.head].addr = (uint16_t)(iow_read & 0xFF);
             // Fast write - return early as we've already written 0x0u to the PIO
             return;
-            */
-            OPL_Pico_PortWrite((opl_port_t)(port & 1), (uint8_t)(iow_read & 0xFF));
             break;
-        /*
         case 0x9:
             pio_sm_put(pio0, IOW_PIO_SM, IO_WAIT);
-            opl_buffer.cmds[opl_buffer.head++] = {
-                OPL_DATA_PORT,
-                (uint8_t)(iow_read & 0xFF)
-            };
+            opl_buffer.cmds[opl_buffer.head++].data = (uint8_t)(iow_read & 0xFF);
             break;
-        */
         // DSP ports
         default:
             pio_sm_put(pio0, IOW_PIO_SM, IO_WAIT);                        
@@ -690,29 +678,19 @@ __force_inline void handle_iow(void) {
 #endif
 #if defined(SOUND_OPL)
     if ((port & 0x3fe) == settings.SB.oplBasePort) {
-        /*
-        // Fast write
-        pio_sm_put(pio0, IOW_PIO_SM, IO_END);
-        opl_buffer.cmds[opl_buffer.head++] = {
-            OPL_REGISTER_PORT,
-            (uint8_t)(iow_read & 0xFF)
-        };
-        // Fast write - return early as we've already written 0x0u to the PIO
-        return;
-        */
-        pio_sm_put(pio0, IOW_PIO_SM, IO_WAIT);
-        OPL_Pico_PortWrite((opl_port_t)(port & 1), (uint8_t)(iow_read & 0xFF));
-    /*
-    } else if (port == settings.SB.oplBasePort + 1) {
-        pio_sm_put(pio0, IOW_PIO_SM, IO_WAIT);
-        if (settings.SB.oplSpeedSensitive) {
-            busy_wait_us(1); // busy wait for speed sensitive games
+        if ((port & 1) == 0) {
+            // Fast write
+            pio_sm_put(pio0, IOW_PIO_SM, IO_END);
+            opl_buffer.cmds[opl_buffer.head].addr = (uint16_t)(iow_read & 0xFF);
+            // Fast write - return early as we've already written 0x0u to the PIO
+            return;
+        } else {
+            pio_sm_put(pio0, IOW_PIO_SM, IO_WAIT);
+            if (settings.SB.oplSpeedSensitive) {
+                busy_wait_us(1); // busy wait for speed sensitive games
+            }
+            opl_buffer.cmds[opl_buffer.head++].data = (uint8_t)(iow_read & 0xFF);
         }
-        opl_buffer.cmds[opl_buffer.head++] = {
-            OPL_DATA_PORT,
-            (uint8_t)(iow_read & 0xFF)
-        };
-    */
     } else // if follows down below
 #endif // SOUND_OPL
 #ifdef SOUND_TANDY
@@ -848,12 +826,10 @@ __force_inline void handle_ior(void) {
         pio_sm_put(pio0, IOR_PIO_SM, IO_WAIT);
         switch (port - settings.SB.basePort) {
         case 0x8:
-            /*
             // wait for OPL buffer to process
             while (opl_buffer.tail != opl_buffer.head) {
                 tight_loop_contents();
             }
-            */
             pio_sm_put(pio0, IOR_PIO_SM, IOR_SET_VALUE | OPL_Pico_PortRead(OPL_REGISTER_PORT));
             break;
         default:
@@ -876,12 +852,10 @@ __force_inline void handle_ior(void) {
     if (port == settings.SB.oplBasePort) {
         // Tell PIO to wait for data
         pio_sm_put(pio0, IOR_PIO_SM, IO_WAIT);
-        /*
         // wait for OPL buffer to process
         while (opl_buffer.tail != opl_buffer.head) {
             tight_loop_contents();
         }
-        */
         pio_sm_put(pio0, IOR_PIO_SM, IOR_SET_VALUE | OPL_Pico_PortRead(OPL_REGISTER_PORT));
     } else // if follows down below
 #endif

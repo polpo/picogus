@@ -383,7 +383,7 @@ static void OPLTimer_CalculateEndTime(opl_timer_t *timer)
     }
 }
 
-static void WriteRegister(unsigned int reg_num, unsigned int value)
+void OPL_Pico_WriteRegister(unsigned int reg_num, unsigned int value)
 {
     switch (reg_num)
     {
@@ -450,7 +450,7 @@ void OPL_Pico_PortWrite(opl_port_t port, unsigned int value)
     }
     else if (port == OPL_DATA_PORT)
     {
-        WriteRegister(register_num, value);
+        OPL_Pico_WriteRegister(register_num, value);
     }
 }
 
