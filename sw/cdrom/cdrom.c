@@ -243,7 +243,6 @@ cdrom_stop(cdrom_t *dev)
     if (dev->cd_status > CD_STATUS_DATA_ONLY)
         dev->cd_status = CD_STATUS_STOPPED;
 #if USE_CD_AUDIO_FIFO
-    fifo_set_state(&dev->audio_fifo, FIFO_STATE_STOPPED);
     fifo_reset(&dev->audio_fifo);
 #endif
 }
@@ -338,11 +337,6 @@ bool cdrom_audio_callback(cdrom_t *dev, uint32_t len) {
             break;
         }
     } // End while (fifo_level < len && ret)
-
-    if (!ret) {
-        /* fifo_set_state(&dev->audio_fifo, FIFO_STATE_STOPPED); */
-        /* fifo_reset(&dev->audio_fifo); */
-    }
 
     cdrom_log("CD-ROM %i: Audio cb. FIFO level: %u. Staging: %d/%d. Ret %d\n",
               dev->id, fifo_level(&dev->audio_fifo),
@@ -511,7 +505,6 @@ uint8_t cdrom_audio_playmsf(cdrom_t *dev, int m,int s, int f, int M, int S, int 
     dev->cd_end    = pos2;
 #if USE_CD_AUDIO_FIFO
     fifo_reset(&dev->audio_fifo);
-    fifo_set_state(&dev->audio_fifo, FIFO_STATE_RUNNING);
 #endif
     dev->cd_status = CD_STATUS_PLAYING;
     
@@ -524,7 +517,6 @@ cdrom_audio_pause_resume(cdrom_t *dev, uint8_t resume)
     if ((dev->cd_status == CD_STATUS_PLAYING) || (dev->cd_status == CD_STATUS_PAUSED))
         dev->cd_status = (dev->cd_status & 0xfe) | (resume & 0x01);
 #if USE_CD_AUDIO_FIFO
-    fifo_set_state(&dev->audio_fifo, (dev->cd_status == CD_STATUS_PLAYING) ? FIFO_STATE_RUNNING : FIFO_STATE_PAUSED);
     fifo_reset(&dev->audio_fifo);
 #endif
 }

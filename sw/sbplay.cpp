@@ -38,10 +38,6 @@ extern "C" void OPL_Pico_WriteRegister(unsigned int reg_num, unsigned int value)
 #if SB_BUFFERLESS
 extern int16_t sbdsp_sample();
 #else // SB_BUFFERLESS
-// extern uint8_t sbdsp_fifo_tx();
-// extern uint16_t sbdsp_fifo_tx(uint8_t *buffer, uint16_t len);
-// extern int16_t sbdsp_sample();
-// extern uint16_t sbdsp_fifo_level();
 extern uint16_t sbdsp_sample_rate();
 extern uint16_t sbdsp_muted();
 extern audio_fifo_t* sbdsp_fifo_peek();
@@ -171,7 +167,6 @@ void play_adlib() {
 #if SOUND_SB && !SB_BUFFERLESS
     // uint8_t sb_samples[512] = {128};
     audio_fifo_t* sb_fifo = sbdsp_fifo_peek();
-    uint32_t sb_state = FIFO_STATE_STOPPED;
 #endif
 #ifdef CDROM
     int16_t cd_samples[SAMPLES_PER_BUFFER * 2];
@@ -255,28 +250,11 @@ void play_adlib() {
 #if SOUND_SB
             if (!sb_left) {
                 // putchar('t');
-                uint32_t tmp_state = fifo_get_state(sb_fifo);
-                uint32_t num_samples;
-                if (tmp_state == FIFO_STATE_RUNNING && tmp_state != sb_state) {
-                    num_samples = AUDIO_FIFO_SIZE >> 1;
-                    // putchar('!');
-                } else {
-                    num_samples = AUDIO_FIFO_SIZE >> 2;
-                }
-                if (fifo_take_samples(sb_fifo, num_samples)) {
-                    // putchar('T');
-                    sb_left = num_samples;
-                    sb_state = tmp_state;
-                } else {
-                    if (sb_state == FIFO_STATE_RUNNING) {
-                        // putchar('U');
-                    }
-                    // printf("%u\n", sb_fifo->samples_in_fifo);
-                }
+                uint32_t num_samples = 256;
+                sb_left = fifo_take_samples(sb_fifo, num_samples);
             }
             if (sb_left) {
                 sb_index = (sb_pos >> FRAC_BITS);
-                int16_t sb_sample;
                 if (sb_index_old != sb_index) {
                     sb_left--;
                 }
@@ -284,11 +262,9 @@ void play_adlib() {
                 sb_frac = sb_pos & FRAC_MASK;
                 sb_ratio = fixed_ratio(sbdsp_sample_rate(), 44100);
                 sb_pos += sb_ratio;
-                // sb_sample = (sb_left && !sbdsp_muted()) ? sb_fifo->buffer[sb_index] : 0;
                 // putchar('p');
                 if (!sbdsp_muted()) {
-                    sb_sample = sb_fifo->buffer[sb_index & AUDIO_FIFO_BITS];
-                    // int16_t sb_sample = sb_fifo->buffer[sb_index & 127];
+                    int16_t sb_sample = sb_fifo->buffer[sb_index & AUDIO_FIFO_BITS];
                     accum[0] += sb_sample;
                     accum[1] += sb_sample;
                 }

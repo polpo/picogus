@@ -27,7 +27,6 @@ typedef int16_t audio_sample_t;
 typedef enum {
     FIFO_STATE_STOPPED,
     FIFO_STATE_RUNNING,
-    FIFO_STATE_PAUSED
 } fifo_state_t;
 
 // FIFO structure
@@ -45,19 +44,12 @@ typedef struct {
 // No more get_audio_fifo() - caller owns the fifo instance(s)
 void fifo_init(audio_fifo_t *fifo);
 uint32_t fifo_level(audio_fifo_t *fifo);
-uint32_t fifo_free_space(audio_fifo_t *fifo);
-bool fifo_has_enough_data(audio_fifo_t *fifo);
 void fifo_reset(audio_fifo_t *fifo);
 bool fifo_add_sample(audio_fifo_t *fifo, audio_sample_t sample);
 bool fifo_add_samples(audio_fifo_t *fifo, const audio_sample_t *samples_buffer, uint32_t num_samples_to_add);
-bool fifo_is_empty(audio_fifo_t *fifo);
-bool fifo_is_full(audio_fifo_t *fifo);
-fifo_state_t fifo_get_state(audio_fifo_t *fifo);
-void fifo_set_state(audio_fifo_t *fifo, fifo_state_t state);
 
+uint32_t fifo_take_samples(audio_fifo_t *fifo, uint32_t num_samples);
 // Helper for consumer to get one sample, this is a more fundamental FIFO op
-// bool fifo_get_sample(audio_fifo_t *fifo, audio_sample_t *sample); // Added for completeness
-bool fifo_take_samples(audio_fifo_t *fifo, uint32_t num_samples);
 
 #ifdef __cplusplus
 }  // extern "C"

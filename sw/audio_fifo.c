@@ -10,20 +10,13 @@
 #include <string.h>
 #include <stdio.h>
 
-// No more global instance here
+#ifndef MIN
+#define MIN(x, y) (((x) < (y)) ? (x) : (y))
+#endif
 
-// Calculate available samples in the FIFO
+// Current samples in fifo
 uint32_t fifo_level(audio_fifo_t *fifo) {
     return fifo->samples_in_fifo;
-}
-
-uint32_t fifo_free_space(audio_fifo_t *fifo) {
-    return AUDIO_FIFO_SIZE - fifo->samples_in_fifo;
-}
-
-// Check if FIFO has reached the start threshold
-bool fifo_has_enough_data(audio_fifo_t *fifo) {
-    return fifo->samples_in_fifo >= AUDIO_FIFO_START_THRESHOLD;
 }
 
 // Initialize the FIFO (called by producer_init or directly by user)
@@ -45,23 +38,21 @@ void fifo_reset(audio_fifo_t *fifo) {
 
 // Add a sample to the FIFO (called by producer)
 bool fifo_add_sample(audio_fifo_t *fifo, audio_sample_t sample) {
-    if (fifo->state != FIFO_STATE_RUNNING || fifo->samples_in_fifo == AUDIO_FIFO_SIZE) {
-        /* printf("%u\n", fifo->samples_in_fifo); */
+    if (fifo->samples_in_fifo == AUDIO_FIFO_SIZE) {
         return false;
     }
     fifo->buffer[fifo->write_idx] = sample;
     fifo->write_idx = (fifo->write_idx + 1) & (AUDIO_FIFO_BITS);
     fifo->samples_in_fifo++;
+    if (fifo->samples_in_fifo >= AUDIO_FIFO_START_THRESHOLD) {
+        fifo->state = FIFO_STATE_RUNNING;
+    }
     return true;
 }
 
 // Add multiple samples to the FIFO
 bool fifo_add_samples(audio_fifo_t *fifo, const audio_sample_t *samples_buffer, uint32_t num_samples_to_add) {
     // Check basic conditions
-    if (fifo->state != FIFO_STATE_RUNNING) {
-        /* putchar('x'); */
-        return false; // FIFO must be running
-    }
     if (num_samples_to_add == 0) {
         return true; // Nothing to add, operation considered successful
     }
@@ -69,7 +60,6 @@ bool fifo_add_samples(audio_fifo_t *fifo, const audio_sample_t *samples_buffer, 
     // Check if there's enough space in the FIFO
     uint32_t available_space = AUDIO_FIFO_SIZE - fifo->samples_in_fifo;
     if (num_samples_to_add > available_space) {
-        putchar('n');
         return false; // Not enough space for all requested samples
     }
 
@@ -93,39 +83,24 @@ bool fifo_add_samples(audio_fifo_t *fifo, const audio_sample_t *samples_buffer, 
     // Update FIFO state
     fifo->write_idx = (fifo->write_idx + num_samples_to_add) & (AUDIO_FIFO_BITS);
     fifo->samples_in_fifo += num_samples_to_add;
-
+    if (fifo->samples_in_fifo >= AUDIO_FIFO_START_THRESHOLD) {
+        fifo->state = FIFO_STATE_RUNNING;
+    }
     return true;
 }
 
 // Take num_samples from the FIFO. Note that it is up to the consumer to actually
 // access the bits in the FIFO directly via its instance of audio_fifo_t
-bool fifo_take_samples(audio_fifo_t *fifo, uint32_t num_samples) {
-    if (fifo->state != FIFO_STATE_RUNNING || /*(fifo->samples_in_fifo < AUDIO_FIFO_START_THRESHOLD) ||*/ (fifo->samples_in_fifo < num_samples)) {
-        /* putchar('X'); */
-        return false;
+uint32_t fifo_take_samples(audio_fifo_t *fifo, uint32_t num_samples) {
+    if (fifo->state == FIFO_STATE_STOPPED) {
+        return 0;
     }
-    fifo->read_idx = (fifo->read_idx + num_samples) & (AUDIO_FIFO_BITS);
-    fifo->samples_in_fifo -= num_samples;
-    return true;
-}
-
-// Check if FIFO is empty
-bool fifo_is_empty(audio_fifo_t *fifo) {
-    return fifo->samples_in_fifo == 0;
-}
-
-// Check if FIFO is full
-bool fifo_is_full(audio_fifo_t *fifo) {
-    return fifo->samples_in_fifo >= AUDIO_FIFO_SIZE;
-}
-
-// Get the current FIFO state
-fifo_state_t fifo_get_state(audio_fifo_t *fifo) {
-    return fifo->state;
-}
-
-// Set the FIFO state
-void fifo_set_state(audio_fifo_t *fifo, fifo_state_t new_state) {
-    /* printf("state: %u\n", new_state); */
-    fifo->state = new_state;
+    uint32_t samples_returned = MIN(fifo->samples_in_fifo, num_samples);
+    fifo->read_idx = (fifo->read_idx + samples_returned) & (AUDIO_FIFO_BITS);
+    fifo->samples_in_fifo -= samples_returned;
+    // Only go back to stopped once fifo is fully exhausted
+    if (fifo->samples_in_fifo == 0) {
+        fifo->state = FIFO_STATE_STOPPED;
+    }
+    return samples_returned;
 }
