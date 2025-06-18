@@ -28,8 +28,8 @@
 #define HAVE_STDARG_H
 #include "86box_compat.h"
 #include "cdrom.h"
-#include "cdrom_image.h"
 #include "cdrom_image_manager.h"
+#include "cdrom_error_msg.h"
 #include "pico/multicore.h"
 #include "hardware/structs/timer.h"
 
@@ -141,6 +141,7 @@ void cdrom_tasks(cdrom_t *dev) {
         cdrom_read_data(dev);
         break;
     case CD_COMMAND_IMAGE_LIST:
+        cdrom_errorstr_clear();
         dev->image_list = cdman_list_images(&dev->image_count);
         dev->image_command = CD_COMMAND_NONE;
         dev->image_status = dev->image_list ? CD_STATUS_READY : CD_STATUS_ERROR;
@@ -150,6 +151,7 @@ void cdrom_tasks(cdrom_t *dev) {
         break;
     case CD_COMMAND_IMAGE_LOAD:
         printf("loading");
+        cdrom_errorstr_clear();
         if (dev->disk_loaded) {
             dev->disk_loaded = 0;
             dev->media_changed = 1;
@@ -161,6 +163,7 @@ void cdrom_tasks(cdrom_t *dev) {
             printf("Opening %s...",dev->image_path);
             if (cdrom_image_open(dev,dev->image_path)) {
                 dev->image_status = CD_STATUS_ERROR;
+                cdman_clear_image();
                 break;
             }
             printf("Done.\n");
@@ -593,6 +596,7 @@ cdrom_global_init(void)
 {
     /* Clear the global data. */
     memset(&cdrom, 0x00, sizeof(cdrom));
+    cdrom.error_str = cdrom_errorstr_get();
     cdrom.current_sector_samples = (int16_t*)cdrom.audio_sector_buffer;
 }
 

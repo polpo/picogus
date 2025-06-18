@@ -220,8 +220,6 @@ __force_inline void select_picogus(uint8_t value) {
     case MODE_CDPORT: // CMS Base port
         basePort_low = 0;
         break;
-    case MODE_CDSTATUS:
-        break;
     case MODE_CDLIST:
 #ifdef CDROM
         if (cdrom.image_status != CD_STATUS_READY) {
@@ -234,10 +232,12 @@ __force_inline void select_picogus(uint8_t value) {
         cur_read_idx = 0;
 #endif
         break;
+    case MODE_CDSTATUS:
     case MODE_CDLOAD:
     case MODE_CDAUTOADV:
         break;
     case MODE_CDNAME:
+    case MODE_CDERROR:
         cur_read = 0;
         break;
     case MODE_SAVE: // Select save settings register
@@ -543,6 +543,12 @@ __force_inline uint8_t read_picogus_high(void) {
         return cdman_current_image_index();
     case MODE_CDNAME: // Firmware string
         ret = cdrom.image_path[cur_read++];
+        if (ret == 0) { // Null terminated
+            cur_read = 0;
+        }
+        return ret;
+    case MODE_CDERROR: // Error string
+        ret = cdrom.error_str[cur_read++];
         if (ret == 0) { // Null terminated
             cur_read = 0;
         }

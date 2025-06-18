@@ -66,6 +66,8 @@
    changing this one define will be enough. */
 #define CDROM_EMPTY !dev->host_drive
 
+#include "../../common/picogus.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -82,6 +84,7 @@ typedef enum
     CD_COMMAND_IMAGE_LIST
 } cdrom_image_command_t;
 
+/*
 typedef enum
 {
     CD_STATUS_ERROR = -1,
@@ -89,6 +92,7 @@ typedef enum
     CD_STATUS_BUSY,
     CD_STATUS_READY,
 } cdrom_image_status_t;
+*/
 
 typedef struct subchannel_t {
     uint8_t attr;
@@ -180,10 +184,8 @@ typedef struct cdrom {
     volatile int cd_buflen;
     int audio_op;
     int audio_muted_soft;
-    int sony_msf;
 
     const cdrom_ops_t *ops;
-    int kevin;
 
     void *image;
 
@@ -191,6 +193,8 @@ typedef struct cdrom {
     void (*close)(void *priv);
     uint32_t (*get_volume)(void *p, int channel);
     uint32_t (*get_channel)(void *p, int channel);
+
+    const char *error_str;
 
     // int16_t cd_buffer[BUF_SIZE];
     uint8_t audio_sector_buffer[RAW_SECTOR_SIZE];

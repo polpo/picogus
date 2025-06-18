@@ -36,6 +36,7 @@
 #endif
 #define HAVE_STDARG_H
 #include "cdrom_image_backend.h"
+#include "cdrom_error_msg.h"
 #include "86box_compat.h"
 
 
@@ -191,7 +192,7 @@ bin_init(const char *filename, int *error)
     struct stat   stats;
     
     if (tf == NULL) {
-        *error = 1;
+        *error = 2;
         cdrom_image_backend_log("can't malloc\n");
         return NULL;
     }
@@ -206,14 +207,6 @@ bin_init(const char *filename, int *error)
     FSIZE_t len = f_size(tf->fp);
     cdrom_image_backend_log("file size: %u", len);
 
-    /* if (f_stat(tf->fn, &stats) != 0) { */
-    /*     #<{(| Use a blank structure if stat failed. |)}># */
-    /*     memset(&stats, 0, sizeof(struct stat)); */
-    /* } */
-    /* *error = ((tf->fp == NULL) || ((stats.st_mode & S_IFMT) == S_IFDIR)); */
-    /*  */
-    /* #<{(| Set the function pointers. |)}># */
-    /* if (!*error) { */
     if (result == FR_OK) {
         cdrom_image_backend_log("all good\n");
         // Set up fast seek for the file (avoids reading the FAT for each seek)
@@ -227,16 +220,9 @@ bin_init(const char *filename, int *error)
         tf->get_length = bin_get_length;
         tf->close      = bin_close;
     } else {
-    /*     #<{(| From the check above, error may still be non-zero if opening a directory. */
-    /*      * The error is set for viso to try and open the directory following this function. */
-    /*      * However, we need to make sure the descriptor is closed. |)}># */
-    /*     if ((tf->fp != NULL) && ((stats.st_mode & S_IFMT) == S_IFDIR)) { */
-    /*         #<{(| tf is freed by bin_close |)}># */
-    /*         bin_close(tf); */
-    /*     } else { */
-            free(tf);
-    /*     } */
+        free(tf);
         tf = NULL;
+        *error = 3;
     }
 
     return tf;
@@ -305,14 +291,13 @@ cdi_close(cd_img_t *cdi)
 int
 cdi_set_device(cd_img_t *cdi, const char *path)
 {
-    int ret;
-
-    if ((ret = cdi_load_cue(cdi, path)))
-        return ret;
-
-    if ((ret = cdi_load_iso(cdi, path)))
-        return ret;
-
+    int len = strlen(path);
+    if (len < 4) return 0;
+    if (strncasecmp(path + (len - 4), ".cue", 4) == 0) {
+        return cdi_load_cue(cdi, path);
+    } else if (strncasecmp(path + (len - 4), ".iso", 4) == 0) {
+        return cdi_load_iso(cdi, path);
+    }
     return 0;
 }
 
@@ -635,27 +620,20 @@ cdi_track_push_back(cd_img_t *cdi, track_t *trk)
 int
 cdi_load_iso(cd_img_t *cdi, const char *filename)
 {
-    int     error;
+    int     error = 0;
     int     ret = 2;
-    track_t trk;
+    track_t trk = {0};
 
     cdi->tracks     = NULL;
     cdi->tracks_num = 0;
-
-    memset(&trk, 0, sizeof(track_t));
 
     /* Data track (shouldn't there be a lead in track?). */
     trk.file = bin_init(filename, &error);
     if (error) {
         if ((trk.file != NULL) && (trk.file->close != NULL))
             trk.file->close(trk.file);
-        ret      = 3;
-//KM        trk.file = viso_init(filename, &error);
-        if (error) {
-            if ((trk.file != NULL) && (trk.file->close != NULL))
-                trk.file->close(trk.file);
-            return 0;
-        }
+        cdrom_errorstr_set("Error loading iso");
+        return 0;
     }
     trk.number       = 1;
     trk.track_number = 1;
@@ -810,14 +788,13 @@ static int
 cdi_cue_get_flags(track_t *cur, char **line)
 {
     char temp[128];
-    char temp2[128];
+    char temp2[128] = {0};
     int  success;
 
     success = cdi_cue_get_buffer(temp, line, 0);
     if (!success)
         return 0;
 
-    memset(temp2, 0x00, sizeof(temp2));
     success = sscanf(temp, "%s", temp2) == 1;
     if (!success)
         return 0;
@@ -903,10 +880,8 @@ cdi_add_track(cd_img_t *cdi, track_t *cur, uint32_t *shift, uint32_t prestart, u
 int
 cdi_load_cue(cd_img_t *cdi, const char *cuefile)
 {
-    track_t  trk;
-    char     pathname[MAX_FILENAME_LENGTH];
+    track_t  trk = {0};
     char     filename[MAX_FILENAME_LENGTH];
-    char     temp[MAX_FILENAME_LENGTH];
     /* uint64_t shift = 0ULL; */
     /* uint64_t prestart = 0ULL; */
     /* uint64_t cur_pregap = 0ULL; */
@@ -933,18 +908,6 @@ cdi_load_cue(cd_img_t *cdi, const char *cuefile)
     cdi->tracks     = NULL;
     cdi->tracks_num = 0;
     
-    memset(&trk, 0, sizeof(track_t));
-
-    /* Get a copy of the filename into pathname, we need it later. */
-    memset(pathname, 0, MAX_FILENAME_LENGTH * sizeof(char));
-
-//KM
-//    path_get_dirname(pathname, cuefile);
-
-    /* Open the file. */
-//KM
-//    fp = plat_fopen(cuefile, "r");
-
     putchar('a');
     /* fp = (FIL *) malloc(sizeof(FIL)); */
     FRESULT result = f_open(&fp, cuefile, FA_READ);      
@@ -975,7 +938,7 @@ cdi_load_cue(cd_img_t *cdi, const char *cuefile)
             cdrom_image_backend_log("no more read\n");
             break;        
         }
-        puts(buf);
+        /* puts(buf); */
         
         /* Do two iterations to make sure to nuke even if it's \r\n or \n\r,
            but do checks to make sure we're not nuking other bytes. */
@@ -1128,8 +1091,6 @@ cdi_load_cue(cd_img_t *cdi, const char *cuefile)
 
             putchar('6');
             if (!strcmp(type, "BINARY")) {
-                memset(temp, 0, MAX_FILENAME_LENGTH * sizeof(char));
-//KM//                path_append_filename(filename, pathname, ansi);
                 strncpy(filename,ansi,MAX_FILENAME_LENGTH);
                 trk.file = track_file_init(filename, &error);
                 if (trk.file) {
@@ -1138,10 +1099,17 @@ cdi_load_cue(cd_img_t *cdi, const char *cuefile)
             }
             putchar('7');
             if (error) {
-/* #ifdef ENABLE_CDROM_IMAGE_BACKEND_LOG */
-                cdrom_image_backend_log("CUE: cannot open fille '%s' in cue sheet!\n",
-                                        filename);
-/* #endif */
+                switch (error) {
+                case 1:
+                    cdrom_errorstr_set("Unsupported type %s for file '%s' in cue sheet", type, ansi);
+                    break;
+                case 2:
+                    cdrom_errorstr_set("Error allocating memory for file '%s' in cue sheet", filename);
+                    break;
+                default:
+                    cdrom_errorstr_set("Cannot open file '%s' in cue sheet", filename);
+                    break;
+                }
                 if (trk.file != NULL) {
                     trk.file->close(trk.file);
                     trk.file = NULL;
@@ -1156,9 +1124,7 @@ cdi_load_cue(cd_img_t *cdi, const char *cuefile)
             /* Ignored commands. */
             success = 1;
         } else {
-/* #ifdef ENABLE_CDROM_IMAGE_BACKEND_LOG */
-            cdrom_image_backend_log("CUE: unsupported command '%s' in cue sheet!\n", command);
-/* #endif */
+            cdrom_errorstr_set("Unsupported command '%s' in cue sheet", command);
             success = 0;
         }
 
@@ -1168,8 +1134,12 @@ cdi_load_cue(cd_img_t *cdi, const char *cuefile)
     }
 
     f_close(&fp);
-    if (!success)
+    if (!success) {
+        if (!cdrom_errorstr_is_set()) {
+            cdrom_errorstr_set("Error while loading cue sheet");
+        }
         return 0;
+    }
 
     /* Add last track. */
     if (!cdi_add_track(cdi, &trk, &shift, prestart, &total_pregap, cur_pregap))

@@ -7,6 +7,8 @@
 
 #include <stdio.h>
 
+#include "cdrom_error_msg.h"
+
 // Maximum number of files to list
 #define MAX_FILES 100
 // Maximum filename length
@@ -52,6 +54,7 @@ char** cdman_list_images(int *fileCount) {
     DIR dp;
     FRESULT res = f_opendir(&dp, "");
     if (res != FR_OK) {
+        cdrom_errorstr_set("No USB disk or error mounting it");
         return NULL;
     }
     
@@ -59,6 +62,7 @@ char** cdman_list_images(int *fileCount) {
     FileEntry *entries = (FileEntry *)malloc(MAX_FILES * sizeof(FileEntry));
     if (!entries) {
         f_closedir(&dp);
+        cdrom_errorstr_set("No image files on USB disk");
         return NULL;
     }
     
@@ -89,6 +93,7 @@ char** cdman_list_images(int *fileCount) {
     
     if (count == 0) {
         free(entries);
+        cdrom_errorstr_set("No image files on USB disk");
         return NULL;
     }
     
@@ -151,19 +156,19 @@ uint8_t cdman_current_image_index(void) {
 
 void cdman_load_image_index(cdrom_t *dev, int imageIndex) {
     /* printf("Loading index %u (was %u)\n", imageIndex, current_index); */
-    int imageCount;
-    char** images = cdman_list_images(&imageCount);
     if (imageIndex == 0) {
         cdman_unload_image(dev);
     } else {
+        int imageCount;
+        char** images = cdman_list_images(&imageCount);
         if (imageIndex > imageCount) {
             // Wrap around index for autoadvance
             imageIndex = 1;
         }
         strcpy(dev->image_path, images[imageIndex - 1]);
         dev->image_command = CD_COMMAND_IMAGE_LOAD;
+        cdman_list_images_free(images, imageCount);
     }
-    cdman_list_images_free(images, imageCount);
     current_index = last_loaded_index = imageIndex;
 }
 
@@ -171,6 +176,11 @@ void cdman_load_image_index(cdrom_t *dev, int imageIndex) {
 void cdman_unload_image(cdrom_t *dev) {
     dev->image_path[0] = 0;
     dev->image_command = CD_COMMAND_IMAGE_LOAD;
+    current_index = 0;
+}
+
+
+void cdman_clear_image(void) {
     current_index = 0;
 }
 
@@ -183,11 +193,17 @@ void cdman_set_autoadvance(bool setting) {
     autoadvance = setting;
 }
 
+
+void cdman_reload_image(cdrom_t *dev) {
+    cdman_load_image_index(dev, autoadvance ? (last_loaded_index + 1) : last_loaded_index);
+}
+
+
 void cdman_set_serial(cdrom_t *dev, uint32_t serial) {
     if (drive_serial == serial) {
         // If we are re-inserting the same drive, maybe advance the disc image
         printf("Inserting the same drive...\n");
-        cdman_load_image_index(dev, autoadvance ? (last_loaded_index + 1) : last_loaded_index);
+        cdman_reload_image(dev);
     } else {
         drive_serial = serial;
         printf("New drive with serial %u inserted", serial);

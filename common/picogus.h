@@ -16,6 +16,13 @@ typedef enum {
     PICO_FIRMWARE_ERROR = 0xFF
 } pico_firmware_status_t;
 
+typedef enum {
+    CD_STATUS_ERROR = -1,
+    CD_STATUS_IDLE,
+    CD_STATUS_BUSY,
+    CD_STATUS_READY,
+} cdrom_image_status_t;
+
 typedef enum { PICO_BASED = 0, PICOGUS_2 = 1 } board_type_t;
 
 typedef enum {
@@ -77,10 +84,11 @@ static const char *modenames[9] = {
 
 #define MODE_CDPORT     0x60 // CD base port
 #define MODE_CDSTATUS   0x61 // Get CD image command status
-#define MODE_CDLIST     0x62 // List CD images
-#define MODE_CDLOAD     0x63 // Load CD image or get loaded image index
-#define MODE_CDNAME     0x64 // Get name of loaded CD image
-#define MODE_CDAUTOADV  0x65 // Set autoadvance for CD image on USB reinsert
+#define MODE_CDERROR    0x62 // Get CD image error
+#define MODE_CDLIST     0x63 // List CD images
+#define MODE_CDLOAD     0x64 // Load CD image or get loaded image index
+#define MODE_CDNAME     0x65 // Get name of loaded CD image
+#define MODE_CDAUTOADV  0x66 // Set autoadvance for CD image on USB reinsert
 
 #define MODE_DEFAULTS   0xE0 // Select reset to defaults register
 #define MODE_SAVE       0xE1 // Select save settings register

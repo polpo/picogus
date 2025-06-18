@@ -57,6 +57,7 @@ Data    (input)     = base + 2  (base)
 */
 #include "mke.h"
 #include "../cdrom/cdrom.h"
+#include "../cdrom/cdrom_image_manager.h"
 
 #include <stdio.h>
 
@@ -107,13 +108,15 @@ void MKE_COMMAND(uint8_t value) {
         switch(mke.command_buffer[0]) { 
             case 06: //TRAY OUT
                 cdrom_fifo_clear(&cdrom.info_fifo);
-                mke_log("TRAY OUT\n");
+                printf("TRAY OUT\n");
+                cdman_unload_image(&cdrom);
                 cdrom_output_status(&cdrom);
                 mke.tray_open=true;
                 break;
             case 07: //TRAY IN
                 cdrom_fifo_clear(&cdrom.info_fifo);                
-                mke_log("TRAY IN\n");
+                printf("TRAY IN\n");
+                cdman_reload_image(&cdrom);
                 cdrom_output_status(&cdrom);                                
                 mke.tray_open=false;
                 break;

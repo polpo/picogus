@@ -70,7 +70,7 @@ static void usage(card_mode_t mode, bool print_all) {
     }
     if (mode == SB_MODE || mode == USB_MODE || print_all) {
         printf("CD-ROM settings:\n");
-        printf("   /cdport x    - set the base port of CD interface. Default: 230, 0 to disable\n");
+        printf("   /cdport x    - set the base port of CD interface. Default: 250, 0 to disable\n");
         printf("   /cdlist      - list CD images on the inserted USB drive\n");
         printf("   /cdload n    - load image n in the list given by /cdlist. 0 to unload image\n");
         printf("   /cdauto 1|0  - auto-advance loaded image when same USB drive is reinserted\n");
@@ -217,18 +217,18 @@ static int init_sb(void) {
 }
 
 
-static void print_firmware_string(void) {
+static void print_string(uint8_t mode) {
     outp(CONTROL_PORT, 0xCC); // Knock on the door...
-    outp(CONTROL_PORT, MODE_FWSTRING); // Select firmware string register
+    outp(CONTROL_PORT, mode); // Select mode register
 
-    char firmware_string[256] = {0};
+    char str[256] = {0};
     for (uint8_t i = 0; i < 255; ++i) {
-        firmware_string[i] = inp(DATA_PORT_HIGH);
-        if (!firmware_string[i]) {
+        str[i] = inp(DATA_PORT_HIGH);
+        if (!str[i]) {
             break;
         }
     }
-    printf("Firmware version: %s\n", firmware_string);
+    puts(str);
 }
 
 
@@ -253,8 +253,9 @@ static bool print_cdimage_list(void) {
     bool ready = false;
     for (uint16_t i = 0; i < 65535; ++i) {
         int8_t cd_status = inp(DATA_PORT_HIGH);
-        if (cd_status == -1) {
-            printf("Error getting CD image list (bad/no USB drive or no images on drive)\n");
+        if (cd_status == CD_STATUS_ERROR) {
+            printf("Error getting CD image list: ");
+            print_string(MODE_CDERROR);
             return false;
         } else if (cd_status == 2) {
             ready = true;
@@ -265,7 +266,6 @@ static bool print_cdimage_list(void) {
         printf("Timeout getting CD image list\n");
         return false;
     }
-    outp(CONTROL_PORT, 0xCC); // Knock on the door...
     outp(CONTROL_PORT, MODE_CDLIST); // Select CD image list register
     char b[256], c, *p = b;
     uint8_t line = 1;
@@ -290,21 +290,29 @@ static bool print_cdimage_list(void) {
 static void print_cdimage_current(void) {
     outp(CONTROL_PORT, 0xCC); // Knock on the door...
     outp(CONTROL_PORT, MODE_CDSTATUS); // Select CD image status register
-    wait_for_read(0); // Wait for CD status to be idle
-    outp(CONTROL_PORT, MODE_CDNAME); // Select CD image name register
-
-    char cdname_string[256] = {0};
-    for (uint8_t i = 0; i < 255; ++i) {
-        cdname_string[i] = inp(DATA_PORT_HIGH);
-        if (!cdname_string[i]) {
-            if (i == 0) {
-                printf("No CD image loaded\n");
-                return;
-            }
+    uint8_t cd_status;
+    for (uint16_t i = 0; i < 65535; ++i) {
+        cd_status = inp(DATA_PORT_HIGH);
+        if (cd_status != CD_STATUS_BUSY) {
             break;
         }
     }
-    printf("CD image loaded: %s\n", cdname_string);
+    if (cd_status == CD_STATUS_BUSY) {
+        printf("Timeout loading CD image.\n");
+        return;
+    } else if ((int8_t)cd_status == CD_STATUS_ERROR) {
+        printf("Error loading CD image: ");
+        print_string(MODE_CDERROR);
+        return;
+    }
+    outp(CONTROL_PORT, MODE_CDLOAD); // Get currently loaded index
+    uint8_t current_index = inp(DATA_PORT_HIGH);
+    if (!current_index) {
+        printf("No CD image loaded.\n");
+        return;
+    }
+    printf("CD image loaded: ");
+    print_string(MODE_CDNAME);
 }
 
 
@@ -337,8 +345,8 @@ static int reboot_to_firmware(const uint8_t value, const bool permanent) {
         fprintf(stderr, "ERROR: card is not alive after rebooting to new firmware\n");
         return 99;
     }
-    printf("PicoGUS detected: ");
-    print_firmware_string();
+    printf("PicoGUS detected: Firmware version: ");
+    print_string(MODE_FWSTRING);
     return 0;
 }
 
@@ -443,8 +451,8 @@ static int write_firmware(const char* fw_filename) {
         fprintf(stderr, "ERROR: card is not alive after programming firmware\n");
         return 99;
     }
-    printf("PicoGUS detected: ");
-    print_firmware_string();
+    printf("PicoGUS detected: Firmware version: ");
+    print_string(MODE_FWSTRING);
     return 0;
 }
 
@@ -530,8 +538,8 @@ int main(int argc, char* argv[]) {
         err_pigus();
         return 99;
     };
-    printf("PicoGUS detected: ");
-    print_firmware_string();
+    printf("PicoGUS detected: Firmware version: ");
+    print_string(MODE_FWSTRING);
 
     int i = 1;
     // /flash option is special and can work across protocol versions, so if it's specified, that's all we do

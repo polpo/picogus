@@ -5,6 +5,7 @@ target_sources(cdrom INTERFACE
     ${CMAKE_CURRENT_LIST_DIR}/cdrom_image_backend.c
     ${CMAKE_CURRENT_LIST_DIR}/cdrom_image_manager.c
     ${CMAKE_CURRENT_LIST_DIR}/cdrom_image.c
+    ${CMAKE_CURRENT_LIST_DIR}/cdrom_error_msg.c
     ${CMAKE_CURRENT_LIST_DIR}/86box_compat.c    
 )
 

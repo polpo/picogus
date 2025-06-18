@@ -32,7 +32,6 @@
 #define HAVE_STDARG_H
 
 #include "cdrom_image_backend.h"
-#include "cdrom_image.h"
 #include "cdrom.h"
 #include "86box_compat.h"
 
