@@ -632,7 +632,7 @@ cdi_load_iso(cd_img_t *cdi, const char *filename)
     if (error) {
         if ((trk.file != NULL) && (trk.file->close != NULL))
             trk.file->close(trk.file);
-        cdrom_errorstr_set("Error loading iso");
+        cdrom_errorstr_set("Error loading iso '%s'", filename);
         return 0;
     }
     trk.number       = 1;
@@ -1101,13 +1101,13 @@ cdi_load_cue(cd_img_t *cdi, const char *cuefile)
             if (error) {
                 switch (error) {
                 case 1:
-                    cdrom_errorstr_set("Unsupported type %s for file '%s' in cue sheet", type, ansi);
+                    cdrom_errorstr_set("Unsupported type %s for file '%s' in cue sheet '%s'", type, ansi, cuefile);
                     break;
                 case 2:
-                    cdrom_errorstr_set("Error allocating memory for file '%s' in cue sheet", filename);
+                    cdrom_errorstr_set("Error allocating memory for file '%s' in cue sheet '%s'", filename, cuefile);
                     break;
                 default:
-                    cdrom_errorstr_set("Cannot open file '%s' in cue sheet", filename);
+                    cdrom_errorstr_set("Cannot open file '%s' in cue sheet '%s'", filename, cuefile);
                     break;
                 }
                 if (trk.file != NULL) {
@@ -1124,7 +1124,7 @@ cdi_load_cue(cd_img_t *cdi, const char *cuefile)
             /* Ignored commands. */
             success = 1;
         } else {
-            cdrom_errorstr_set("Unsupported command '%s' in cue sheet", command);
+            cdrom_errorstr_set("Unsupported command '%s' in cue sheet '%s'", command, cuefile);
             success = 0;
         }
 
@@ -1136,7 +1136,7 @@ cdi_load_cue(cd_img_t *cdi, const char *cuefile)
     f_close(&fp);
     if (!success) {
         if (!cdrom_errorstr_is_set()) {
-            cdrom_errorstr_set("Error while loading cue sheet");
+            cdrom_errorstr_set("Error while loading cue sheet '%s'", cuefile);
         }
         return 0;
     }
