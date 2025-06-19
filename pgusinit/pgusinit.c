@@ -831,7 +831,7 @@ int main(int argc, char* argv[]) {
                 break;
             }
         }
-        if (i == 8) {
+        if (i == 7) {
             usage(mode, false);
             return 255;
         }
