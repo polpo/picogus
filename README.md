@@ -4,7 +4,7 @@
 
 [![Build Status](https://github.com/polpo/picogus/actions/workflows/build.yml/badge.svg)](https://github.com/polpo/picogus/actions/workflows/build.yml)
 
-ISA sound card emulation on the Raspberry Pi Pico's RP2040 microcontroller. PicoGUS can emulate:
+ISA sound card and CD-ROM drive emulation on the Raspberry Pi Pico's RP2040 microcontroller. PicoGUS can emulate:
 
 * [Gravis Ultrasound (GUS)](https://en.wikipedia.org/wiki/Gravis_Ultrasound) - the primary focus of PicoGUS, hence the name
 * [Sound Blaster 2.0](https://en.wikipedia.org/wiki/Sound_Blaster#Sound_Blaster_2.0,_CT1350) / [AdLib (OPL2)](https://en.wikipedia.org/wiki/Ad_Lib,_Inc.)
@@ -12,6 +12,7 @@ ISA sound card emulation on the Raspberry Pi Pico's RP2040 microcontroller. Pico
 * [Tandy 3-voice](http://www.vgmpf.com/Wiki/index.php?title=Tandy_3_Voice)
 * [CMS/Game Blaster](http://nerdlypleasures.blogspot.com/2012/10/all-you-ever-wanted-to-know-about.html)
 * [Game port joystick](https://en.wikipedia.org/wiki/Game_port)
+* [Panasonic/MKE CD-ROM](https://en.wikipedia.org/wiki/Panasonic_CD_interface)
 
 Current status: perpetual beta! See the [main wiki page](https://github.com/polpo/picogus/wiki) for current status and the [compatibility list](https://github.com/polpo/picogus/wiki/Compatibility-list) for support status of various DOS programs and other system compatibility notes. This project has a heavy demoscene focus due to the GUS's history so that's what I've concentrated on, but GUS support in games is very good to excellent.
 
@@ -60,7 +61,8 @@ My videos:
 * MPU-401 emulation adapted from [HardMPU](https://github.com/ab0tj/HardMPU) and [DOSBox-X](https://github.com/joncampbell123/dosbox-x)
 * Tandy 3-voice emulation based on code contributed by [Aaron Giles](https://aarongiles.com/), adapted from [DREAMM](https://aarongiles.com/dreamm/) 
 * CMS emulation based on code contributed by [Aaron Giles](https://aarongiles.com/), adapted from [DREAMM](https://aarongiles.com/dreamm/)
-* USB joystick support uses [TinyUSB](https://github.com/hathach/tinyusb) and [tusb_xinput](https://github.com/Ryzee119/tusb_xinput)
+* USB support uses [TinyUSB](https://github.com/hathach/tinyusb) and [tusb_xinput](https://github.com/Ryzee119/tusb_xinput) with USB mass storage improvements by rppicomidi and wbcbz7.
+* FAT drive support by [FatFS](https://elm-chan.org/fsw/ff/)
 
 ## License
 
