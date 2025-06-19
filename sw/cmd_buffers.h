@@ -1,3 +1,4 @@
+#pragma once
 /*
  * Command buffers for CMS and Tandy bus events
  */

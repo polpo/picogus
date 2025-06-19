@@ -37,7 +37,7 @@ static void usage(card_mode_t mode, bool print_all) {
     printf("Usage:\n");
     printf("   /?            - show this message (/?? to show options for all modes)\n");
     printf("   /flash fw.uf2 - program the PicoGUS with the firmware file fw.uf2\n");
-    printf("   /mode x       - change card mode to x (gus, sb, mpu, tandy, cms, adlib, usb)\n");
+    printf("   /mode x       - change card mode to x (gus, sb, mpu, psg, adlib, usb)\n");
     printf("   /save         - save settings to the card to persist on system boot\n");
     printf("   /defaults     - set all settings for all modes to defaults\n");
     printf("   /wtvol x      - set volume of WT header. 0-100, Default 100 (2.0 cards only)\n");
@@ -75,17 +75,17 @@ static void usage(card_mode_t mode, bool print_all) {
         printf("   /cdload n    - load image n in the list given by /cdlist. 0 to unload image\n");
         printf("   /cdauto 1|0  - auto-advance loaded image when same USB drive is reinserted\n");
     }
-    if (mode == TANDY_MODE || print_all) {
+    if (mode == PSG_MODE || print_all) {
         //     "...............................................................................\n"
         printf("Tandy settings:\n");
         printf("   /tandyport x - set the base port of the Tandy 3-voice. Default: 2C0\n");
     }
-    if (mode == CMS_MODE || print_all) {
+    if (mode == PSG_MODE || print_all) {
         //     "...............................................................................\n"
         printf("CMS settings:\n");
         printf("   /cmsport x - set the base port of the CMS. Default: 220\n");
     }
-    if (mode == USB_MODE || mode == CMS_MODE || mode == TANDY_MODE || mode == ADLIB_MODE || print_all) {
+    if (mode == USB_MODE || mode == PSG_MODE || mode == ADLIB_MODE || print_all) {
         //     "...............................................................................\n"
         printf("Serial Mouse settings:\n");
         printf("   /mousecom n - mouse COM port. Default: 0, Choices: 0 (disable), 1, 2, 3, 4\n");
@@ -785,7 +785,7 @@ int main(int argc, char* argv[]) {
         // CD-ROM options /////////////////////////////////////////////////////////////////
         } else if (stricmp(argv[i], "/cdport") == 0) {
             process_port_opt(tmp_uint16);
-            outp(CONTROL_PORT, MODE_CDPORT); // Select Tandy port register
+            outp(CONTROL_PORT, MODE_CDPORT); // Select CD port register
             outpw(DATA_PORT_LOW, tmp_uint16); // Write port
         } else if (stricmp(argv[i], "/cdlist") == 0) {
             if (!print_cdimage_list()) {
@@ -820,8 +820,12 @@ int main(int argc, char* argv[]) {
 
 
     if (mode_name[0]) {
+        if (strnicmp(mode_name, "TANDY", 5) == 0 || strnicmp(mode_name, "CMS", 3) == 0) {
+            // Backwards compatibility for old tandy and cms modes
+            strcpy(mode_name, "PSG");
+        } 
         int i;
-        for (i = 1; i < 8; ++i) {
+        for (i = 1; i < 7; ++i) {
             if (strnicmp(modenames[i], mode_name, 7) == 0) {
                 fw_num = i;
                 break;
@@ -921,15 +925,13 @@ int main(int argc, char* argv[]) {
         tmp_uint8 = inp(DATA_PORT_HIGH);
         printf("CD image auto-advance on USB reinsert %s\n", tmp_uint8 ? "enabled" : "disabled");
         break;
-    case TANDY_MODE:
+    case PSG_MODE:
         outp(CONTROL_PORT, MODE_TANDYPORT); // Select port register
         tmp_uint16 = inpw(DATA_PORT_LOW); // Get port
-        printf("Running in Tandy 3-voice mode on port %x\n", tmp_uint16);
-        break;
-    case CMS_MODE:
+        printf("Running in PSG mode (Tandy 3-voice on port %x, ", tmp_uint16);
         outp(CONTROL_PORT, MODE_CMSPORT); // Select port register
         tmp_uint16 = inpw(DATA_PORT_LOW); // Get port
-        printf("Running in CMS/Game Blaster mode on port %x\n", tmp_uint16);
+        printf("CMS/Game Blaster on port %x)\n", tmp_uint16);
         break;
     case SB_MODE:
         if (init_sb()) {
@@ -963,7 +965,7 @@ int main(int argc, char* argv[]) {
         printf("Running in unknown mode (maybe upgrade pgusinit?)\n");
         break;
     }
-    if (mode == USB_MODE || mode == CMS_MODE || mode == TANDY_MODE || mode == ADLIB_MODE) {
+    if (mode == USB_MODE || mode == PSG_MODE || mode == ADLIB_MODE) {
         outp(CONTROL_PORT, MODE_MOUSEPORT); // Select port register
         tmp_uint16 = inpw(DATA_PORT_LOW); // Get port
         printf("Serial Mouse ");

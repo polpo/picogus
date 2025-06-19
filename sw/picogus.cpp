@@ -104,19 +104,16 @@ void play_mpu(void);
 #endif
 #endif
 
-#ifdef SOUND_TANDY
-#include "square/square.h"
-void play_tandy(void);
-
+#if SOUND_TANDY || SOUND_CMS
 #include "cmd_buffers.h"
+#include "square/square.h"
+void play_psg(void);
+#endif
+#if SOUND_TANDY
 tandy_buffer_t tandy_buffer = { {0}, 0, 0 };
 #endif
-
-#ifdef SOUND_CMS
-void play_cms(void);
+#if SOUND_CMS
 static uint8_t cms_detect = 0xFF;
-
-#include "cmd_buffers.h"
 cms_buffer_t cms_buffer = { {0}, 0, 0 };
 #endif
 
@@ -570,10 +567,8 @@ __force_inline uint8_t read_picogus_high(void) {
 void processSettings(void) {
 #if defined(SOUND_GUS)
     settings.startupMode = GUS_MODE;
-#elif defined(SOUND_TANDY)
-    settings.startupMode = TANDY_MODE;
-#elif defined(SOUND_CMS)
-    settings.startupMode = CMS_MODE;
+#elif (SOUND_TANDY || SOUND_CMS)
+    settings.startupMode = PSG_MODE;
 #elif defined(SOUND_SB)
     settings.startupMode = SB_MODE;
 #elif defined(SOUND_OPL)
@@ -744,6 +739,47 @@ __force_inline void handle_iow(void) {
         PG_NE2000_Write(port & 0x1f, iow_read & 0xFF);        
     } else // if follows down below
 #endif
+#ifdef SOUND_CMS
+    if ((port & 0x3f0) == settings.CMS.basePort) {
+        pio_sm_put(pio0, IOW_PIO_SM, IO_END);
+        switch (port & 0xf) {
+        // SAA data/address ports
+        case 0x0:
+        case 0x1:
+        case 0x2:
+        case 0x3:
+            cms_buffer.cmds[cms_buffer.head++] = {
+                port,
+                (uint8_t)(iow_read & 0xFF)
+            };
+            break;
+        // CMS autodetect ports
+        case 0x6:
+        case 0x7:
+            cms_detect = iow_read & 0xFF;
+            break;
+        }
+        return;
+    } else
+#endif // SOUND_CMS
+#ifdef SOUND_MPU
+    if ((port & 0x3fe) == settings.MPU.basePort) {
+        switch (port & 0xf) {
+        case 0:
+            pio_sm_put(pio0, IOW_PIO_SM, IO_WAIT);
+            // printf("MPU IOW: port: %x value: %x\n", port, iow_read & 0xFF);
+            MPU401_WriteData(iow_read & 0xFF, true);
+            gpio_xor_mask(LED_PIN);
+            break;
+        case 1:
+            pio_sm_put(pio0, IOW_PIO_SM, IO_WAIT);
+            MPU401_WriteCommand(iow_read & 0xFF, true);
+            // printf("MPU IOW: port: %x value: %x\n", port, iow_read & 0xFF);
+            // __dsb();
+            break;
+        }
+    } else
+#endif // SOUND_MPU
     // PicoGUS control
     if (port == CONTROL_PORT) {
         pio_sm_put(pio0, IOW_PIO_SM, IO_WAIT);
@@ -767,46 +803,6 @@ __force_inline void handle_iow(void) {
         if (control_active) {
             write_picogus_high(iow_read & 0xFF);
         }
-    } else {
-#ifdef SOUND_CMS
-        switch (port - settings.CMS.basePort) {
-        // SAA data/address ports
-        case 0x0:
-        case 0x1:
-        case 0x2:
-        case 0x3:
-            pio_sm_put(pio0, IOW_PIO_SM, IO_END);
-            cms_buffer.cmds[cms_buffer.head++] = {
-                port,
-                (uint8_t)(iow_read & 0xFF)
-            };
-            return;
-            break;
-        // CMS autodetect ports
-        case 0x6:
-        case 0x7:
-            pio_sm_put(pio0, IOW_PIO_SM, IO_END);
-            cms_detect = iow_read & 0xFF;
-            return;
-            break;
-        }
-#endif // SOUND_CMS
-#ifdef SOUND_MPU
-        switch (port - settings.MPU.basePort) {
-        case 0:
-            pio_sm_put(pio0, IOW_PIO_SM, IO_WAIT);
-            // printf("MPU IOW: port: %x value: %x\n", port, iow_read & 0xFF);
-            MPU401_WriteData(iow_read & 0xFF, true);
-            gpio_xor_mask(LED_PIN);
-            break;
-        case 1:
-            pio_sm_put(pio0, IOW_PIO_SM, IO_WAIT);
-            MPU401_WriteCommand(iow_read & 0xFF, true);
-            // printf("MPU IOW: port: %x value: %x\n", port, iow_read & 0xFF);
-            // __dsb();
-            break;
-        }
-#endif // SOUND_MPU
     }
     // Fallthrough if no match, or for slow write, reset PIO
     pio_sm_put(pio0, IOW_PIO_SM, IO_END);
@@ -905,6 +901,25 @@ __force_inline void handle_ior(void) {
         return;
     } else // if follows down below
 #endif // USB_MOUSE
+#if defined(SOUND_CMS)
+    if ((port & 0x3f0) == settings.CMS.basePort) {
+        switch (port & 0xf) {
+        // CMS autodetect ports
+        case 0x4:
+            pio_sm_put(pio0, IOR_PIO_SM, IO_WAIT);
+            pio_sm_put(pio0, IOR_PIO_SM, IOR_SET_VALUE | 0x7F);
+            return;
+        case 0xa:
+        case 0xb:
+            pio_sm_put(pio0, IOR_PIO_SM, IO_WAIT);
+            pio_sm_put(pio0, IOR_PIO_SM, IOR_SET_VALUE | cms_detect);
+            return;
+        default:
+            pio_sm_put(pio0, IOR_PIO_SM, IO_END);
+            return;
+        }
+    } else
+#endif // SOUND_CMS
     if (port == CONTROL_PORT) {
         // Tell PIO to wait for data
         pio_sm_put(pio0, IOR_PIO_SM, IO_WAIT);
@@ -917,20 +932,6 @@ __force_inline void handle_ior(void) {
         pio_sm_put(pio0, IOR_PIO_SM, IO_WAIT);
         pio_sm_put(pio0, IOR_PIO_SM, IOR_SET_VALUE | read_picogus_high());
     } else {
-#if defined(SOUND_CMS)
-        switch (port - settings.CMS.basePort) {
-        // CMS autodetect ports
-        case 0x4:
-            pio_sm_put(pio0, IOR_PIO_SM, IO_WAIT);
-            pio_sm_put(pio0, IOR_PIO_SM, IOR_SET_VALUE | 0x7F);
-            return;
-        case 0xa:
-        case 0xb:
-            pio_sm_put(pio0, IOR_PIO_SM, IO_WAIT);
-            pio_sm_put(pio0, IOR_PIO_SM, IOR_SET_VALUE | cms_detect);
-            return;
-        }
-#endif // SOUND_CMS
         // Reset PIO
         pio_sm_put(pio0, IOR_PIO_SM, IO_END);
     }
@@ -1145,15 +1146,10 @@ int main()
 #endif // MPU_ONLY
 #endif // SOUND_MPU
 
-#ifdef SOUND_TANDY
-    puts("Creating tandysound");
-    multicore_launch_core1(&play_tandy);
-#endif // SOUND_TANDY
-
-#ifdef SOUND_CMS
-    puts("Creating CMS");
-    multicore_launch_core1(&play_cms);
-#endif // SOUND_CMS
+#if (SOUND_TANDY || SOUND_CMS)
+    puts("Creating psgsound");
+    multicore_launch_core1(&play_psg);
+#endif // (SOUND_TANDY || SOUND_CMS)
 
 #ifdef NE2000
 extern void PIC_ActivateIRQ(void);

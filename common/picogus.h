@@ -30,20 +30,18 @@ typedef enum {
     GUS_MODE     = 1,
     ADLIB_MODE   = 2,
     MPU_MODE     = 3,
-    TANDY_MODE   = 4,
-    CMS_MODE     = 5,
-    SB_MODE      = 6,
-    USB_MODE     = 7,
-    NE2000_MODE  = 8
+    PSG_MODE     = 4,
+    SB_MODE      = 5,
+    USB_MODE     = 6,
+    NE2000_MODE  = 7
 } card_mode_t;
 
-static const char *modenames[9] = {
+static const char *modenames[8] = {
     "INVALID",
     "GUS",
     "ADLIB",
     "MPU",
-    "TANDY",
-    "CMS",
+    "PSG",
     "SB",
     "USB",
     "NE2000"

@@ -284,38 +284,21 @@ function(build_mpu TARGET_NAME MULTIFW)
 endfunction()
 
 ################################################################################
-# Build Tandy firmware
-function(build_tandy TARGET_NAME MULTIFW)
+# Build PSG firmware
+function(build_psg TARGET_NAME MULTIFW)
     set(USB_JOYSTICK TRUE)
     set(USB_MOUSE TRUE)
     set(SOUND_MPU TRUE)
     config_target(${TARGET_NAME} ${MULTIFW})
-    pico_set_program_name(${TARGET_NAME} "picogus-tandy")
+    pico_set_program_name(${TARGET_NAME} "picogus-psg")
     target_compile_definitions(${TARGET_NAME} PRIVATE
         SOUND_TANDY=1
-        # SQUARE_FLOAT_OUTPUT=1
-    )
-    target_sources(${TARGET_NAME} PRIVATE
-        square/square.cpp
-    )
-    target_sources(${TARGET_NAME} PRIVATE tandyplay.cpp)
-endfunction()
-
-################################################################################
-# Build CMS firmware
-function(build_cms TARGET_NAME MULTIFW)
-    set(USB_JOYSTICK TRUE)
-    set(USB_MOUSE TRUE)
-    set(SOUND_MPU TRUE)
-    config_target(${TARGET_NAME} ${MULTIFW})
-    pico_set_program_name(${TARGET_NAME} "picogus-cms")
-    target_compile_definitions(${TARGET_NAME} PRIVATE
         SOUND_CMS=1
     )
     target_sources(${TARGET_NAME} PRIVATE
         square/square.cpp
     )
-    target_sources(${TARGET_NAME} PRIVATE cmsplay.cpp)
+    target_sources(${TARGET_NAME} PRIVATE psgplay.cpp)
 endfunction()
 
 ################################################################################
@@ -363,8 +346,7 @@ if(PROJECT_TYPE STREQUAL "MULTIFW")
             "${CMAKE_BINARY_DIR}/pg-gus-multifw.ld"
             "${CMAKE_BINARY_DIR}/pg-adlib-multifw.ld"
             "${CMAKE_BINARY_DIR}/pg-mpu-multifw.ld"
-            "${CMAKE_BINARY_DIR}/pg-tandy-multifw.ld"
-            "${CMAKE_BINARY_DIR}/pg-cms-multifw.ld"
+            "${CMAKE_BINARY_DIR}/pg-psg-multifw.ld"
             "${CMAKE_BINARY_DIR}/pg-sb-multifw.ld"
             "${CMAKE_BINARY_DIR}/pg-usb-multifw.ld"
         COMMAND
@@ -378,22 +360,19 @@ if(PROJECT_TYPE STREQUAL "MULTIFW")
             -DFW_2_LD="${CMAKE_BINARY_DIR}/pg-adlib-multifw.ld"
             -DFW_3_BIN="${CMAKE_BINARY_DIR}/pg-mpu.bin"
             -DFW_3_LD="${CMAKE_BINARY_DIR}/pg-mpu-multifw.ld"
-            -DFW_4_BIN="${CMAKE_BINARY_DIR}/pg-tandy.bin"
-            -DFW_4_LD="${CMAKE_BINARY_DIR}/pg-tandy-multifw.ld"
-            -DFW_5_BIN="${CMAKE_BINARY_DIR}/pg-cms.bin"
-            -DFW_5_LD="${CMAKE_BINARY_DIR}/pg-cms-multifw.ld"
-            -DFW_6_BIN="${CMAKE_BINARY_DIR}/pg-sb.bin"
-            -DFW_6_LD="${CMAKE_BINARY_DIR}/pg-sb-multifw.ld"
-            -DFW_7_BIN="${CMAKE_BINARY_DIR}/pg-usb.bin"
-            -DFW_7_LD="${CMAKE_BINARY_DIR}/pg-usb-multifw.ld"
+            -DFW_4_BIN="${CMAKE_BINARY_DIR}/pg-psg.bin"
+            -DFW_4_LD="${CMAKE_BINARY_DIR}/pg-psg-multifw.ld"
+            -DFW_5_BIN="${CMAKE_BINARY_DIR}/pg-sb.bin"
+            -DFW_5_LD="${CMAKE_BINARY_DIR}/pg-sb-multifw.ld"
+            -DFW_6_BIN="${CMAKE_BINARY_DIR}/pg-usb.bin"
+            -DFW_6_LD="${CMAKE_BINARY_DIR}/pg-usb-multifw.ld"
             -P ${CMAKE_SOURCE_DIR}/multifw/generate_ld.cmake
         DEPENDS
             "${CMAKE_SOURCE_DIR}/multifw/firmware.ld.in"
             pg-gus
             pg-adlib
             pg-mpu
-            pg-tandy
-            pg-cms
+            pg-psg
             pg-sb
             pg-usb
     )
@@ -402,8 +381,7 @@ if(PROJECT_TYPE STREQUAL "MULTIFW")
         "${CMAKE_BINARY_DIR}/pg-gus-multifw.ld"
         "${CMAKE_BINARY_DIR}/pg-adlib-multifw.ld"
         "${CMAKE_BINARY_DIR}/pg-mpu-multifw.ld"
-        "${CMAKE_BINARY_DIR}/pg-tandy-multifw.ld"
-        "${CMAKE_BINARY_DIR}/pg-cms-multifw.ld"
+        "${CMAKE_BINARY_DIR}/pg-psg-multifw.ld"
         "${CMAKE_BINARY_DIR}/pg-sb-multifw.ld"
         "${CMAKE_BINARY_DIR}/pg-usb-multifw.ld"
     )
@@ -417,12 +395,9 @@ if(PROJECT_TYPE STREQUAL "MULTIFW")
     build_mpu(pg-mpu FALSE)
     build_mpu(pg-mpu-multifw TRUE)
     add_dependencies(pg-mpu-multifw pg-mpu generate_flash_firmware_h)
-    build_tandy(pg-tandy FALSE)
-    build_tandy(pg-tandy-multifw TRUE)
-    add_dependencies(pg-tandy-multifw pg-tandy generate_flash_firmware_h)
-    build_cms(pg-cms FALSE)
-    build_cms(pg-cms-multifw TRUE)
-    add_dependencies(pg-cms-multifw pg-cms generate_flash_firmware_h)
+    build_psg(pg-psg FALSE)
+    build_psg(pg-psg-multifw TRUE)
+    add_dependencies(pg-psg-multifw pg-psg generate_flash_firmware_h)
     build_sb(pg-sb FALSE)
     build_sb(pg-sb-multifw TRUE)
     add_dependencies(pg-sb-multifw pg-sb generate_flash_firmware_h)
@@ -450,8 +425,8 @@ if(PROJECT_TYPE STREQUAL "MULTIFW")
     endif()
     add_custom_command(
         OUTPUT picogus.uf2
-        DEPENDS bootloader UF2CREATE pg-gus-multifw pg-adlib-multifw pg-mpu-multifw pg-tandy-multifw pg-cms-multifw pg-sb-multifw pg-usb-multifw
-        COMMAND UF2CREATE bootloader.bin pg-gus-multifw.bin pg-adlib-multifw.bin pg-mpu-multifw.bin pg-tandy-multifw.bin pg-cms-multifw.bin pg-sb-multifw.bin pg-usb-multifw.bin picogus.uf2
+        DEPENDS bootloader UF2CREATE pg-gus-multifw pg-adlib-multifw pg-mpu-multifw pg-psg-multifw pg-sb-multifw pg-usb-multifw
+        COMMAND UF2CREATE bootloader.bin pg-gus-multifw.bin pg-adlib-multifw.bin pg-mpu-multifw.bin pg-psg-multifw.bin pg-sb-multifw.bin pg-usb-multifw.bin picogus.uf2
     )
     add_custom_target(picogus ALL DEPENDS picogus.uf2)
 
@@ -469,12 +444,9 @@ elseif(PROJECT_TYPE STREQUAL "ADLIB")
 elseif(PROJECT_TYPE STREQUAL "MPU")
     set(FW_TARGET pg-mpu)
     build_mpu(pg-mpu FALSE)
-elseif(PROJECT_TYPE STREQUAL "TANDY")
-    set(FW_TARGET pg-tandy)
-    build_tandy(pg-tandy FALSE)
-elseif(PROJECT_TYPE STREQUAL "CMS")
-    set(FW_TARGET pg-cms)
-    build_cms(pg-cms FALSE)
+elseif(PROJECT_TYPE STREQUAL "PSG")
+    set(FW_TARGET pg-psg)
+    build_psg(pg-psg FALSE)
 elseif(PROJECT_TYPE STREQUAL "USB")
     set(FW_TARGET pg-usb)
     build_usb(pg-usb FALSE)
