@@ -1,3 +1,41 @@
+# v3.0.0
+
+## New features/changes
+
+### CD-ROM emulation
+
+PicoGUS now supports CD-ROM emulation (in other words, PicoGUS is now an ODE)! It emulates a [Panasonic/MKE interface and drive](https://en.wikipedia.org/wiki/Panasonic_CD_interface) and supports CD images in ISO or BIN/CUE stored on a USB drive plugged into the USB port on the PicoGUS. CD-ROM emulation has been tested in DOS and Windows 9x and CD audio playback is fully supported.
+
+CD-ROM emulation is available in Sound Blaster and USB modes. Sound Blaster mode really pushes the limit of the RP2040: it mixes CD audio, SB DSP, and OPL sound while simultaneously supporting CD data and MPU-401 emulation. The emulated drive is approximately 2x speed in SB mode and 3x-4x speed in USB mode. Disc images can be swapped on the fly with pgusinit, and multi-disc games are supported by removing and reinserting the USB drive to advance the current disc image.
+
+For more information and a guide on how to use CD-ROM emulation on PicoGUS with recommended drivers, known limitations, etc., visit the new [CD-ROM emulation wiki page](https://github.com/polpo/picogus/wiki/CD-ROM-Emulation).
+
+Massive thanks to [Kevin Moonlight (yyzkevin)](https://github.com/yyzkevin) for reverse engineering the Panasonic/MKE interface and contributing the bulk of the underlying code for this emulation.
+
+Also major thanks to [rppicomidi](https://github.com/rppicomidi) for greatly improving mass storage speed for the RP2040 in TinyUSB and [Artem Vasilev (wbcbz7)](https://github.com/wbcbz7) for additional fixes and rebasing on a more recent state of the repository. Without their work, USB mass storage would not be nearly fast enough to support CD-ROM emulation on the RP2040. These improvements are still not merged into the upstream project, so here's hoping that can be completed.
+
+And thanks to all who tested this firmware before release to surface bugs and edge cases I wouldn't have been able to find myself. Cue sheets are the wild west of formats!
+
+### Tandy/CMS modes combined into new PSG (programmable sound generator) mode
+
+To reduce firmware size and prepare for future support for other [PSG sound chips](https://en.wikipedia.org/wiki/Programmable_sound_generator) (here's a hint, it's the [AY-3](https://en.wikipedia.org/wiki/General_Instrument_AY-3-8910) as used on the [Mindscape Music Board](https://www.youtube.com/watch?v=Eeo4INoGyRY)), Tandy and CMS modes have been combined into a single PSG mode. It can be selected with `pgusinit /mode psg`, but the old `/mode tandy` and `/mode cms` switches still work for backwards compatibility.
+
+## Fixes
+
+### pgusinit
+
+When pgusinit couldn't detect a PicoGUS, it would erroneously continue trying to configure the card. This would result in a strange firmware version mismatch error. This has now been fixed.
+
+## Known issues
+
+### Sound Blaster mode
+
+Due to the addition of CD-ROM emulation to SB mode, SB DSP audio now runs through a FIFO. This may result in some playback issues that are being worked on. Also "Direct DAC" mode (mostly used by older titles) is not currently supported.
+
+### General
+
+Due to the addition of new settings, any saved settings done with `/pgusinit save` on previous firmware versions will be reset to defaults when upgrading to firmware v3.0.0.
+
 # v2.2.0
 
 ## New features/changes
