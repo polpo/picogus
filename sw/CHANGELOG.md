@@ -1,3 +1,11 @@
+# v3.0.1
+
+## Fixes
+
+### SB and USB modes
+
+Fixes MPU-401 output in SB and USB modes. It was broken by the introduction of CD-ROM emulation in SB mode and it never actually worked in USB mode!
+
 # v3.0.0
 
 ## New features/changes
