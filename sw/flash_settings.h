@@ -77,6 +77,9 @@ typedef struct Settings {
         uint16_t basePort;
         bool autoAdvance : 1;
     } CD;
+    struct {
+        uint16_t basePort;
+    } MMB;
 } Settings;
 
 

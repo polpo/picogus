@@ -73,6 +73,10 @@ static const Settings defaultSettings = {
     .CD = {
         .basePort = 0x250,
         .autoAdvance = true
+    },
+    .MMB = {
+        // Mindscape Music Board defaults to off because its port is so common
+        .basePort = 0xffff
     }
 };
 
