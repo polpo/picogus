@@ -6,7 +6,7 @@
 #define CONTROL_PORT 0x1D0
 #define DATA_PORT_LOW  0x1D1
 #define DATA_PORT_HIGH 0x1D2
-#define PICOGUS_PROTOCOL_VER 3
+#define PICOGUS_PROTOCOL_VER 4
 
 typedef enum {
     PICO_FIRMWARE_IDLE = 0,
