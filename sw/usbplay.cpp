@@ -28,6 +28,12 @@
 #include "pico/audio_i2s.h"
 #endif
 
+#ifdef SOUND_MPU
+#include "flash_settings.h"
+extern Settings settings;
+#include "mpu401/export.h"
+#endif
+
 #include "pico_pic.h"
 
 #ifdef CDROM
@@ -83,6 +89,10 @@ void play_usb() {
     // init host stack on configured roothub port
     tuh_init(BOARD_TUH_RHPORT);
 
+#ifdef SOUND_MPU
+    MPU401_Init(settings.MPU.delaySysex, settings.MPU.fakeAllNotesOff);
+#endif
+
 #ifdef CDROM
     struct audio_buffer_pool *ap = init_audio();
 #endif
@@ -99,6 +109,11 @@ void play_usb() {
                 buffer->sample_count = 1;
             }
             give_audio_buffer(ap, buffer);
+#ifdef SOUND_MPU
+            send_midi_bytes(8);
+#endif
+        } else {
+            send_midi_bytes(2);
         }
         cdrom_tasks(&cdrom);
 #endif // CDROM

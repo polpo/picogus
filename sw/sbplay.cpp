@@ -292,7 +292,7 @@ void play_adlib() {
         uartemu_core1_task();
 #endif
 #ifdef SOUND_MPU
-        send_midi_bytes(1);
+        send_midi_bytes(8);
 #endif
 #ifdef CDROM
         cdrom_tasks(&cdrom);
