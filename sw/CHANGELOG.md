@@ -8,7 +8,7 @@ PicoGUS now supports CD-ROM emulation (in other words, PicoGUS is now an ODE)! I
 
 CD-ROM emulation is available in Sound Blaster and USB modes. Sound Blaster mode really pushes the limit of the RP2040: it mixes CD audio, SB DSP, and OPL sound while simultaneously supporting CD data and MPU-401 emulation. The emulated drive is approximately 2x speed in SB mode and 3x-4x speed in USB mode. Disc images can be swapped on the fly with pgusinit, and multi-disc games are supported by removing and reinserting the USB drive to advance the current disc image.
 
-For more information and a guide on how to use CD-ROM emulation on PicoGUS with recommended drivers, known limitations, etc., visit the new [CD-ROM emulation wiki page](https://github.com/polpo/picogus/wiki/CD-ROM-Emulation).
+For more information and a guide on how to use CD-ROM emulation on PicoGUS with recommended drivers, known limitations, etc., visit the new [CD-ROM emulation wiki page](https://github.com/polpo/picogus/wiki/CD%E2%80%90ROM-Emulation).
 
 Massive thanks to [Kevin Moonlight (yyzkevin)](https://github.com/yyzkevin) for reverse engineering the Panasonic/MKE interface and contributing the bulk of the underlying code for this emulation.
 
