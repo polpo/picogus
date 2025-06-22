@@ -19,7 +19,7 @@ set(PICO_COPY_TO_RAM 1)
 include(pico_sdk_import.cmake)
 
 project(picogus
-    VERSION "3.0.1"
+    VERSION "3.1.0"
     LANGUAGES C CXX ASM
 )
 
@@ -123,7 +123,6 @@ function(config_target TARGET_NAME MULTIFW)
         target_sources(${TARGET_NAME} PRIVATE
             mke/mke.c
             cdrom/msc_app.c
-            audio_fifo.c
         )
         target_compile_definitions(${TARGET_NAME} PRIVATE CDROM=1)
         target_sources(${TARGET_NAME} PRIVATE

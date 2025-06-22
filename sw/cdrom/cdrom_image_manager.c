@@ -10,9 +10,9 @@
 #include "cdrom_error_msg.h"
 
 // Maximum number of files to list
-#define MAX_FILES 100
+#define MAX_FILES 25
 // Maximum filename length
-#define MAX_FILENAME_LEN 64
+#define MAX_FILENAME_LEN 127
 
 // Structure to hold filename and allow sorting
 typedef char FileEntry[MAX_FILENAME_LEN];
@@ -83,8 +83,8 @@ char** cdman_list_images(int *fileCount) {
         
         // Check if it has valid extension
         if (isCDImage(fno.fname)) {
-            strncpy(entries[count], fno.fname, MAX_FILENAME_LEN - 1);
-            entries[count][MAX_FILENAME_LEN - 1] = '\0';
+            strcpy(entries[count], fno.fname);
+            /* entries[count][MAX_FILENAME_LEN - 1] = '\0'; */
             count++;
         }
     }
@@ -113,7 +113,7 @@ char** cdman_list_images(int *fileCount) {
         fileList[i] = (char *)malloc(len);
         if (fileList[i]) {
             strcpy(fileList[i], entries[i]);
-            printf("%s\n", fileList[i]);
+            /* printf("%s\n", fileList[i]); */
         } else {
             // Clean up on allocation failure
             for (int j = 0; j < i; j++) {
@@ -161,15 +161,40 @@ void cdman_load_image_index(cdrom_t *dev, int imageIndex) {
     } else {
         int imageCount;
         char** images = cdman_list_images(&imageCount);
+        if (!images) {
+            dev->image_command = CD_COMMAND_NONE;
+            dev->image_status = CD_STATUS_ERROR;
+            return;
+        }
         if (imageIndex > imageCount) {
             // Wrap around index for autoadvance
             imageIndex = 1;
         }
         strcpy(dev->image_path, images[imageIndex - 1]);
-        dev->image_command = CD_COMMAND_IMAGE_LOAD;
         cdman_list_images_free(images, imageCount);
+        dev->image_command = CD_COMMAND_IMAGE_LOAD;
     }
     current_index = last_loaded_index = imageIndex;
+}
+
+void cdman_set_image_index(cdrom_t *dev) {
+    int imageCount;
+    char** images = cdman_list_images(&imageCount);
+    if (!images) {
+        dev->image_command = CD_COMMAND_NONE;
+        dev->image_status = CD_STATUS_ERROR;
+        return;
+    }
+    current_index = 0;
+    for (int i = 0; i < imageCount; ++i) {
+        if (strncasecmp(dev->image_path, images[i], MAX_FILENAME_LEN) == 0) {
+            current_index = last_loaded_index = i + 1;
+            // Copy back the canonical name to image_path with proper case
+            strcpy(dev->image_path, images[i]);
+            break;
+        }
+    }
+    cdman_list_images_free(images, imageCount);
 }
 
 

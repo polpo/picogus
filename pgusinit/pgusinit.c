@@ -27,7 +27,7 @@
 #include "../common/picogus.h"
 
 static void banner(void) {
-    printf("PicoGUSinit v3.5.0 (c) 2025 Ian Scott - licensed under the GNU GPL v2\n");
+    printf("PicoGUSinit v3.6.0 (c) 2025 Ian Scott - licensed under the GNU GPL v2\n");
 }
 
 
@@ -140,6 +140,7 @@ static void err_pigus(void) {
 static void err_protocol(uint8_t expected, uint8_t got) {
     fprintf(stderr, "ERROR: PicoGUS card using protocol %u, needs %u\n", got, expected);
     fprintf(stderr, "Please run the latest PicoGUS firmware and pgusinit.exe versions together!\n");
+    fprintf(stderr, "To flash new firmware, run pgusinit /flash picogus.uf2\n");
 }
 
 
@@ -242,28 +243,33 @@ static bool wait_for_read(const uint8_t value) {
 }
 
 
+static cdrom_image_status_t wait_for_cd_status(void) {
+    outp(CONTROL_PORT, 0xCC); // Knock on the door...
+    outp(CONTROL_PORT, MODE_CDSTATUS); // Select CD image status register
+    cdrom_image_status_t cd_status;
+    for (uint16_t i = 0; i < 256; ++i) {
+        delay(100);
+        cd_status = (cdrom_image_status_t)inp(DATA_PORT_HIGH);
+        if (cd_status != CD_STATUS_BUSY) {
+            break;
+        }
+    }
+    return cd_status;
+}
+
 static bool print_cdimage_list(void) {
     outp(CONTROL_PORT, 0xCC); // Knock on the door...
     outp(CONTROL_PORT, MODE_CDLOAD); // Get currently loaded index
     uint8_t current_index = inp(DATA_PORT_HIGH);
     printf("Listing CD images on USB drive:\n");
     outp(CONTROL_PORT, MODE_CDLIST); // Select CD image list register
-    delay(10);
-    outp(CONTROL_PORT, MODE_CDSTATUS); // Select CD image status register
-    bool ready = false;
-    for (uint16_t i = 0; i < 65535; ++i) {
-        int8_t cd_status = inp(DATA_PORT_HIGH);
-        if (cd_status == CD_STATUS_ERROR) {
-            printf("Error getting CD image list: ");
-            print_string(MODE_CDERROR);
-            return false;
-        } else if (cd_status == 2) {
-            ready = true;
-            break;
-        }
-    }
-    if (!ready) {
+    cdrom_image_status_t cd_status = wait_for_cd_status();
+    if (cd_status == CD_STATUS_BUSY) {
         printf("Timeout getting CD image list\n");
+        return false;
+    } else if (cd_status == CD_STATUS_ERROR) {
+        printf("Error getting CD image list: ");
+        print_string(MODE_CDERROR);
         return false;
     }
     outp(CONTROL_PORT, MODE_CDLIST); // Select CD image list register
@@ -287,32 +293,40 @@ static bool print_cdimage_list(void) {
 }
 
 
-static void print_cdimage_current(void) {
-    outp(CONTROL_PORT, 0xCC); // Knock on the door...
-    outp(CONTROL_PORT, MODE_CDSTATUS); // Select CD image status register
-    uint8_t cd_status;
-    for (uint16_t i = 0; i < 65535; ++i) {
-        cd_status = inp(DATA_PORT_HIGH);
-        if (cd_status != CD_STATUS_BUSY) {
-            break;
-        }
-    }
-    if (cd_status == CD_STATUS_BUSY) {
-        printf("Timeout loading CD image.\n");
-        return;
-    } else if ((int8_t)cd_status == CD_STATUS_ERROR) {
-        printf("Error loading CD image: ");
-        print_string(MODE_CDERROR);
-        return;
-    }
+static int print_cdimage_current(void) {
     outp(CONTROL_PORT, MODE_CDLOAD); // Get currently loaded index
     uint8_t current_index = inp(DATA_PORT_HIGH);
     if (!current_index) {
         printf("No CD image loaded.\n");
-        return;
+        return 97;
     }
     printf("CD image loaded: ");
     print_string(MODE_CDNAME);
+    return 0;
+}
+
+
+static int wait_for_cd_load(void) {
+    cdrom_image_status_t cd_status = wait_for_cd_status();
+    if (cd_status == CD_STATUS_BUSY) {
+        printf("Timeout loading CD image.\n");
+        return 99;
+    } else if ((int8_t)cd_status == CD_STATUS_ERROR) {
+        printf("Error loading CD image: ");
+        print_string(MODE_CDERROR);
+        return 98;
+    }
+    return print_cdimage_current();
+}
+
+
+static void print_cdemu_status(void) {
+    outp(CONTROL_PORT, MODE_CDAUTOADV); // Select joystick enable register
+    uint8_t tmp_uint8 = inp(DATA_PORT_HIGH);
+    outp(CONTROL_PORT, MODE_CDPORT); // Select port register
+    uint16_t tmp_uint16 = inpw(DATA_PORT_LOW); // Get port
+    printf("CD-ROM emulation on port %x, image auto-advance %s\n", tmp_uint16, tmp_uint8 ? "enabled" : "disabled");
+    print_cdimage_current();
 }
 
 
@@ -493,6 +507,7 @@ static void send_string(uint8_t mode, char* str, int16_t max_len)
     outp(DATA_PORT_HIGH, 0);
 }
 
+
 #define process_bool_opt(option) \
 if (i + 1 >= argc) { \
     usage(mode, false); \
@@ -522,9 +537,7 @@ int main(int argc, char* argv[]) {
     uint8_t enable_joystick = 0;
     uint8_t wtvol;
     char fw_filename[256] = {0};
-    char wifi_ssid[33] = {0};
-    char wifi_pass[64] = {0};
-    bool nopass = false;
+    bool wifichg = false;
     card_mode_t mode;
     char mode_name[8] = {0};
     int fw_num = 8;
@@ -549,12 +562,11 @@ int main(int argc, char* argv[]) {
                 usage(INVALID_MODE, false);
                 return 255;
             }
-            e = sscanf(argv[++i], "%255s", fw_filename);
-            if (e != 1) {
+            if (strlen(argv[++i]) > 255) {
                 usage(INVALID_MODE, false);
                 return 5;
             }
-            return write_firmware(fw_filename);
+            return write_firmware(argv[i]);
         }
         ++i;
     }
@@ -762,25 +774,25 @@ int main(int argc, char* argv[]) {
                 usage(mode, false);
                 return 255;
             }
-            e = sscanf(argv[++i], "%32s", wifi_ssid);
-            if (e != 1) {
+            if (strlen(argv[++i]) > 32) {
                 usage(mode, false);
                 return 4;
             }
-            send_string(MODE_WIFISSID, wifi_ssid, 32);
+            wifichg = true;
+            send_string(MODE_WIFISSID, argv[i], 32);
         } else if (stricmp(argv[i], "/wifipass") == 0) {
             if (i + 1 >= argc) {
                 usage(mode, false);
                 return 255;
             }
-            e = sscanf(argv[++i], "%63s", wifi_pass);
-            if (e != 1) {
+            if (strlen(argv[++i]) > 63) {
                 usage(mode, false);
                 return 4;
             }
-            send_string(MODE_WIFIPASS, wifi_pass, 63);
+            wifichg = true;
+            send_string(MODE_WIFIPASS, argv[i], 63);
         } else if (stricmp(argv[i], "/wifinopass") == 0) {
-            nopass = true;
+            wifichg = true;
             send_string(MODE_WIFIPASS, "", 1);
         // CD-ROM options /////////////////////////////////////////////////////////////////
         } else if (stricmp(argv[i], "/cdport") == 0) {
@@ -804,8 +816,18 @@ int main(int argc, char* argv[]) {
             }
             outp(CONTROL_PORT, MODE_CDLOAD); // Select CD image load register
             outp(DATA_PORT_HIGH, tmp_uint8);
-            print_cdimage_current();
-            return 0;
+            return wait_for_cd_load();
+        } else if (stricmp(argv[i], "/cdloadname") == 0) {
+            if (i + 1 >= argc) {
+                usage(mode, false);
+                return 255;
+            }
+            if (strlen(argv[++i]) > 127) {
+                usage(mode, false);
+                return 5;
+            }
+            send_string(MODE_CDNAME, argv[i], 127);
+            return wait_for_cd_load();
         } else if (stricmp(argv[i], "/cdauto") == 0) {
             process_bool_opt(tmp_uint8);
             outp(CONTROL_PORT, MODE_CDAUTOADV); // Select CD image autoadvance register
@@ -838,7 +860,7 @@ int main(int argc, char* argv[]) {
         return reboot_to_firmware(fw_num, permanent);
     }
 
-    if (wifi_ssid[0] || wifi_pass[0] || nopass) {
+    if (wifichg) {
         outp(CONTROL_PORT, MODE_WIFIAPPLY);
         outp(DATA_PORT_HIGH, 0);
     }
@@ -920,10 +942,7 @@ int main(int argc, char* argv[]) {
         break;
     case USB_MODE:
         printf("Running in USB mode\n", tmp_uint16);
-        print_cdimage_current();
-        outp(CONTROL_PORT, MODE_CDAUTOADV); // Select joystick enable register
-        tmp_uint8 = inp(DATA_PORT_HIGH);
-        printf("CD image auto-advance on USB reinsert %s\n", tmp_uint8 ? "enabled" : "disabled");
+        print_cdemu_status();
         break;
     case PSG_MODE:
         outp(CONTROL_PORT, MODE_TANDYPORT); // Select port register
@@ -950,10 +969,7 @@ int main(int argc, char* argv[]) {
         } else {
             printf("(AdLib port disabled)\n");
         }
-        print_cdimage_current();
-        outp(CONTROL_PORT, MODE_CDAUTOADV); // Select joystick enable register
-        tmp_uint8 = inp(DATA_PORT_HIGH);
-        printf("CD image auto-advance on USB reinsert %s\n", tmp_uint8 ? "enabled" : "disabled");
+        print_cdemu_status();
         break;
     case NE2000_MODE:
         outp(CONTROL_PORT, MODE_NE2KPORT); // Select port register

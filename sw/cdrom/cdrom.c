@@ -162,9 +162,12 @@ void cdrom_tasks(cdrom_t *dev) {
         if (dev->image_path[0]) {
             printf("Opening %s...",dev->image_path);
             if (cdrom_image_open(dev,dev->image_path)) {
+                dev->image_command = CD_COMMAND_NONE;
                 dev->image_status = CD_STATUS_ERROR;
                 cdman_clear_image();
                 break;
+            } else {
+                cdman_set_image_index(dev);
             }
             printf("Done.\n");
             dev->disk_loaded = 1;
@@ -179,9 +182,8 @@ void cdrom_tasks(cdrom_t *dev) {
 
 
 void cdrom_fifo_init(cdrom_fifo_t *fifo,uint16_t size) {
-    fifo->data = malloc(size);    
+    fifo->data = calloc(1, size);    
     if(!fifo->data) fatal("Unable to allocate fifo");
-    memset(fifo->data,0,size);
     fifo->size = size;
 }
 

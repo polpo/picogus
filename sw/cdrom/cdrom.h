@@ -170,7 +170,7 @@ typedef struct cdrom {
 
     char **image_list;
     int image_count;
-    char image_path[256];
+    char image_path[128];
 
     uint32_t sound_on;
     uint32_t cdrom_capacity;

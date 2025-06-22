@@ -56,18 +56,18 @@ static bool inquiry_complete_cb(uint8_t dev_addr, tuh_msc_complete_data_t const 
     msc_csw_t const* csw = cb_data->csw;
 
     if (csw->status != 0) {
-        printf("Inquiry failed\r\n");
+        // printf("Inquiry failed\r\n");
         return false;
     }
 
     // Print out Vendor ID, Product ID and Rev
-    printf("%.8s %.16s rev %.4s\r\n", scsi_resp.inquiry.vendor_id, scsi_resp.inquiry.product_id, scsi_resp.inquiry.product_rev);
+    // printf("%.8s %.16s rev %.4s\r\n", scsi_resp.inquiry.vendor_id, scsi_resp.inquiry.product_id, scsi_resp.inquiry.product_rev);
 
     // Get capacity of device
     uint32_t const block_count = tuh_msc_get_block_count(dev_addr, cbw->lun);
     uint32_t const block_size = tuh_msc_get_block_size(dev_addr, cbw->lun);
 
-    printf("Disk Size: %" PRIu32 " MB\r\n", block_count / ((1024*1024)/block_size));
+    // printf("Disk Size: %" PRIu32 " MB\r\n", block_count / ((1024*1024)/block_size));
     // printf("Block Count = %lu, Block Size: %lu\r\n", block_count, block_size);
 
     // For simplicity: we only mount 1 device
@@ -89,10 +89,10 @@ static bool inquiry_complete_cb(uint8_t dev_addr, tuh_msc_complete_data_t const 
 //------------- IMPLEMENTATION -------------//
 void tuh_msc_mount_cb(uint8_t dev_addr)
 {
-    printf("A MassStorage device is mounted\r\n");
+    // printf("A MassStorage device is mounted\r\n");
     if (mounted_dev) {
         // Only handle a single drive
-        printf("Only a single USB drive is supported\n");
+        // printf("Only a single USB drive is supported\n");
         return;
     }
     mounted_dev = dev_addr;  // may not actually be mounted, but does indicate the drive is inserted
@@ -103,7 +103,7 @@ void tuh_msc_mount_cb(uint8_t dev_addr)
 void tuh_msc_umount_cb(uint8_t dev_addr)
 {
     (void)dev_addr;
-    printf("A MassStorage device is unmounted\r\n");
+    // printf("A MassStorage device is unmounted\r\n");
     mounted_dev = 0;
 
     f_unmount("");

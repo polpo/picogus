@@ -161,15 +161,6 @@ image_is_track_audio(cdrom_t *dev, uint32_t pos, int ismsf)
 static int
 image_is_track_pre(cdrom_t *dev, uint32_t lba)
 {
-    cd_img_t *img = (cd_img_t *) dev->image;
-    int       track;
-
-    /* GetTrack requires LBA. */
-    track = cdi_get_track(img, lba);
-
-    if (track != -1)
-        return cdi_get_audio_track_pre(img, track);
-
     return 0;
 }
 
@@ -231,7 +222,7 @@ image_exit(cdrom_t *dev)
         cdi_close(img);
         dev->image = NULL;
     }
-    printf("wiped ops in image exit\n");
+    // printf("wiped ops in image exit\n");
     dev->ops = NULL;
 }
 
@@ -250,7 +241,7 @@ static int
 image_open_abort(cdrom_t *dev)
 {
     cdrom_image_close(dev);
-    printf("wipes ops in image open abort");
+    // printf("wipes ops in image open abort");
     dev->ops           = NULL;
     dev->host_drive    = 0;
     dev->image_path[0] = 0;
@@ -267,17 +258,16 @@ cdrom_image_open(cdrom_t *dev, const char *fn)
     if (fn != dev->image_path)
         strcpy(dev->image_path, fn);
 
-    putchar('a');
+    // putchar('a');
     /* Create new instance of the CDROM_Image class. */
-    img = (cd_img_t *) malloc(sizeof(cd_img_t));
+    img = (cd_img_t *) calloc(1, sizeof(cd_img_t));
 
     /* This guarantees that if ops is not NULL, then
        neither is the image pointer. */
     if (!img)
         return image_open_abort(dev);
 
-    putchar('b');
-    memset(img, 0, sizeof(cd_img_t));
+    // putchar('b');
     dev->image = img;
 
     /* Open the image. */
@@ -298,7 +288,7 @@ cdrom_image_open(cdrom_t *dev, const char *fn)
     cdrom_image_log("CD-ROM capacity: %i sectors (%" PRIi64 " bytes)\n", dev->cdrom_capacity, ((uint64_t) dev->cdrom_capacity) << 11ULL);
 
     /* Attach this handler to the drive. */
-    printf("Set Ops in Open\n");
+    // printf("Set Ops in Open\n");
     dev->ops = &cdrom_image_ops;
 
     return 0;

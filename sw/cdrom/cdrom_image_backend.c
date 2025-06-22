@@ -72,9 +72,8 @@ static inline void frames_to_msf(uint32_t total_frames, uint8_t *pM, uint8_t *pS
     *pF = (uint8_t)total_frames;
 }
 
-#define MAX_LINE_LENGTH     512
-#define MAX_FILENAME_LENGTH 256
-#define CROSS_LEN           512
+#define MAX_LINE_LENGTH     256
+#define MAX_FILENAME_LENGTH 127
 
 static char temp_keyword[64];
 
@@ -177,10 +176,12 @@ bin_close(void *priv)
     if (tf->fp != NULL) {
         //fclose(tf->fp);
         f_close(tf->fp);
+        free(tf->fp);
         tf->fp = NULL;
     }
 
-    memset(tf->fn, 0x00, sizeof(tf->fn));
+    tf->fn[0] = 0;
+    /* memset(tf->fn, 0x00, sizeof(tf->fn)); */
 
     free(priv);
 }
@@ -274,7 +275,7 @@ cdi_clear_tracks(cd_img_t *cdi)
     }
 
     /* Now free the array. */
-    free(cdi->tracks);
+    free(cdi->tracks); /// maybe not
     cdi->tracks = NULL;
 
     /* Mark that there's no tracks. */
@@ -297,8 +298,10 @@ cdi_set_device(cd_img_t *cdi, const char *path)
         return cdi_load_cue(cdi, path);
     } else if (strncasecmp(path + (len - 4), ".iso", 4) == 0) {
         return cdi_load_iso(cdi, path);
+    } else {
+        cdrom_errorstr_set("File '%s' not a cue or iso", path);
+        return 0;
     }
-    return 0;
 }
 
 void
@@ -315,17 +318,6 @@ cdi_get_audio_tracks_lba(cd_img_t *cdi, int *st_track, int *end, uint32_t *lead_
     *st_track = 1;
     *end      = cdi->tracks_num - 1;
     *lead_out = cdi->tracks[*end].start;
-}
-
-int
-cdi_get_audio_track_pre(cd_img_t *cdi, int track)
-{
-    const track_t *trk = &cdi->tracks[track - 1];
-
-    if ((track < 1) || (track > cdi->tracks_num))
-        return 0;
-
-    return trk->pre;
 }
 
 /* This replaces both Info and EndInfo, they are specified by a variable. */
@@ -748,7 +740,7 @@ cdi_cue_get_keyword(char **dest, char **line)
 static uint32_t
 cdi_cue_get_number(char **line)
 {
-    char     temp[128];
+    char     temp[11];
     uint32_t num;
 
     if (!cdi_cue_get_buffer(temp, line, 0))
@@ -765,7 +757,7 @@ static int
 /* cdi_cue_get_frame(uint64_t *frames, char **line) */
 cdi_cue_get_frame(uint32_t *frames, char **line)
 {
-    char temp[128];
+    char temp[9];
     int  min;
     int  sec;
     int  fr;
@@ -780,26 +772,6 @@ cdi_cue_get_frame(uint32_t *frames, char **line)
         return 0;
 
     *frames = MSF_TO_FRAMES(min, sec, fr);
-
-    return 1;
-}
-
-static int
-cdi_cue_get_flags(track_t *cur, char **line)
-{
-    char temp[128];
-    char temp2[128] = {0};
-    int  success;
-
-    success = cdi_cue_get_buffer(temp, line, 0);
-    if (!success)
-        return 0;
-
-    success = sscanf(temp, "%s", temp2) == 1;
-    if (!success)
-        return 0;
-
-    cur->pre = (strstr(temp2, "PRE") != NULL);
 
     return 1;
 }
@@ -908,12 +880,14 @@ cdi_load_cue(cd_img_t *cdi, const char *cuefile)
     cdi->tracks     = NULL;
     cdi->tracks_num = 0;
     
-    putchar('a');
+    // putchar('a');
     /* fp = (FIL *) malloc(sizeof(FIL)); */
     FRESULT result = f_open(&fp, cuefile, FA_READ);      
     cdrom_image_backend_log("result: %u\n", result);
-    if (result != FR_OK)
+    if (result != FR_OK) {
+        cdrom_errorstr_set("No file '%s' on USB", cuefile);
         return 0;
+    }
 
     FSIZE_t len = f_size(&fp);
     cdrom_image_backend_log("file size: %u", len);
@@ -980,8 +954,6 @@ cdi_load_cue(cd_img_t *cdi, const char *cuefile)
 
             trk.form  = 0;
             trk.mode2 = 0;
-
-            trk.pre = 0;
 
             if (!strcmp(type, "AUDIO")) {
                 trk.sector_size = RAW_SECTOR_SIZE;
@@ -1060,36 +1032,36 @@ cdi_load_cue(cd_img_t *cdi, const char *cuefile)
                     break;
             }
         } else if (!strcmp(command, "FILE")) {
-            putchar('1');
+            // putchar('1');
             if (can_add_track) {
                 success = cdi_add_track(cdi, &trk, &shift, prestart, &total_pregap, cur_pregap);
             } else {
                 success = 1;
             }
             if (!success) {
-                putchar('x');
+                // putchar('x');
                 break;
             }
             can_add_track = 0;
 
-            putchar('2');
+            // putchar('2');
             memset(ansi, 0, MAX_FILENAME_LENGTH * sizeof(char));
             memset(filename, 0, MAX_FILENAME_LENGTH * sizeof(char));
 
-            putchar('3');
+            // putchar('3');
             success = cdi_cue_get_buffer(ansi, &line, 0);
             if (!success)
                 break;
-            putchar('4');
+            // putchar('4');
             success = cdi_cue_get_keyword(&type, &line);
             if (!success)
                 break;
 
-            putchar('5');
+            // putchar('5');
             trk.file = NULL;
             error    = 1;
 
-            putchar('6');
+            // putchar('6');
             if (!strcmp(type, "BINARY")) {
                 strncpy(filename,ansi,MAX_FILENAME_LENGTH);
                 trk.file = track_file_init(filename, &error);
@@ -1097,7 +1069,7 @@ cdi_load_cue(cd_img_t *cdi, const char *cuefile)
                     error = 0;
                 }
             }
-            putchar('7');
+            // putchar('7');
             if (error) {
                 switch (error) {
                 case 1:
@@ -1118,9 +1090,7 @@ cdi_load_cue(cd_img_t *cdi, const char *cuefile)
             }
         } else if (!strcmp(command, "PREGAP"))
             success = cdi_cue_get_frame(&cur_pregap, &line);
-        else if (!strcmp(command, "FLAGS"))
-            success = cdi_cue_get_flags(&trk, &line);
-        else if (!strcmp(command, "CATALOG") || !strcmp(command, "CDTEXTFILE") || !strcmp(command, "ISRC") || !strcmp(command, "PERFORMER") || !strcmp(command, "POSTGAP") || !strcmp(command, "REM") || !strcmp(command, "SONGWRITER") || !strcmp(command, "TITLE") || !strcmp(command, "")) {
+        else if (!strcmp(command, "CATALOG") || !strcmp(command, "CDTEXTFILE") || !strcmp(command, "ISRC") || !strcmp(command, "PERFORMER") || !strcmp(command, "POSTGAP") || !strcmp(command, "REM") || !strcmp(command, "SONGWRITER") || !strcmp(command, "TITLE") || !strcmp(command, "FLAGS") || !strcmp(command, "")) {
             /* Ignored commands. */
             success = 1;
         } else {
@@ -1128,7 +1098,7 @@ cdi_load_cue(cd_img_t *cdi, const char *cuefile)
             success = 0;
         }
 
-        putchar('z');
+        // putchar('z');
         if (!success)
             break;
     }

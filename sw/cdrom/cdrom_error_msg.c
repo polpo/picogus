@@ -9,7 +9,7 @@ void cdrom_errorstr_set(const char *fmt, ...) {
     va_list ap;
     va_start(ap, fmt);
     vsnprintf(_error, 256, fmt, ap);
-    printf("setting cdrom error: %s\n", _error);    
+    /* printf("setting cdrom error: %s\n", _error);     */
     va_end(ap);
 }
 

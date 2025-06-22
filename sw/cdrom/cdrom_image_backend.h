@@ -57,7 +57,7 @@ typedef struct SMSF {
     uint8_t  fr;
 } TMSF;
 
-#define SZ_TBL 64
+#define SZ_TBL 32
 
 /* Track file struct. */
 typedef struct track_file_t {
@@ -66,7 +66,7 @@ typedef struct track_file_t {
     uint32_t (*get_length)(void *priv);
     void (*close)(void *priv);
 
-    char  fn[260];
+    char  fn[128];
     FIL *fp;
     void *priv;
     // fast seek cluster link map table
@@ -80,7 +80,6 @@ typedef struct track_t {
     int           sector_size;
     int           mode2;
     int           form;
-    int           pre;
     int           pad;
     // uint64_t      start;
     uint32_t      start;
@@ -101,7 +100,6 @@ extern void cdi_close(cd_img_t *cdi);
 extern int  cdi_set_device(cd_img_t *cdi, const char *path);
 extern void cdi_get_audio_tracks(cd_img_t *cdi, int *st_track, int *end, TMSF *lead_out);
 extern void cdi_get_audio_tracks_lba(cd_img_t *cdi, int *st_track, int *end, uint32_t *lead_out);
-extern int  cdi_get_audio_track_pre(cd_img_t *cdi, int track);
 extern int  cdi_get_audio_track_info(cd_img_t *cdi, int end, int track, int *track_num, TMSF *start, uint8_t *attr);
 extern int  cdi_get_audio_track_info_lba(cd_img_t *cdi, int end, int track, int *track_num, uint32_t *start, uint8_t *attr);
 extern int  cdi_get_track(cd_img_t *cdi, uint32_t sector);

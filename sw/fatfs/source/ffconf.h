@@ -114,7 +114,7 @@
 
 
 #define FF_USE_LFN		1
-#define FF_MAX_LFN		255
+#define FF_MAX_LFN		127
 /* The FF_USE_LFN switches the support for LFN (long file name).
 /
 /   0: Disable LFN. FF_MAX_LFN has no effect.

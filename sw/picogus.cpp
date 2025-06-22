@@ -219,12 +219,12 @@ __force_inline void select_picogus(uint8_t value) {
         break;
     case MODE_CDLIST:
 #ifdef CDROM
-        if (cdrom.image_status != CD_STATUS_READY) {
+        if (cdrom.image_status == CD_STATUS_IDLE) {
             cdrom.image_status = CD_STATUS_BUSY;
             cdrom.image_command = CD_COMMAND_IMAGE_LIST;
-            puts("cdimages start");
+            // puts("cdimages start");
         }
-        puts("cdimages read");
+        // puts("cdimages read");
         cur_read = 0;
         cur_read_idx = 0;
 #endif
@@ -234,6 +234,7 @@ __force_inline void select_picogus(uint8_t value) {
     case MODE_CDAUTOADV:
         break;
     case MODE_CDNAME:
+        cur_write = 0;
     case MODE_CDERROR:
         cur_read = 0;
         break;
@@ -393,6 +394,17 @@ __force_inline void write_picogus_high(uint8_t value) {
         cdrom.image_status = CD_STATUS_BUSY;
         cdrom.image_command = CD_COMMAND_IMAGE_LOAD_INDEX;
         break;
+    case MODE_CDNAME:
+        if (!cur_write) {
+            memset(cdrom.image_path, 0, sizeof(cdrom.image_path));
+        }
+        cdrom.image_path[cur_write++] = value;
+        if (!value) {
+            cur_write = 0;
+            cdrom.image_status = CD_STATUS_BUSY;
+            cdrom.image_command = CD_COMMAND_IMAGE_LOAD;
+        }
+        break;
 #endif
     case MODE_CDAUTOADV: // enable auto advance of CD image on USB reinsert
         settings.CD.autoAdvance = value;
@@ -520,7 +532,7 @@ __force_inline uint8_t read_picogus_high(void) {
         return settings.CD.basePort == 0xFFFF ? 0 : (settings.CD.basePort >> 8);
 #ifdef CDROM
     case MODE_CDSTATUS:
-        printf("cdstatus %x\n", cdrom.image_status);
+        // printf("cdstatus %x\n", cdrom.image_status);
         return cdrom.image_status;
     case MODE_CDLIST:
         if (cur_read_idx == cdrom.image_count) { // If end of the images
