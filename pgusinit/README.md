@@ -1,4 +1,4 @@
-# PicoGUS firmware v2.0.0 / PicoGUSinit v3.0.0
+# PicoGUSinit
 
 PicoGUSinit (also called pgusinit, after the program's .exe file) detects and
 initializes a PicoGUS card. In GUS emulation mode, it should be used instead of
@@ -10,10 +10,12 @@ The board must be loaded with firmware before using it for the first time. See
 https://github.com/polpo/picogus/wiki/Building-your-PicoGUS#programming-the-pico
 for programming instructions if your card didn't come programmed. The `/flash
 x` option to pgusinit can be used to upgrade firmware on a running PicoGUS.
-Firmware file that comes with release:
+Firmware files that comes with release:
 
 * `picogus.uf2` - All modes are now in a single firmware. To switch between
   modes, use the `/mode x` option in pgusinit.
+* `pg-ne2k.uf2` - Special firmware for NE2000/WiFi. Only works on PicoGUS
+  Femto and PicoGUS v1.x boards with a Pico W installed.
 
 pgusinit must be run with firmware it is compatible with. If run with an
 incompatible firmware, pgusinit will complain about a protocol mismatch. One
@@ -115,7 +117,14 @@ that do not require an IRQ: AdLib, CMS, Tandy, and USB.
   Increase for smoother cursor movement, decrease for lower CPU load
 * `/mousesen n` - set mouse sensitivity (256 - 100%, 128 - 50%, 512 - 200%)
 
+### CD-ROM emulation
+
+* `/cdport x` - set base port of CD interface. Default: 250, 0 to disable
+* `/cdlist` - list CD images on the inserted USB drive
+* `/cdload n` - load image n in the list given by /cdlist. 0 to unload image
+* `/cdloadname x` - load CD image by name. Names with spaces can be quoted
+* `/cdauto 1|0` - auto-advance loaded image when same USB drive is reinserted
+
 ## Compiling
 
-PicoGUSinit can be compiled with OpenWatcom 1.9 or 2.0. In DOS with OpenWatcom
-installed, run `wmake` to compile.
+PicoGUSinit can be compiled with OpenWatcom 1.9 or 2.0. Run `wmake` to compile.

@@ -70,10 +70,11 @@ static void usage(card_mode_t mode, bool print_all) {
     }
     if (mode == SB_MODE || mode == USB_MODE || print_all) {
         printf("CD-ROM settings:\n");
-        printf("   /cdport x    - set the base port of CD interface. Default: 250, 0 to disable\n");
-        printf("   /cdlist      - list CD images on the inserted USB drive\n");
-        printf("   /cdload n    - load image n in the list given by /cdlist. 0 to unload image\n");
-        printf("   /cdauto 1|0  - auto-advance loaded image when same USB drive is reinserted\n");
+        printf("   /cdport x     - set base port of CD interface. Default: 250, 0 to disable\n");
+        printf("   /cdlist       - list CD images on the inserted USB drive\n");
+        printf("   /cdload n     - load image n in the list given by /cdlist. 0 to unload image\n");
+        printf("   /cdloadname x - load CD image by name. Names with spaces can be quoted\n");
+        printf("   /cdauto 1|0   - auto-advance loaded image when same USB drive is reinserted\n");
     }
     if (mode == PSG_MODE || print_all) {
         //     "...............................................................................\n"
