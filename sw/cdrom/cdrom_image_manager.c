@@ -9,31 +9,116 @@
 
 #include "cdrom_error_msg.h"
 
-// Maximum number of files to list
-#define MAX_FILES 25
 // Maximum filename length
 #define MAX_FILENAME_LEN 127
 
-// Structure to hold filename and allow sorting
-typedef char FileEntry[MAX_FILENAME_LEN];
+// Node structure for the linked list of CD image files
+typedef struct CDImageNode {
+    char *filename;
+    struct CDImageNode *next;
+} CDImageNode;
 
-// Comparison function for qsort (case insensitive ASCIIbetical sorting)
-static int cmp(const void *a, const void *b) {
-    const FileEntry *fileA = (const FileEntry *)a;
-    const FileEntry *fileB = (const FileEntry *)b;
-    return strncasecmp(*fileA, *fileB, MAX_FILENAME_LEN);
+static CDImageNode* create_cd_node(const char *filename) {
+    CDImageNode *new_node = malloc(sizeof(CDImageNode));
+    if (!new_node) {
+        return NULL; // Memory allocation failed
+    }
+    
+    // Allocate memory for the filename and copy it
+    new_node->filename = malloc(strlen(filename) + 1);
+    if (!new_node->filename) {
+        free(new_node);
+        return NULL; // Memory allocation failed
+    }
+    
+    strcpy(new_node->filename, filename);
+    new_node->next = NULL;
+    return new_node;
 }
 
-// Function to check if filename has .iso or .cue extension
-static int isCDImage(const char *filename) {
+// Add a filename to the sorted list (case insensitive)
+static bool add_cd_image_sorted(CDImageNode **head, const char *filename) {
+    CDImageNode *new_node = create_cd_node(filename);
+    if (!new_node) {
+        return false; // Memory allocation failed
+    }
+    
+    // Case 1: Empty list or new filename should be first
+    if (!*head || strncasecmp(filename, (*head)->filename, MAX_FILENAME_LEN) < 0) {
+        new_node->next = *head;
+        *head = new_node;
+        return true;
+    }
+    
+    // Case 2: Find the correct position to insert
+    CDImageNode *current = *head;
+    while (current->next && strncasecmp(filename, current->next->filename, MAX_FILENAME_LEN) > 0) {
+        current = current->next;
+    }
+    
+    // Insert the new node
+    new_node->next = current->next;
+    current->next = new_node;
+    
+    return true;
+}
+
+static bool isCDImage(const char *filename) {
     int len = strlen(filename);
-    if (len < 4) return 0;
+    if (len < 4) return false;
     // Filter out macOS extended attribute files
     if (strncmp(filename, "._", 2) == 0) {
-        return 0;
+        return false;
     }
     return (strncasecmp(filename + (len - 4), ".iso", 4) == 0 ||
-            strncasecmp(filename + (len -4), ".cue", 4) == 0);
+            strncasecmp(filename + (len - 4), ".cue", 4) == 0);
+}
+
+// convert linked list to array and free the list
+static char** cd_list_to_array(CDImageNode *head, int *count) {
+    if (!head || !count) {
+        return NULL;
+    }
+    
+    // Count nodes
+    *count = 0;
+    CDImageNode *current = head;
+    while (current) {
+        (*count)++;
+        current = current->next;
+    }
+    
+    // Allocate array of string pointers
+    char **fileList = (char **)malloc(*count * sizeof(char *));
+    if (!fileList) {
+        return NULL;
+    }
+    
+    // Transfer filename ownership from nodes to array and free nodes
+    current = head;
+    int i = 0;
+    while (current) {
+        CDImageNode *temp = current;
+        
+        // Transfer ownership of filename string
+        fileList[i] = current->filename;
+        i++;
+        
+        current = current->next;
+        free(temp); // Only free the node, not the filename
+    }
+    
+    return fileList;
+}
+
+static void free_cd_list(CDImageNode *head) {
+    CDImageNode *current = head;
+    while (current) {
+        CDImageNode *temp = current;
+        current = current->next;
+        free(temp->filename);
+        free(temp);
+    }
 }
 
 /**
@@ -41,7 +126,7 @@ static int isCDImage(const char *filename) {
  * 
  * @param fileCount: Pointer to int that will receive the number of files found
  * @return: Array of strings containing filenames, or NULL on error
- *          Caller is responsible for freeing the memory
+ *          Caller needs to free memory with cdman_list_images_free
  */
 char** cdman_list_images(int *fileCount) {
     if (!fileCount) {
@@ -58,19 +143,11 @@ char** cdman_list_images(int *fileCount) {
         return NULL;
     }
     
-    // Array to store file entries for sorting
-    FileEntry *entries = (FileEntry *)malloc(MAX_FILES * sizeof(FileEntry));
-    if (!entries) {
-        f_closedir(&dp);
-        cdrom_errorstr_set("No image files on USB disk");
-        return NULL;
-    }
-    
-    int count = 0;
+    CDImageNode *head = NULL;
     FILINFO fno;
     
-    // Read directory entries
-    while (count < MAX_FILES) {
+    // Read directory entries and build sorted linked list
+    while (1) {
         res = f_readdir(&dp, &fno);
         if (res != FR_OK || fno.fname[0] == 0) {
             break; // End of directory or error
@@ -81,52 +158,33 @@ char** cdman_list_images(int *fileCount) {
             continue;
         }
         
-        // Check if it has valid extension
+        // Check if it has valid extension and add to sorted list
         if (isCDImage(fno.fname)) {
-            strcpy(entries[count], fno.fname);
-            /* entries[count][MAX_FILENAME_LEN - 1] = '\0'; */
-            count++;
+            if (!add_cd_image_sorted(&head, fno.fname)) {
+                // Memory allocation failed, clean up and return error
+                f_closedir(&dp);
+                free_cd_list(head);
+                cdrom_errorstr_set("Memory allocation failed");
+                return NULL;
+            }
         }
     }
     
     f_closedir(&dp);
     
-    if (count == 0) {
-        free(entries);
+    if (!head) {
         cdrom_errorstr_set("No image files on USB disk");
         return NULL;
     }
     
-    // Sort the entries alphabetically
-    qsort(entries, count, sizeof(FileEntry), cmp);
-    
-    // Allocate array of string pointers
-    char **fileList = (char **)malloc(count * sizeof(char *));
+    // Convert linked list to array and clean up list
+    char **fileList = cd_list_to_array(head, fileCount);
     if (!fileList) {
-        free(entries);
+        free_cd_list(head);
+        cdrom_errorstr_set("Memory allocation failed");
         return NULL;
     }
     
-    // Allocate memory for each filename string
-    for (int i = 0; i < count; i++) {
-        int len = strlen(entries[i]) + 1;
-        fileList[i] = (char *)malloc(len);
-        if (fileList[i]) {
-            strcpy(fileList[i], entries[i]);
-            /* printf("%s\n", fileList[i]); */
-        } else {
-            // Clean up on allocation failure
-            for (int j = 0; j < i; j++) {
-                free(fileList[j]);
-            }
-            free(fileList);
-            free(entries);
-            return NULL;
-        }
-    }
-    
-    free(entries);
-    *fileCount = count;
     return fileList;
 }
 
