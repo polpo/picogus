@@ -1,3 +1,19 @@
+# v3.1.0
+
+## Fixes
+
+### CD-ROM emulation
+
+Many fixes/improvements to CD image handling:
+
+- Add ability to load image by name
+- Fix memory leak when changing images (file handle not freed, causing crash after switching images several times)
+- Less memory usage all over
+- Longer max file length limit (127 chars)
+- Better errors when USB not present
+- Fix polling of CD status register when listing images
+- Many weird edge cases with image loading state fixed
+
 # v3.0.1
 
 ## Fixes
