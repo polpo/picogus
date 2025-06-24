@@ -41,23 +41,23 @@ settings. Options may be given for other settings:
   as an aux input (for example for an internal CD-ROM drive).
 * `/mode x` - changes the card to mode specified by x. Options:
     - `gus`: Gravis Ultrasound
-    - `sb`: Sound Blaster 2.0 & AdLib
+    - `sb`: Sound Blaster 2.0 & AdLib. Supports CD-rom emulation.
     - `mpu`: MPU-401 with intelligent mode and IRQ support
-    - `tandy`: Tandy 3-voice. Supports USB serial mouse emulation.
-    - `cms`: Creative Music System/Game Blaster. Supports USB serial mouse
+    - `psg`: Tandy 3-voice and CMS/Game Blaster. Supports USB serial mouse
       emulation.
-    - 'adlib`: AdLib only. Supports USB serial mouse emulation.
+    - `adlib`: AdLib only. Supports USB serial mouse emulation.
     - `usb`: Only emulates game port joystick and serial mouse via USB. Can be
-      used if you don't want to emulate any sound cards.
+      used if you don't want to emulate any sound cards. Supports CD-ROM
+      emulation.
 * `/save` - saves current settings to the card. Saved settings persist across
   reboots, meaning pgusinit does not need to be run. The card mode is also
   saved.
 * `/defaults` - restores all card settings to defaults.
 * `/joy 1|0` - enable USB joystick support with 1, disable with 0.
 
-### GUS emulation mode
+### GUS options
 
-GUS emulation mode requires the ULTRASND variable to be set, in the format:
+GUS emulation requires the ULTRASND variable to be set, in the format:
 
 `set ULTRASND=240,1,1,5,5` where 240 is the PicoGUS's port, 1 is the DMA, and
 5 is the IRQ. pgusinit will check that the port set on the PicoGUS matches the
@@ -82,25 +82,25 @@ See the Compatibility List wiki for notes on programs that require special
 settings for the above options:
 https://github.com/polpo/picogus/wiki/Compatibility-list
 
-### Sound Blaster/AdLib mode
+### Sound Blaster/AdLib options
 
 * `/sbport x` - sets the base port of the Sound Blaster. Defaults to 220.
 * `/oplport x` - sets the base port of the OPL/AdLib. Defaults to 388.
 * `/oplwait` - wait on OPL2 data write. Can fix speed-sensitive early AdLib
   games on fast systems (example: 688 Attack Sub).
 
-### MPU-401 emulation mode
+### MPU-401 options
 
 * `/mpuport x` - sets the base port of the MPU-401. Defaults to 330.
 * `/mpudelay` - set to 1 to enable sysex delay to prevent buffer overflows on
   older MPU-401 revisions.
 * `/mpufake` - set to 1 to fake all-notes-off for the Roland RA-50.
 
-### Tandy emulation mode
+### Tandy options
 
 * `/tandyport x` - sets the base port of the Tandy 3-voice. Defaults to 2c0.
 
-### CMS emulation mode
+### CMS options
 
 * `/cmsport x` - sets the base port of the CMS. Defaults to 220.
 
@@ -117,7 +117,7 @@ that do not require an IRQ: AdLib, CMS, Tandy, and USB.
   Increase for smoother cursor movement, decrease for lower CPU load
 * `/mousesen n` - set mouse sensitivity (256 - 100%, 128 - 50%, 512 - 200%)
 
-### CD-ROM emulation
+### CD-ROM emulation options
 
 * `/cdport x` - set base port of CD interface. Default: 250, 0 to disable
 * `/cdlist` - list CD images on the inserted USB drive
