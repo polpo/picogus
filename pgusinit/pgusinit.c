@@ -42,6 +42,7 @@ static void usage(card_mode_t mode, bool print_all) {
     printf("   /defaults     - set all settings for all modes to defaults\n");
     printf("   /wtvol x      - set volume of WT header. 0-100, Default 100 (2.0 cards only)\n");
     printf("   /joy 1|0      - enable/disable USB joystick support, Default: 0\n");
+    printf("   /mainvol x    - set the main audio volume: 0 - 100\n");
     //     "...............................................................................\n"
     printf("MPU-401 settings:\n");
     printf("   /mpuport x    - set the base port of the MPU-401. Default: 330, 0 to disable\n");
@@ -57,16 +58,19 @@ static void usage(card_mode_t mode, bool print_all) {
         printf("                 Specifying 0 restores the GUS default behavior.\n");
         printf("                 (increase to fix games with streaming audio like Doom)\n");
         printf("   /gus44k 1|0 - Fixed 44.1kHz output for all active voice #s [EXPERIMENTAL]\n");
+        printf("   /gusvol x   - set the GUS audio volume: 0 - 100\n");
     }
     if (mode == SB_MODE || print_all) {
         //     "...............................................................................\n"
         printf("Sound Blaster settings:\n");
         printf("   /sbport x    - set the base port of the Sound Blaster. Default: 220\n");
+        printf("   /sbvol x     - set the Sound Blaster audio volume: 0 - 100%\n");
     }
     if (mode == SB_MODE || mode == ADLIB_MODE || print_all) {
         printf("AdLib settings:\n");
         printf("   /oplport x   - set the base port of the OPL2. Default: 388, 0 to disable\n");
         printf("   /oplwait 1|0 - wait on OPL2 write. Can fix speed-sensitive early AdLib games\n");
+        printf("   /oplvol x    - set the OPL2 audio volume: 0 - 100\n");
     }
     if (mode == SB_MODE || mode == USB_MODE || print_all) {
         printf("CD-ROM settings:\n");
@@ -74,17 +78,20 @@ static void usage(card_mode_t mode, bool print_all) {
         printf("   /cdlist       - list CD images on the inserted USB drive\n");
         printf("   /cdload n     - load image n in the list given by /cdlist. 0 to unload image\n");
         printf("   /cdloadname x - load CD image by name. Names with spaces can be quoted\n");
+        printf("   /cdvol n      - set the CD audio volume: 0 - 100\n");
         printf("   /cdauto 1|0   - auto-advance loaded image when same USB drive is reinserted\n");
     }
     if (mode == PSG_MODE || print_all) {
         //     "...............................................................................\n"
         printf("Tandy settings:\n");
         printf("   /tandyport x - set the base port of the Tandy 3-voice. Default: 2C0\n");
+        printf("   /psgvol x    - set the PSG audio volume: 0 - 100\n");
     }
     if (mode == PSG_MODE || print_all) {
         //     "...............................................................................\n"
         printf("CMS settings:\n");
         printf("   /cmsport x - set the base port of the CMS. Default: 220\n");
+        printf("   /psgvol x  - set the PSG audio volume: 0 - 100\n");
     }
     if (mode == USB_MODE || mode == PSG_MODE || mode == ADLIB_MODE || print_all) {
         //     "...............................................................................\n"
@@ -326,7 +333,10 @@ static void print_cdemu_status(void) {
     uint8_t tmp_uint8 = inp(DATA_PORT_HIGH);
     outp(CONTROL_PORT, MODE_CDPORT); // Select port register
     uint16_t tmp_uint16 = inpw(DATA_PORT_LOW); // Get port
-    printf("CD-ROM emulation on port %x, image auto-advance %s\n", tmp_uint16, tmp_uint8 ? "enabled" : "disabled");
+    outp(CONTROL_PORT, MODE_CDVOL); // Select CD volume register
+    uint16_t tmp_vol = inp(DATA_PORT_HIGH);
+    printf("CD-ROM emulation on port %x, image auto-advance %s\nCD-Audio Volume: %u%\n", tmp_uint16, tmp_uint8 ? "enabled" : "disabled", tmp_vol);
+    
     print_cdimage_current();
 }
 
@@ -507,7 +517,6 @@ static void send_string(uint8_t mode, char* str, int16_t max_len)
     }
     outp(DATA_PORT_HIGH, 0);
 }
-
 
 #define process_bool_opt(option) \
 if (i + 1 >= argc) { \
@@ -833,6 +842,78 @@ int main(int argc, char* argv[]) {
             process_bool_opt(tmp_uint8);
             outp(CONTROL_PORT, MODE_CDAUTOADV); // Select CD image autoadvance register
             outp(DATA_PORT_HIGH, tmp_uint8);
+        } else if (stricmp(argv[i], "/mainvol") == 0) {
+            if (i + 1 >= argc) {
+                usage(mode, false);
+                return 255;
+            }
+            e = sscanf(argv[++i], "%hhu", &tmp_uint8);
+            if (e != 1 || tmp_uint8 > 100) {
+                usage(mode, false);
+                return 4;
+            }
+            outp(CONTROL_PORT, MODE_MAINVOL); // Set the volume for all outputs
+            outp(DATA_PORT_HIGH, tmp_uint8);
+        } else if (stricmp(argv[i], "/oplvol") == 0) {
+            if (i + 1 >= argc) {
+                usage(mode, false);
+                return 255;
+            }
+            e = sscanf(argv[++i], "%hhu", &tmp_uint8);
+            if (e != 1 || tmp_uint8 > 100) {
+                usage(mode, false);
+                return 4;
+            }
+            outp(CONTROL_PORT, MODE_OPLVOL); // Set the volume for Sound Blaster
+            outp(DATA_PORT_HIGH, tmp_uint8);
+        } else if (stricmp(argv[i], "/sbvol") == 0) {
+            if (i + 1 >= argc) {
+                usage(mode, false);
+                return 255;
+            }
+            e = sscanf(argv[++i], "%hhu", &tmp_uint8);
+            if (e != 1 || tmp_uint8 > 100) {
+                usage(mode, false);
+                return 4;
+            }
+            outp(CONTROL_PORT, MODE_SBVOL); // Set the volume for Sound Blaster
+            outp(DATA_PORT_HIGH, tmp_uint8);
+        } else if (stricmp(argv[i], "/cdvol") == 0) {
+            if (i + 1 >= argc) {
+                usage(mode, false);
+                return 255;
+            }
+            e = sscanf(argv[++i], "%hhu", &tmp_uint8);
+            if (e != 1 || tmp_uint8 > 100) {
+                usage(mode, false);
+                return 4;
+            }
+            outp(CONTROL_PORT, MODE_CDVOL); // Set the volume for CD Audio
+            outp(DATA_PORT_HIGH, tmp_uint8); 
+        } else if (stricmp(argv[i], "/gusvol") == 0) {
+            if (i + 1 >= argc) {
+                usage(mode, false);
+                return 255;
+            }
+            e = sscanf(argv[++i], "%hhu", &tmp_uint8);
+            if (e != 1 || tmp_uint8 > 100) {
+                usage(mode, false);
+                return 4;
+            }
+            outp(CONTROL_PORT, MODE_GUSVOL); // Set the volume for GUS
+            outp(DATA_PORT_HIGH, tmp_uint8);   
+        } else if (stricmp(argv[i], "/psgvol") == 0) {
+            if (i + 1 >= argc) {
+                usage(mode, false);
+                return 255;
+            }
+            e = sscanf(argv[++i], "%hhu", &tmp_uint8);
+            if (e != 1 || tmp_uint8 > 100) {
+                usage(mode, false);
+                return 4;
+            }
+            outp(CONTROL_PORT, MODE_PSGVOL); // Set the volume for PSG
+            outp(DATA_PORT_HIGH, tmp_uint8);     
         } else {
             printf("Unknown option: %s\n", argv[i]);
             usage(mode, false);
@@ -929,6 +1010,11 @@ int main(int argc, char* argv[]) {
         outp(CONTROL_PORT, MODE_GUSPORT); // Select port register
         tmp_uint16 = inpw(DATA_PORT_LOW); // Get port
         printf("Running in GUS mode on port %x\n", tmp_uint16);
+        outp(CONTROL_PORT, MODE_GUSVOL); // Select GUS volume register
+        tmp_uint8 = inp(DATA_PORT_HIGH);
+        outp(CONTROL_PORT, MODE_MAINVOL); // Select Main volume register
+        tmp_uint16 = inp(DATA_PORT_HIGH);
+        printf("Volume:     GUS: %u     Main: %u\n", tmp_uint8, tmp_uint16);
         break;
     case ADLIB_MODE:
         outp(CONTROL_PORT, MODE_OPLPORT); // Select port register
@@ -952,6 +1038,11 @@ int main(int argc, char* argv[]) {
         outp(CONTROL_PORT, MODE_CMSPORT); // Select port register
         tmp_uint16 = inpw(DATA_PORT_LOW); // Get port
         printf("CMS/Game Blaster on port %x)\n", tmp_uint16);
+        outp(CONTROL_PORT, MODE_PSGVOL); // Select PSG volume register
+        tmp_uint8 = inp(DATA_PORT_HIGH);
+        outp(CONTROL_PORT, MODE_MAINVOL); // Select Main volume register
+        tmp_uint16 = inp(DATA_PORT_HIGH);
+        printf("Volume:     PSG: %u     Main: %u\n", tmp_uint8, tmp_uint16);
         break;
     case SB_MODE:
         if (init_sb()) {
@@ -967,9 +1058,22 @@ int main(int argc, char* argv[]) {
             outp(CONTROL_PORT, MODE_OPLWAIT); // Select Adlib wait register
             tmp_uint8 = inp(DATA_PORT_HIGH);
             printf("%s)\n", tmp_uint8 ? ", wait on" : "");
+            outp(CONTROL_PORT, MODE_OPLVOL); // Select Adlib volume register
+            tmp_uint8 = inp(DATA_PORT_HIGH);
+            printf("Volume:     ");
+            printf("OPL: %u    ", tmp_uint8);
         } else {
             printf("(AdLib port disabled)\n");
+            printf("Volume:     ");
         }
+        outp(CONTROL_PORT, MODE_SBVOL); // Select Sound Blaster volume register
+        uint8_t tmp_uint8 = inp(DATA_PORT_HIGH);
+        printf("SB: %u    ", tmp_uint8);
+
+        outp(CONTROL_PORT, MODE_MAINVOL); // Select Sound Blaster volume register
+        tmp_uint8 = inp(DATA_PORT_HIGH);
+        printf("Main: %u    \n", tmp_uint8);
+
         print_cdemu_status();
         break;
     case NE2000_MODE:

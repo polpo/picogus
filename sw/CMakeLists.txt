@@ -204,6 +204,7 @@ function(build_gus TARGET_NAME MULTIFW)
     config_target(${TARGET_NAME} ${MULTIFW})
     pico_set_program_name(${TARGET_NAME} "picogus-gus")
     target_sources(${TARGET_NAME} PRIVATE
+        volctrl.cpp
         gusplay.cpp
         isa_dma.c
     )
@@ -241,6 +242,7 @@ function(build_sb TARGET_NAME MULTIFW)
     config_target(${TARGET_NAME} ${MULTIFW})
     pico_set_program_name(${TARGET_NAME} "picogus-sb")
     target_sources(${TARGET_NAME} PRIVATE
+        volctrl.cpp
         sbdsp.cpp
         sbplay.cpp
         isa_dma.c
@@ -263,7 +265,10 @@ function(build_adlib TARGET_NAME MULTIFW)
     set(SOUND_OPL TRUE)
     config_target(${TARGET_NAME} ${MULTIFW})
     pico_set_program_name(${TARGET_NAME} "picogus-adlib")
-    target_sources(${TARGET_NAME} PRIVATE sbplay.cpp)    
+    target_sources(${TARGET_NAME} PRIVATE 
+        volctrl.cpp
+        sbplay.cpp
+    )    
 endfunction()
 
 ################################################################################
@@ -295,6 +300,7 @@ function(build_psg TARGET_NAME MULTIFW)
         SOUND_CMS=1
     )
     target_sources(${TARGET_NAME} PRIVATE
+        volctrl.cpp
         square/square.cpp
     )
     target_sources(${TARGET_NAME} PRIVATE psgplay.cpp)
@@ -312,7 +318,10 @@ function(build_usb TARGET_NAME MULTIFW)
     target_compile_definitions(${TARGET_NAME} PRIVATE
         USB_ONLY=1
     )
-    target_sources(${TARGET_NAME} PRIVATE usbplay.cpp)
+    target_sources(${TARGET_NAME} PRIVATE 
+        volctrl.cpp
+        usbplay.cpp
+    )
 endfunction()
 
 

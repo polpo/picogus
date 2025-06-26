@@ -43,6 +43,7 @@ critical_section_t gus_crit;
 extern dma_inst_t dma_config;
 
 #include "clamp.h"
+#include "volctrl.h"
 
 using namespace std;
 
@@ -615,6 +616,7 @@ class GUSChannels {
 
             // Output stereo sample if DAC enable on
             // if ((GUS_reset_reg & 0x02/*DAC enable*/) == 0x02) {
+                tmpsamp = scale_sample(tmpsamp, gus_volume, 0);
                 stream[0] += tmpsamp * VolLeft;
                 stream[1] += tmpsamp * VolRight;
                 WaveUpdate();

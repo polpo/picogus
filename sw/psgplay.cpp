@@ -32,6 +32,7 @@
 #include "square/square.h"
 
 #include "cmd_buffers.h"
+#include "volctrl.h"
 
 #if SOUND_TANDY
 extern tandy_buffer_t tandy_buffer;
@@ -170,9 +171,9 @@ void play_psg() {
         cms.generator(0).generate_frames(buf, SAMPLES_PER_BUFFER);
         cms.generator(1).generate_frames(buf, SAMPLES_PER_BUFFER);
 #endif
-        for (int i = 0; i < SAMPLES_PER_BUFFER; ++i) {
-            samples[i << 1] = buf[i << 1] >> 1;
-            samples[(i << 1) + 1] = buf[(i << 1) + 1] >> 1;
+        for (int i = 0; i < SAMPLES_PER_BUFFER; ++i) {          
+            samples[i << 1] = scale_sample(buf[i << 1], psg_volume, 0);
+            samples[(i << 1) + 1] = scale_sample(buf[(i << 1) + 1], psg_volume, 0);
         }
         buffer->sample_count = SAMPLES_PER_BUFFER;
 
