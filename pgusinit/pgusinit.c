@@ -23,6 +23,12 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <i86.h>
+#include <ctype.h>
+#include <string.h>
+#include "pgusinit.h"
+
+char mode_name[8] = {0};
+bool wifichg = false;
 
 #include "../common/picogus.h"
 
@@ -542,49 +548,6 @@ static void send_string(uint8_t mode, char* str, int16_t max_len)
     outp(DATA_PORT_HIGH, 0);
 }
 
-#define send_uint8_arg(mode) \
-    if (i + 1 >= argc)                          \
-    {                                           \
-        usage(mode, false);                     \
-        return 255;                             \
-    }                                           \
-    e = sscanf(argv[++i], "%hhu", &tmp_uint8);  \
-    if (e != 1 || tmp_uint8 > 255)              \
-    {                                           \
-        usage(mode, false);                     \
-        return 4;                               \
-    }                                           \
-    outp(CONTROL_PORT, mode);                   \
-    outp(DATA_PORT_HIGH, tmp_uint8);
-
-#define send_volume(mode) \
-    if (i + 1 >= argc)                          \
-    {                                           \
-        usage(mode, false);                     \
-        return 255;                             \
-    }                                           \
-    e = sscanf(argv[++i], "%hhu", &tmp_uint8);  \
-    if (e != 1 || tmp_uint8 > 100)              \
-    {                                           \
-        usage(mode, false);                     \
-        return 4;                               \
-    }                                           \
-    outp(CONTROL_PORT, mode);                   \
-    outp(DATA_PORT_HIGH, tmp_uint8);
-
-#define process_bool_opt(option) \
-if (i + 1 >= argc) { \
-    usage(mode, false); \
-    return 255; \
-} \
-e = sscanf(argv[++i], "%1[01]", tmp_arg); \
-if (e != 1) { \
-    usage(mode, false); \
-    return 5; \
-} \
-option = (tmp_arg[0] == '1') ? 1 : 0;
-
-
 #define process_port_opt(option) \
 if (i + 1 >= argc) { \
     usage(mode, false); \
@@ -596,14 +559,446 @@ if (e != 1 || option > 0x3ffu) { \
     return 4; \
 }
 
+static void cmdDisplayUsage(char* argv[], int index, int mode)
+{
+    usage(mode, false);
+}
+
+static int strcasecmp_bool(const char* a, const char* b) {
+    while (*a && *b) {
+        if (tolower((unsigned char)*a) != tolower((unsigned char)*b)) {
+            return 1; // Not equal
+        }
+        a++; b++;
+    }
+    return (*a || *b); // Not equal if either has remaining chars
+}
+
+static void cmdSendBool(char* argv[], int i, int mode)
+{
+    const char* arg = argv[++i];
+    uint8_t value;
+
+    if (!arg) {
+        usage(mode, false);
+        return;
+    }
+
+    if (strcmp(arg, "1") == 0 || strcasecmp_bool(arg, "true") == 0 || strcasecmp_bool(arg, "on") == 0) {
+        value = 1;
+    } else if (strcmp(arg, "0") == 0 || strcasecmp_bool(arg, "false") == 0 || strcasecmp_bool(arg, "off") == 0) {
+        value = 0;
+    } else {
+        usage(mode, false);
+        return;
+    }
+
+    outp(CONTROL_PORT, mode);
+    outp(DATA_PORT_HIGH, value);
+}
+
+static void cmdSetMode(char *argv[], int i, int mode)
+{
+    const char* arg = argv[++i];
+    
+    if (!arg || strlen(arg) > 7) {
+        usage(mode, false);
+        return;
+    }
+
+    strncpy(mode_name, arg, 8); // 7 chars max + null terminator
+    mode_name[7] = '\0';        // Ensure null-termination
+
+    return;
+}
+
+void cmdSetVol(char *argv[], int i, int mode)
+{
+    const char* arg = argv[++i];
+    char* endptr;
+    long val;
+
+    if (!arg) {
+        usage(mode, false);
+        return;
+    }
+
+    val = strtol(arg, &endptr, 10);
+
+    if (*endptr != '\0' || val < 0 || val > 100) {
+        usage(mode, false);
+        return;
+    }
+
+    outp(CONTROL_PORT, mode);
+    outp(DATA_PORT_HIGH, (uint8_t)val);
+
+    return;
+}
+
+static void ctrlSendUint8(char *arg, int mode, int min, int max)
+{
+    const char* str = arg;
+    char* endptr;
+    long val;
+
+    if (!str) {
+        usage(mode, false);
+        return;
+    }
+
+    val = strtol(str, &endptr, 10);
+
+    if (*endptr != '\0' || val < min || val > max) {
+        usage(mode, false);
+        return;
+    }
+
+    outp(CONTROL_PORT, mode);
+    outp(DATA_PORT_HIGH, (uint8_t)val);
+
+    return;
+}
+
+static void cmdSendUint8(char *argv[], int i, int mode)
+{   
+    ctrlSendUint8(argv[++i], mode, 0, 255);
+
+    return;
+}
+
+static void ctrlSendUint16(char *arg, int mode, long min, long max)
+{
+    const char *str = arg;
+    char *endptr;
+    long val;
+
+    if (!str)
+    {
+        usage(mode, false);
+        return;
+    }
+
+    val = strtol(str, &endptr, 10);
+
+    if (*endptr != '\0' || val < min || val > max)
+    {
+        usage(mode, false);
+        return;
+    }
+
+    outp(CONTROL_PORT, mode);
+    outpw(DATA_PORT_LOW, (uint16_t)val);
+
+    return;
+}
+
+static void cmdSendUint16(char *argv[], int i, int mode)
+{
+    ctrlSendUint16(argv[++i], mode, 0, 65535);
+    return;
+}
+
+static int envGetHex(const char *env, const char *key, const char *delims, int mode)
+{
+    const char *envVal = getenv(env);
+    const char *startPtr;
+    char portStr[6] = {0};  // enough for 5-digit hex + null
+    char *endptr;
+    long port;
+
+    if (!envVal || !*envVal) {
+        printf("%s not set.\n", env);
+        usage(mode, false);
+        return -1;
+    }
+
+    if (key && *key) {
+        // Keyed mode, e.g., "A220" → look for 'A'
+        startPtr = strchr(envVal, key[0]);
+        if (!startPtr || !isxdigit(startPtr[1])) {
+            printf("%s variable does not contain %sxxx.\n", env, key);
+            usage(mode, false);
+            return -2;
+        }
+        startPtr++;  // Move past key character
+    } else {
+        // No key → parse from beginning
+        startPtr = envVal;
+    }
+
+    // Copy until delimiter or space
+    int i = 0;
+    while (startPtr[i] && !strchr(delims, startPtr[i]) && !isspace((unsigned char)startPtr[i]) && i < 5) {
+        portStr[i] = startPtr[i];
+        i++;
+    }
+    portStr[i] = '\0';
+
+    port = strtol(portStr, &endptr, 16);  // always parse as hex
+
+    if (*endptr != '\0') {
+        printf("Invalid %s port value format: %s\n", env, portStr);
+        usage(mode, false);
+        return -3;
+    }
+
+    if (port < 0 || port > 0x3FF) {
+        printf("%s port out of range: 0x%lx\n", env, port);
+        usage(mode, false);
+        return -4;
+    }
+
+    return (int)port;
+}
+
+void setBlaster()
+{    
+    int mode = MODE_SBPORT;
+    outp(CONTROL_PORT, mode);
+    outpw(DATA_PORT_LOW, (uint16_t)envGetHex("BLASTER", "A", " ", mode));
+
+    return;
+}
+
+static void cmdSetBlaster(char *argv[], int i, int mode)
+{
+    setBlaster();
+}
+
+void setUltrasnd()
+{
+    int mode = MODE_GUSPORT;
+    outp(CONTROL_PORT, mode);
+    outpw(DATA_PORT_LOW, (uint16_t)envGetHex("ULTRASND", "", ",", mode));
+
+    return;
+}
+
+static void cmdSetUltrasnd(char *argv[], int i, int mode)
+{
+    setUltrasnd();
+}
+
+static void cmdSendPort(char *argv[], int i, int mode)
+{
+
+    const char *arg = argv[++i];
+    char *endptr;
+    long val;
+
+    if (!arg)
+    {
+        usage(mode, false);
+        return;
+    }
+
+    val = strtol(arg, &endptr, 16);
+
+    if (*endptr != '\0' || val < 0 || val > 0x3FF)
+    {
+        usage(mode, false);
+        return;
+    }
+
+    outp(CONTROL_PORT, mode);
+    outpw(DATA_PORT_LOW, (uint16_t)val);
+
+    return;
+}
+
+static void cmdSendMousePort(char *argv[], int i, int mode)
+{
+    const char* arg = argv[++i];
+    char* endptr;
+    long val;
+    uint16_t port;
+
+    if (!arg) {
+        usage(mode, false);
+        return;
+    }
+
+    val = strtol(arg, &endptr, 10);
+    if (*endptr != '\0' || val < 0 || val > 4) {
+        usage(mode, false);
+        return ;
+    }
+
+    switch (val) {
+        case 0: port = 0x000; break;
+        case 1: port = 0x3F8; break;
+        case 2: port = 0x2F8; break;
+        case 3: port = 0x3E8; break;
+        case 4: port = 0x2E8; break;
+        default:
+            usage(mode, false);
+            return;
+    }
+
+    outp(CONTROL_PORT, MODE_MOUSEPORT);
+    outpw(DATA_PORT_LOW, port);
+
+    return;
+}
+
+static void cmdSendMouseSen(char *argv[], int i, int mode)
+{
+    ctrlSendUint16(argv[++i], mode, 0, 1024);
+    return;
+}
+
+static void cmdSendMouseProto(char *argv[], int i, int mode)
+{
+    ctrlSendUint8(argv[++i], mode, 0, 3);
+    return;
+}
+
+static void cmdSendMouseRate(char *argv[], int i, int mode)
+{
+    ctrlSendUint8(argv[++i], mode, 20, 200);
+    return;
+}
+
+static void cmdWifiStatus(char *argv[], int i, int mode)
+{
+    wifi_printStatus();
+}
+
+static void cmdWifiSSID(char *argv[], int i, int mode)
+{
+    wifichg = true;
+    send_string(mode, argv[i], 32);
+}
+
+static void cmdWifiPass(char *argv[], int i, int mode)
+{
+    wifichg = true;
+    send_string(mode, argv[i], 63);
+}
+
+static void cmdWifiNoPass(char *argv[], int i, int mode)
+{
+    wifichg = true;
+    send_string(mode, "", 1);
+}
+
+static void cmdCDLoadName(char *argv[], int i, int mode)
+{
+    send_string(mode, argv[i], 127);
+}
+
+static void cmdCDList(char *argv[], int i, int mode)
+{
+    print_cdimage_list();
+}
+
+static void cmdCDLoad(char *argv[], int i, int mode)
+{
+    ctrlSendUint8(argv[++i], mode, 0, 255);
+    wait_for_cd_load();
+}
+
+static void cmdGUSBuffer(char *argv[], int i, int mode)
+{
+    uint8_t tmp_uint8;
+    uint8_t e = sscanf(argv[++i], "%hhu", &tmp_uint8);
+    if (e != 1 || tmp_uint8 < 1)
+    {
+        usage(mode, false);
+        return;
+    }
+    outp(CONTROL_PORT, mode);
+    outp(DATA_PORT_HIGH, (unsigned char)(tmp_uint8 - 1));
+}
+
+ParseCommand parseCommands[] = {
+    {"/?", cmdDisplayUsage, 0, ARG_NONE},
+    {"/??", cmdDisplayUsage, 0, ARG_NONE},
+    {"/joy", cmdSendBool, MODE_JOYEN, ARG_REQUIRE},
+    {"/mode", cmdSetMode, 0, ARG_REQUIRE},
+    {"/wtvol", cmdSetVol, MODE_WTVOL, ARG_REQUIRE},
+    {"/gus44k", cmdSendBool, MODE_GUS44K, ARG_REQUIRE, "false"},
+    {"/gusbuf", cmdGUSBuffer, MODE_GUSBUF, ARG_REQUIRE, "4"},
+    {"/gusdma", cmdSendUint8, MODE_GUSDMA, ARG_REQUIRE, "0"},
+    {"/gusport", cmdSetUltrasnd, MODE_GUSPORT, ARG_NONE, "240"},
+    {"/sbport", cmdSetBlaster, MODE_SBPORT, ARG_NONE, "220"},
+    {"/oplport", cmdSendPort, MODE_OPLPORT, ARG_REQUIRE, "388"},
+    {"/oplwait", cmdSendBool, MODE_OPLWAIT, ARG_REQUIRE, "false"},
+    {"/mpuport", cmdSendPort, MODE_MPUPORT, ARG_REQUIRE, "330"},
+    {"/mpudelay", cmdSendBool, MODE_MPUDELAY, ARG_REQUIRE, "false"},
+    {"/mpufake", cmdSendBool, MODE_MPUFAKE, ARG_REQUIRE, "false"},
+    {"/tandyport", cmdSendPort, MODE_TANDYPORT, ARG_REQUIRE, "2c0"},
+    {"/cmsport", cmdSendPort, MODE_CMSPORT, ARG_REQUIRE, "220"},
+    {"/mousecom", cmdSendMousePort, MODE_MOUSEPORT, ARG_REQUIRE, "0"},
+    {"/mousesen", cmdSendMouseSen, MODE_MOUSESEN, ARG_REQUIRE, "256"},
+    {"/mouseproto", cmdSendMouseProto, MODE_MOUSEPROTO, ARG_REQUIRE, "0"},
+    {"/mouserate", cmdSendMouseRate, MODE_MOUSERATE, ARG_REQUIRE, "60"},
+    {"/ne2kport", cmdSendPort, MODE_NE2KPORT, ARG_REQUIRE, "300"},
+    {"/wifistatus", cmdSendPort, 0, ARG_NONE},
+    {"/wifissid", cmdWifiSSID, MODE_WIFISSID, ARG_REQUIRE},
+    {"/wifipass", cmdWifiPass, MODE_WIFIPASS, ARG_REQUIRE},
+    {"/wifinopass", cmdWifiNoPass, MODE_WIFIPASS, ARG_NONE},
+    {"/cdport", cmdSendPort, MODE_CDPORT, ARG_REQUIRE, "250"},
+    {"/cdlist", cmdCDList, 0, ARG_NONE},
+    {"/cdload", cmdCDLoad, MODE_CDLOAD, ARG_REQUIRE},
+    {"/cdauto", cmdSendBool, MODE_CDAUTOADV, ARG_REQUIRE, "true"},
+    {"/cdloadname", cmdCDLoadName, 0, ARG_REQUIRE},
+    {"/mainvol", cmdSetVol, MODE_MAINVOL, ARG_REQUIRE, "100"},
+    {"/oplvol", cmdSetVol, MODE_OPLVOL, ARG_REQUIRE, "80"},
+    {"/sbvol", cmdSetVol, MODE_SBVOL, ARG_REQUIRE, "100"},
+    {"/cdvol", cmdSetVol, MODE_CDVOL, ARG_REQUIRE, "100"},
+    {"/gusvol", cmdSetVol, MODE_GUSVOL, ARG_REQUIRE, "100"},
+    {"/psgvol", cmdSetVol, MODE_PSGVOL, ARG_REQUIRE, "100"}
+};
+ 
+ParseCommand *matchCommand (char *str)
+{
+    for(int i = 0; parseCommands[i].name != NULL; i++ )
+    {
+	
+        if ( !strcmp ( parseCommands[i].name, str ) )
+			return &parseCommands[i];
+	}
+
+	return NULL;
+}
+
+int parseCommand (int argc, char* argv[], int i)
+{
+	int retVal = 0;
+
+	if ( !argv[i] )
+		return retVal;
+
+	ParseCommand *command = matchCommand(argv[i]);                            
+
+    if (command)
+    {
+        if (command->type == ARG_REQUIRE && i + 1 >= argc)                                                                       
+            return retVal;  
+
+        if (!strcmp(argv[i + 1], "default"))
+        {
+            if (command->def)
+                argv[i + 1] = command->def;
+            else
+                return retVal;
+        }
+
+        command->routine(argv, i, command->mode);
+        retVal = 1;
+    }
+
+    return retVal;
+}
+
 int main(int argc, char* argv[]) {
     int e;
     uint8_t enable_joystick = 0;
     uint8_t wtvol;
     char fw_filename[256] = {0};
-    bool wifichg = false;
     card_mode_t mode;
-    char mode_name[8] = {0};
     int fw_num = 8;
     bool permanent = false;
 
@@ -650,272 +1045,16 @@ int main(int argc, char* argv[]) {
     uint8_t tmp_uint8;
     i = 1;
     while (i < argc) {
-        // global options /////////////////////////////////////////////////////////////////
-        if (stricmp(argv[i], "/?") == 0) {
+        if (!parseCommand(argc, argv, i))
+        {
             usage(mode, false);
             return 0;
-        } else if (stricmp(argv[i], "/??") == 0) {
-            usage(mode, true);
-            return 0;
-        } else if (stricmp(argv[i], "/joy") == 0) {
-            process_bool_opt(tmp_uint8);
-            outp(CONTROL_PORT, MODE_JOYEN); // Select joystick enable register
-            outp(DATA_PORT_HIGH, tmp_uint8);
-        } else if (stricmp(argv[i], "/mode") == 0) {               
-            if (i + 1 >= argc) {
-                usage(mode, false);
-                return 255;
-            }
-            e = sscanf(argv[++i], "%7s", mode_name);
-            if (e != 1) {
-                usage(mode, false);
-                return 5;
-            }
-        } else if (stricmp(argv[i], "/wtvol") == 0) {
-            if (i + 1 >= argc) {
-                usage(mode, false);
-                return 255;
-            }
-            e = sscanf(argv[++i], "%hhu", &tmp_uint8);
-            if (e != 1 || tmp_uint8 > 100) {
-                usage(mode, false);
-                return 4;
-            }
-            outp(CONTROL_PORT, MODE_WTVOL); // Select wavetable volume register
-            outp(DATA_PORT_HIGH, tmp_uint8); // Write volume
-        } else if (stricmp(argv[i], "/save") == 0) {
-            permanent = true;
-        } else if (stricmp(argv[i], "/defaults") == 0) {
-            outp(CONTROL_PORT, MODE_DEFAULTS); // Select defaults register
-            outp(DATA_PORT_HIGH, 0xff);
-        // GUS options /////////////////////////////////////////////////////////////////
-        } else if (stricmp(argv[i], "/gus44k") == 0) {
-            process_bool_opt(tmp_uint8);
-            outp(CONTROL_PORT, MODE_GUS44K); // Select force 44k buffer
-            outp(DATA_PORT_HIGH, tmp_uint8);
-        } else if (stricmp(argv[i], "/gusbuf") == 0) {
-            if (i + 1 >= argc) {
-                usage(mode, false);
-                return 255;
-            }
-            e = sscanf(argv[++i], "%hhu", &tmp_uint8);
-            if (e != 1 || tmp_uint8 < 1) {
-                usage(mode, false);
-                return 3;
-            }
-            outp(CONTROL_PORT, MODE_GUSBUF); // Select audio buffer register
-            outp(DATA_PORT_HIGH, (unsigned char)(tmp_uint8 - 1));
-        } else if (stricmp(argv[i], "/gusdma") == 0) {
-            if (i + 1 >= argc) {
-                usage(mode, false);
-                return 255;
-            }
-            e = sscanf(argv[++i], "%hhu", &tmp_uint8);
-            if (e != 1) {
-                usage(mode, false);
-                return 4;
-            }
-            outp(CONTROL_PORT, MODE_GUSDMA); // Select DMA interval register
-            outp(DATA_PORT_HIGH, tmp_uint8);
-        } else if (stricmp(argv[i], "/gusport") == 0) {
-            process_port_opt(tmp_uint16);
-            outp(CONTROL_PORT, MODE_GUSPORT); // Select GUS port register
-            outpw(DATA_PORT_LOW, tmp_uint16); // Write port
-        // SB options /////////////////////////////////////////////////////////////////
-        } else if (stricmp(argv[i], "/sbport") == 0) {
-            process_port_opt(tmp_uint16);
-            outp(CONTROL_PORT, MODE_SBPORT); // Select SB port register
-            outpw(DATA_PORT_LOW, tmp_uint16); // Write port
-        } else if (stricmp(argv[i], "/oplport") == 0) {
-            process_port_opt(tmp_uint16);
-            outp(CONTROL_PORT, MODE_OPLPORT); // Select OPL port register
-            outpw(DATA_PORT_LOW, tmp_uint16); // Write port
-        } else if (stricmp(argv[i], "/oplwait") == 0) {
-            process_bool_opt(tmp_uint8);
-            outp(CONTROL_PORT, MODE_OPLWAIT); // Select Adlib wait register
-            outp(DATA_PORT_HIGH, tmp_uint8); // Write sysex delay and fake all notes off settings
-        // MPU options /////////////////////////////////////////////////////////////////
-        } else if (stricmp(argv[i], "/mpuport") == 0) {
-            process_port_opt(tmp_uint16);
-            outp(CONTROL_PORT, MODE_MPUPORT); // Select MPU port register
-            outpw(DATA_PORT_LOW, tmp_uint16); // Write port
-        } else if (stricmp(argv[i], "/mpudelay") == 0) {
-            process_bool_opt(tmp_uint8);
-            outp(CONTROL_PORT, MODE_MPUDELAY); // Select MPU sysex delay register
-            outp(DATA_PORT_HIGH, tmp_uint8);
-        } else if (stricmp(argv[i], "/mpufake") == 0) {
-            process_bool_opt(tmp_uint8);
-            outp(CONTROL_PORT, MODE_MPUFAKE); // Select MPU fake all notes off register
-            outp(DATA_PORT_HIGH, tmp_uint8);
-        // Tandy options /////////////////////////////////////////////////////////////////
-        } else if (stricmp(argv[i], "/tandyport") == 0) {
-            process_port_opt(tmp_uint16);
-            outp(CONTROL_PORT, MODE_TANDYPORT); // Select Tandy port register
-            outpw(DATA_PORT_LOW, tmp_uint16); // Write port
-        // CMS options /////////////////////////////////////////////////////////////////
-        } else if (stricmp(argv[i], "/cmsport") == 0) {
-            process_port_opt(tmp_uint16);
-            outp(CONTROL_PORT, MODE_CMSPORT); // Select CMS port register
-            outpw(DATA_PORT_LOW, tmp_uint16); // Write port
-        // Mouse options /////////////////////////////////////////////////////////////////
-        } else if (stricmp(argv[i], "/mousecom") == 0) {
-            if (i + 1 >= argc) {
-                usage(mode, false);
-                return 255;
-            }
-            e = sscanf(argv[++i], "%hhu", &tmp_uint8);
-            if (e != 1 || tmp_uint8 > 3) {
-                usage(mode, false);
-                return 4;
-            }
-            switch (tmp_uint8) {
-            case 0:
-                tmp_uint16 = 0;
-                break;
-            case 1:    
-                tmp_uint16 = 0x3f8;
-                break;
-            case 2:    
-                tmp_uint16 = 0x2f8;
-                break;
-            case 3:    
-                tmp_uint16 = 0x3e8;
-                break;
-            case 4:    
-                tmp_uint16 = 0x2e8;
-                break;
-            default:
-                usage(mode, false);
-                return 4;
-            }
-            outp(CONTROL_PORT, MODE_MOUSEPORT); // Select mouse port register
-            outpw(DATA_PORT_LOW, tmp_uint16);
-        } else if (stricmp(argv[i], "/mousesen") == 0) {
-            if (i + 1 >= argc) {
-                usage(mode, false);
-                return 255;
-            }
-            e = sscanf(argv[++i], "%hi", &tmp_uint16);
-            if (e != 1) {
-                usage(mode, false);
-                return 4;
-            }
-            outp(CONTROL_PORT, MODE_MOUSESEN); // Select mouse sensitivity register
-            outpw(DATA_PORT_LOW, tmp_uint16);
-        } else if (stricmp(argv[i], "/mouseproto") == 0) {
-            if (i + 1 >= argc) {
-                usage(mode, false);
-                return 255;
-            }
-            e = sscanf(argv[++i], "%hhu", &tmp_uint8);
-            if (e != 1 || tmp_uint8 > 3) {
-                usage(mode, false);
-                return 4;
-            }
-            outp(CONTROL_PORT, MODE_MOUSEPROTO);
-            outp(DATA_PORT_HIGH, tmp_uint8);
-        } else if (stricmp(argv[i], "/mouserate") == 0) {
-            if (i + 1 >= argc) {
-                usage(mode, false);
-                return 255;
-            }
-            e = sscanf(argv[++i], "%hhu", &tmp_uint8);
-            if (e != 1 || tmp_uint8 < 20 || tmp_uint8 > 200) {
-                usage(mode, false);
-                return 4;
-            }
-            outp(CONTROL_PORT, MODE_MOUSERATE);
-            outp(DATA_PORT_HIGH, tmp_uint8);
-        // NE2000/WiFi options /////////////////////////////////////////////////////////////////
-        } else if (stricmp(argv[i], "/ne2kport") == 0) {
-            process_port_opt(tmp_uint16);
-            outp(CONTROL_PORT, MODE_NE2KPORT); // Select NE2000 port register
-            outpw(DATA_PORT_LOW, tmp_uint16); // Write port
-        } else if (stricmp(argv[i], "/wifistatus") == 0) {
-            wifi_printStatus();
-        } else if (stricmp(argv[i], "/wifissid") == 0) {
-            if (i + 1 >= argc) {
-                usage(mode, false);
-                return 255;
-            }
-            if (strlen(argv[++i]) > 32) {
-                usage(mode, false);
-                return 4;
-            }
-            wifichg = true;
-            send_string(MODE_WIFISSID, argv[i], 32);
-        } else if (stricmp(argv[i], "/wifipass") == 0) {
-            if (i + 1 >= argc) {
-                usage(mode, false);
-                return 255;
-            }
-            if (strlen(argv[++i]) > 63) {
-                usage(mode, false);
-                return 4;
-            }
-            wifichg = true;
-            send_string(MODE_WIFIPASS, argv[i], 63);
-        } else if (stricmp(argv[i], "/wifinopass") == 0) {
-            wifichg = true;
-            send_string(MODE_WIFIPASS, "", 1);
-        // CD-ROM options /////////////////////////////////////////////////////////////////
-        } else if (stricmp(argv[i], "/cdport") == 0) {
-            process_port_opt(tmp_uint16);
-            outp(CONTROL_PORT, MODE_CDPORT); // Select CD port register
-            outpw(DATA_PORT_LOW, tmp_uint16); // Write port
-        } else if (stricmp(argv[i], "/cdlist") == 0) {
-            if (!print_cdimage_list()) {
-                return 98;
-            }
-            return 0;
-        } else if (stricmp(argv[i], "/cdload") == 0) {
-            if (i + 1 >= argc) {
-                usage(mode, false);
-                return 255;
-            }
-            e = sscanf(argv[++i], "%hhu", &tmp_uint8);
-            if (e != 1) {
-                usage(mode, false);
-                return 3;
-            }
-            outp(CONTROL_PORT, MODE_CDLOAD); // Select CD image load register
-            outp(DATA_PORT_HIGH, tmp_uint8);
-            return wait_for_cd_load();
-        } else if (stricmp(argv[i], "/cdloadname") == 0) {
-            if (i + 1 >= argc) {
-                usage(mode, false);
-                return 255;
-            }
-            if (strlen(argv[++i]) > 127) {
-                usage(mode, false);
-                return 5;
-            }
-            send_string(MODE_CDNAME, argv[i], 127);
-            return wait_for_cd_load();
-        } else if (stricmp(argv[i], "/cdauto") == 0) {
-            process_bool_opt(tmp_uint8);
-            outp(CONTROL_PORT, MODE_CDAUTOADV); // Select CD image autoadvance register
-            outp(DATA_PORT_HIGH, tmp_uint8);
-        } else if (stricmp(argv[i], "/mainvol") == 0) {
-            send_volume(MODE_MAINVOL);
-        } else if (stricmp(argv[i], "/oplvol") == 0) {
-            send_volume(MODE_OPLVOL);
-        } else if (stricmp(argv[i], "/sbvol") == 0) {
-            send_volume(MODE_SBVOL);
-        } else if (stricmp(argv[i], "/cdvol") == 0) {
-            send_volume(MODE_CDVOL);
-        } else if (stricmp(argv[i], "/gusvol") == 0) {
-            send_volume(MODE_GUSVOL);
-        } else if (stricmp(argv[i], "/psgvol") == 0) {
-            send_volume(MODE_PSGVOL);
-        } else {
-            printf("Unknown option: %s\n", argv[i]);
-            usage(mode, false);
-            return 255;
         }
+        else
+            break;
+        
         ++i;
     }
-
 
     if (mode_name[0]) {
         if (strnicmp(mode_name, "TANDY", 5) == 0 || strnicmp(mode_name, "CMS", 3) == 0) {
