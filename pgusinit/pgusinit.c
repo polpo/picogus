@@ -48,7 +48,7 @@ static void usage(card_mode_t mode, bool print_all) {
     printf("   /mpuport x    - set the base port of the MPU-401. Default: 330, 0 to disable\n");
     printf("   /mpudelay 1|0 - delay SYSEX (for rev.0 Roland MT-32)\n");
     printf("   /mpufake 1|0  - fake all notes off (for Roland RA-50)\n");
-    if (mode == GUS_MODE || print_all) {
+    if (mode == GUS_MODE || mode == MODE_GUSVOL || print_all) {
         //     "...............................................................................\n"
         printf("GUS settings:\n");
         printf("   /gusport x  - set the base port of the GUS. Default: 240\n");
@@ -60,19 +60,19 @@ static void usage(card_mode_t mode, bool print_all) {
         printf("   /gus44k 1|0 - Fixed 44.1kHz output for all active voice #s [EXPERIMENTAL]\n");
         printf("   /gusvol x   - set the GUS audio volume: 0 - 100\n");
     }
-    if (mode == SB_MODE || print_all) {
+    if (mode == SB_MODE || mode == MODE_SBVOL || print_all) {
         //     "...............................................................................\n"
         printf("Sound Blaster settings:\n");
         printf("   /sbport x    - set the base port of the Sound Blaster. Default: 220\n");
         printf("   /sbvol x     - set the Sound Blaster audio volume: 0 - 100%\n");
     }
-    if (mode == SB_MODE || mode == ADLIB_MODE || print_all) {
+    if (mode == SB_MODE || mode == ADLIB_MODE || mode == MODE_OPLVOL || print_all) {
         printf("AdLib settings:\n");
         printf("   /oplport x   - set the base port of the OPL2. Default: 388, 0 to disable\n");
         printf("   /oplwait 1|0 - wait on OPL2 write. Can fix speed-sensitive early AdLib games\n");
         printf("   /oplvol x    - set the OPL2 audio volume: 0 - 100\n");
     }
-    if (mode == SB_MODE || mode == USB_MODE || print_all) {
+    if (mode == SB_MODE || mode == USB_MODE || mode == MODE_CDVOL || print_all) {
         printf("CD-ROM settings:\n");
         printf("   /cdport x     - set base port of CD interface. Default: 250, 0 to disable\n");
         printf("   /cdlist       - list CD images on the inserted USB drive\n");
@@ -81,13 +81,13 @@ static void usage(card_mode_t mode, bool print_all) {
         printf("   /cdvol n      - set the CD audio volume: 0 - 100\n");
         printf("   /cdauto 1|0   - auto-advance loaded image when same USB drive is reinserted\n");
     }
-    if (mode == PSG_MODE || print_all) {
+    if (mode == PSG_MODE || mode == MODE_PSGVOL || print_all) {
         //     "...............................................................................\n"
         printf("Tandy settings:\n");
         printf("   /tandyport x - set the base port of the Tandy 3-voice. Default: 2C0\n");
         printf("   /psgvol x    - set the PSG audio volume: 0 - 100\n");
     }
-    if (mode == PSG_MODE || print_all) {
+    if (mode == PSG_MODE || mode == MODE_PSGVOL || print_all) {
         //     "...............................................................................\n"
         printf("CMS settings:\n");
         printf("   /cmsport x - set the base port of the CMS. Default: 220\n");
@@ -518,6 +518,36 @@ static void send_string(uint8_t mode, char* str, int16_t max_len)
     outp(DATA_PORT_HIGH, 0);
 }
 
+#define send_uint8_arg(mode) \
+    if (i + 1 >= argc)                          \
+    {                                           \
+        usage(mode, false);                     \
+        return 255;                             \
+    }                                           \
+    e = sscanf(argv[++i], "%hhu", &tmp_uint8);  \
+    if (e != 1 || tmp_uint8 > 255)              \
+    {                                           \
+        usage(mode, false);                     \
+        return 4;                               \
+    }                                           \
+    outp(CONTROL_PORT, mode);                   \
+    outp(DATA_PORT_HIGH, tmp_uint8);
+
+#define send_volume(mode) \
+    if (i + 1 >= argc)                          \
+    {                                           \
+        usage(mode, false);                     \
+        return 255;                             \
+    }                                           \
+    e = sscanf(argv[++i], "%hhu", &tmp_uint8);  \
+    if (e != 1 || tmp_uint8 > 100)              \
+    {                                           \
+        usage(mode, false);                     \
+        return 4;                               \
+    }                                           \
+    outp(CONTROL_PORT, mode);                   \
+    outp(DATA_PORT_HIGH, tmp_uint8);
+
 #define process_bool_opt(option) \
 if (i + 1 >= argc) { \
     usage(mode, false); \
@@ -843,77 +873,17 @@ int main(int argc, char* argv[]) {
             outp(CONTROL_PORT, MODE_CDAUTOADV); // Select CD image autoadvance register
             outp(DATA_PORT_HIGH, tmp_uint8);
         } else if (stricmp(argv[i], "/mainvol") == 0) {
-            if (i + 1 >= argc) {
-                usage(mode, false);
-                return 255;
-            }
-            e = sscanf(argv[++i], "%hhu", &tmp_uint8);
-            if (e != 1 || tmp_uint8 > 100) {
-                usage(mode, false);
-                return 4;
-            }
-            outp(CONTROL_PORT, MODE_MAINVOL); // Set the volume for all outputs
-            outp(DATA_PORT_HIGH, tmp_uint8);
+            send_volume(MODE_MAINVOL);
         } else if (stricmp(argv[i], "/oplvol") == 0) {
-            if (i + 1 >= argc) {
-                usage(mode, false);
-                return 255;
-            }
-            e = sscanf(argv[++i], "%hhu", &tmp_uint8);
-            if (e != 1 || tmp_uint8 > 100) {
-                usage(mode, false);
-                return 4;
-            }
-            outp(CONTROL_PORT, MODE_OPLVOL); // Set the volume for Sound Blaster
-            outp(DATA_PORT_HIGH, tmp_uint8);
+            send_volume(MODE_OPLVOL);
         } else if (stricmp(argv[i], "/sbvol") == 0) {
-            if (i + 1 >= argc) {
-                usage(mode, false);
-                return 255;
-            }
-            e = sscanf(argv[++i], "%hhu", &tmp_uint8);
-            if (e != 1 || tmp_uint8 > 100) {
-                usage(mode, false);
-                return 4;
-            }
-            outp(CONTROL_PORT, MODE_SBVOL); // Set the volume for Sound Blaster
-            outp(DATA_PORT_HIGH, tmp_uint8);
+            send_volume(MODE_SBVOL);
         } else if (stricmp(argv[i], "/cdvol") == 0) {
-            if (i + 1 >= argc) {
-                usage(mode, false);
-                return 255;
-            }
-            e = sscanf(argv[++i], "%hhu", &tmp_uint8);
-            if (e != 1 || tmp_uint8 > 100) {
-                usage(mode, false);
-                return 4;
-            }
-            outp(CONTROL_PORT, MODE_CDVOL); // Set the volume for CD Audio
-            outp(DATA_PORT_HIGH, tmp_uint8); 
+            send_volume(MODE_CDVOL);
         } else if (stricmp(argv[i], "/gusvol") == 0) {
-            if (i + 1 >= argc) {
-                usage(mode, false);
-                return 255;
-            }
-            e = sscanf(argv[++i], "%hhu", &tmp_uint8);
-            if (e != 1 || tmp_uint8 > 100) {
-                usage(mode, false);
-                return 4;
-            }
-            outp(CONTROL_PORT, MODE_GUSVOL); // Set the volume for GUS
-            outp(DATA_PORT_HIGH, tmp_uint8);   
+            send_volume(MODE_GUSVOL);
         } else if (stricmp(argv[i], "/psgvol") == 0) {
-            if (i + 1 >= argc) {
-                usage(mode, false);
-                return 255;
-            }
-            e = sscanf(argv[++i], "%hhu", &tmp_uint8);
-            if (e != 1 || tmp_uint8 > 100) {
-                usage(mode, false);
-                return 4;
-            }
-            outp(CONTROL_PORT, MODE_PSGVOL); // Set the volume for PSG
-            outp(DATA_PORT_HIGH, tmp_uint8);     
+            send_volume(MODE_PSGVOL);
         } else {
             printf("Unknown option: %s\n", argv[i]);
             usage(mode, false);
