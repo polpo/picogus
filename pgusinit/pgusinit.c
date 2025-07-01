@@ -375,6 +375,30 @@ static int reboot_to_firmware(const uint8_t value, const bool permanent) {
     return 0;
 }
 
+void print_progress_bar(uint32_t current, uint32_t total) {
+    const int bar_width = 50;
+    static int last_filled = -1;
+
+    int filled = (current * bar_width) / total;
+    int percent = (current * 100) / total;
+
+    if (filled != last_filled) {
+        last_filled = filled;
+
+        char bar[80];
+        int pos = 0;
+        pos += sprintf(bar, "\r[");
+        for (int i = 0; i < bar_width; i++) {
+            bar[pos++] = (i < filled) ? '=' : ' ';
+        }
+        pos += sprintf(bar + pos, "] %3d%%", percent);
+        bar[pos] = '\0';
+
+        fprintf(stderr, "%s", bar);
+        fflush(stderr);
+    }
+}
+
 static int write_firmware(const char* fw_filename) {
     union {
         uint8_t buf[512];
@@ -465,7 +489,7 @@ static int write_firmware(const char* fw_filename) {
                 outp(CONTROL_PORT, MODE_FLASH); // Select firmware programming mode, which will reboot the card in DONE
             }
         }
-        fprintf(stderr, ".");
+        print_progress_bar(i + 1, numBlocks);
         //fprintf(stderr, "%u ", i);
     }
     fclose(fp);
