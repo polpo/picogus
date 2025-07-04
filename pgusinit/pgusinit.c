@@ -608,8 +608,6 @@ static void cmdSetMode(char *argv[], int i, int mode)
 
     strncpy(mode_name, arg, 8); // 7 chars max + null terminator
     mode_name[7] = '\0';        // Ensure null-termination
-
-    return;
 }
 
 void cmdSetVol(char *argv[], int i, int mode)
@@ -632,8 +630,6 @@ void cmdSetVol(char *argv[], int i, int mode)
 
     outp(CONTROL_PORT, mode);
     outp(DATA_PORT_HIGH, (uint8_t)val);
-
-    return;
 }
 
 static void ctrlSendUint8(char *arg, int mode, int min, int max)
@@ -656,15 +652,11 @@ static void ctrlSendUint8(char *arg, int mode, int min, int max)
 
     outp(CONTROL_PORT, mode);
     outp(DATA_PORT_HIGH, (uint8_t)val);
-
-    return;
 }
 
 static void cmdSendUint8(char *argv[], int i, int mode)
 {   
     ctrlSendUint8(argv[++i], mode, 0, 255);
-
-    return;
 }
 
 static void ctrlSendUint16(char *arg, int mode, long min, long max)
@@ -689,14 +681,11 @@ static void ctrlSendUint16(char *arg, int mode, long min, long max)
 
     outp(CONTROL_PORT, mode);
     outpw(DATA_PORT_LOW, (uint16_t)val);
-
-    return;
 }
 
 static void cmdSendUint16(char *argv[], int i, int mode)
 {
     ctrlSendUint16(argv[++i], mode, 0, 65535);
-    return;
 }
 
 static int envGetHex(const char *env, const char *key, const char *delims, int mode)
@@ -803,8 +792,6 @@ static void cmdSendPort(char *argv[], int i, int mode)
 
     outp(CONTROL_PORT, mode);
     outpw(DATA_PORT_LOW, (uint16_t)val);
-
-    return;
 }
 
 static void cmdSendMousePort(char *argv[], int i, int mode)
@@ -839,25 +826,21 @@ static void cmdSendMousePort(char *argv[], int i, int mode)
     outp(CONTROL_PORT, MODE_MOUSEPORT);
     outpw(DATA_PORT_LOW, port);
 
-    return;
 }
 
 static void cmdSendMouseSen(char *argv[], int i, int mode)
 {
     ctrlSendUint16(argv[++i], mode, 0, 1024);
-    return;
 }
 
 static void cmdSendMouseProto(char *argv[], int i, int mode)
 {
     ctrlSendUint8(argv[++i], mode, 0, 3);
-    return;
 }
 
 static void cmdSendMouseRate(char *argv[], int i, int mode)
 {
     ctrlSendUint8(argv[++i], mode, 20, 200);
-    return;
 }
 
 static void cmdWifiStatus(char *argv[], int i, int mode)
@@ -885,18 +868,22 @@ static void cmdWifiNoPass(char *argv[], int i, int mode)
 
 static void cmdCDLoadName(char *argv[], int i, int mode)
 {
-    send_string(mode, argv[i], 127);
+    send_string(mode, argv[++i], 127);
+    wait_for_cd_load();
+    exit(0);
 }
 
 static void cmdCDList(char *argv[], int i, int mode)
 {
     print_cdimage_list();
+    exit(0);
 }
 
 static void cmdCDLoad(char *argv[], int i, int mode)
 {
     ctrlSendUint8(argv[++i], mode, 0, 255);
     wait_for_cd_load();
+    exit(0);
 }
 
 static void cmdGUSBuffer(char *argv[], int i, int mode)
@@ -943,7 +930,7 @@ ParseCommand parseCommands[] = {
     {"/cdlist", cmdCDList, 0, ARG_NONE},
     {"/cdload", cmdCDLoad, MODE_CDLOAD, ARG_REQUIRE},
     {"/cdauto", cmdSendBool, MODE_CDAUTOADV, ARG_REQUIRE, "true"},
-    {"/cdloadname", cmdCDLoadName, 0, ARG_REQUIRE},
+    {"/cdloadname", cmdCDLoadName, MODE_CDNAME, ARG_REQUIRE},
     {"/mainvol", cmdSetVol, MODE_MAINVOL, ARG_REQUIRE, "100"},
     {"/oplvol", cmdSetVol, MODE_OPLVOL, ARG_REQUIRE, "80"},
     {"/sbvol", cmdSetVol, MODE_SBVOL, ARG_REQUIRE, "100"},
