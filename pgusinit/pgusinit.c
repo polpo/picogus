@@ -993,6 +993,34 @@ int parseCommand (int argc, char* argv[], int i)
     return retVal;
 }
 
+static uint8_t ctrlGetUint8(int mode)
+{
+    uint8_t tmp_uint8;
+    outp(CONTROL_PORT, mode);
+    tmp_uint8 = inp(DATA_PORT_HIGH);
+
+    return tmp_uint8;
+}
+
+static uint16_t ctrlGetUint16(int mode)
+{
+    uint16_t tmp_uint16;
+    outp(CONTROL_PORT, mode);
+    tmp_uint16 = inp(DATA_PORT_HIGH);
+
+    return tmp_uint16;
+}
+
+static uint16_t ctrlGetPort(int mode)
+{
+    uint16_t tmp_uint16;
+    outp(CONTROL_PORT, mode);
+    tmp_uint16 = inpw(DATA_PORT_LOW);
+    
+    return tmp_uint16;
+}
+
+
 int main(int argc, char* argv[]) {
     int e;
     uint8_t enable_joystick = 0;
@@ -1091,25 +1119,16 @@ int main(int argc, char* argv[]) {
     }
     printf("\n");
 
-    outp(CONTROL_PORT, MODE_JOYEN); // Select joystick enable register
-    tmp_uint8 = inp(DATA_PORT_HIGH);
-    printf("USB joystick support %s\n", tmp_uint8 ? "enabled" : "disabled");
+    printf("USB joystick support %s\n", ctrlGetUint8(MODE_JOYEN) ? "enabled" : "disabled");
 
     if (board_type == PICOGUS_2) {
-        outp(CONTROL_PORT, MODE_WTVOL); // Select wavetable volume register
-        wtvol = inp(DATA_PORT_HIGH); // Read volume
+        wtvol = ctrlGetUint8(MODE_WTVOL);
         printf("Wavetable volume set to %u\n", wtvol);
     }
 
-    outp(CONTROL_PORT, MODE_MPUPORT); // Select MPU port register
-    tmp_uint16 = inpw(DATA_PORT_LOW); // Get port
     if (tmp_uint16) {
-        outp(CONTROL_PORT, MODE_MPUDELAY); // Select MPU-401 delay register
-        tmp_uint8 = inp(DATA_PORT_HIGH);
-        printf("MPU-401: port %x; sysex delay: %s, ", tmp_uint16, tmp_uint8 ? "on" : "off");
-        outp(CONTROL_PORT, MODE_MPUFAKE); // Select MPU-401 fake all notes off
-        tmp_uint8 = inp(DATA_PORT_HIGH);
-        printf("fake all notes off: %s\n", tmp_uint8 ? "on" : "off");
+        printf("MPU-401: port %x; sysex delay: %s, ", ctrlGetPort(MODE_MPUPORT), ctrlGetUint8(MODE_MPUDELAY) ? "on" : "off");
+        printf("fake all notes off: %s\n", ctrlGetUint8(MODE_MPUFAKE) ? "on" : "off");
     } else {
         printf("MPU-401 disabled\n");
     }
@@ -1120,99 +1139,64 @@ int main(int argc, char* argv[]) {
             return 1;
         }
         printf("GUS mode: ");
-        outp(CONTROL_PORT, MODE_GUSBUF); // Select audio buffer register
-        tmp_uint16 = inp(DATA_PORT_HIGH) + 1;
-        printf("Audio buffer: %u samples; ", tmp_uint16);
+        printf("Audio buffer: %u samples; ", ctrlGetUint16(MODE_GUSBUF) + 1);
 
-        outp(CONTROL_PORT, MODE_GUSDMA); // Select DMA interval register
-        tmp_uint8 = inp(DATA_PORT_HIGH);
+        tmp_uint8 = ctrlGetUint8(MODE_GUSDMA);
         if (tmp_uint8 == 0) {
             printf("DMA interval: default; ");
         } else {
             printf("DMA interval: %u us; ", tmp_uint8);
         }
 
-        outp(CONTROL_PORT, MODE_GUS44K); // Select force 44k buffer
-        tmp_uint8 = inp(DATA_PORT_HIGH);
+        tmp_uint8 = ctrlGetUint8(MODE_GUS44K);
         if (tmp_uint8) {
             printf("Sample rate: fixed 44.1k\n");
         } else {
             printf("Sample rate: variable\n");
         }
         
-        outp(CONTROL_PORT, MODE_GUSPORT); // Select port register
-        tmp_uint16 = inpw(DATA_PORT_LOW); // Get port
-        printf("Running in GUS mode on port %x\n", tmp_uint16);
-        outp(CONTROL_PORT, MODE_GUSVOL); // Select GUS volume register
-        tmp_uint8 = inp(DATA_PORT_HIGH);
-        outp(CONTROL_PORT, MODE_MAINVOL); // Select Main volume register
-        tmp_uint16 = inp(DATA_PORT_HIGH);
-        printf("Volume:     GUS: %u     Main: %u\n", tmp_uint8, tmp_uint16);
+        printf("Running in GUS mode on port %x\n", ctrlGetPort(MODE_GUSPORT));
+        printf("Volume:     GUS: %u     Main: %u\n", ctrlGetUint8(MODE_GUSVOL), ctrlGetUint8(MODE_MAINVOL));
         break;
     case ADLIB_MODE:
-        outp(CONTROL_PORT, MODE_OPLPORT); // Select port register
-        tmp_uint16 = inpw(DATA_PORT_LOW); // Get port
-        printf("Running in AdLib/OPL2 mode on port %x", tmp_uint16);
-        outp(CONTROL_PORT, MODE_OPLWAIT); // Select Adlib wait register
-        tmp_uint8 = inp(DATA_PORT_HIGH);
-        printf("%s\n", tmp_uint8 ? ", wait on" : "");
+        printf("Running in AdLib/OPL2 mode on port %x", ctrlGetPort(MODE_OPLPORT));
+        printf("%s\n", ctrlGetUint8(MODE_OPLWAIT) ? ", wait on" : "");
         break;
     case MPU_MODE:
-        printf("Running in MPU-401 only mode (with IRQ)\n", tmp_uint16);
+        printf("Running in MPU-401 only mode (with IRQ)\n");
         break;
     case USB_MODE:
-        printf("Running in USB mode\n", tmp_uint16);
+        printf("Running in USB mode\n");
         print_cdemu_status();
         break;
     case PSG_MODE:
-        outp(CONTROL_PORT, MODE_TANDYPORT); // Select port register
-        tmp_uint16 = inpw(DATA_PORT_LOW); // Get port
-        printf("Running in PSG mode (Tandy 3-voice on port %x, ", tmp_uint16);
-        outp(CONTROL_PORT, MODE_CMSPORT); // Select port register
-        tmp_uint16 = inpw(DATA_PORT_LOW); // Get port
-        printf("CMS/Game Blaster on port %x)\n", tmp_uint16);
-        outp(CONTROL_PORT, MODE_PSGVOL); // Select PSG volume register
-        tmp_uint8 = inp(DATA_PORT_HIGH);
-        outp(CONTROL_PORT, MODE_MAINVOL); // Select Main volume register
-        tmp_uint16 = inp(DATA_PORT_HIGH);
-        printf("Volume:     PSG: %u     Main: %u\n", tmp_uint8, tmp_uint16);
+        printf("Running in PSG mode (Tandy 3-voice on port %x, ", ctrlGetPort(MODE_TANDYPORT));
+        printf("CMS/Game Blaster on port %x)\n", ctrlGetPort(MODE_CMSPORT));
+        printf("Volume:     PSG: %u     Main: %u\n", ctrlGetUint8(MODE_PSGVOL), ctrlGetUint8(MODE_MAINVOL));
         break;
     case SB_MODE:
         if (init_sb()) {
             return 1;
         }
-        outp(CONTROL_PORT, MODE_SBPORT); // Select port register
-        tmp_uint16 = inpw(DATA_PORT_LOW); // Get port
-        printf("Running in Sound Blaster 2.0 mode on port %x ", tmp_uint16);
+        printf("Running in Sound Blaster 2.0 mode on port %x ", ctrlGetPort(MODE_SBPORT));
         outp(CONTROL_PORT, MODE_OPLPORT); // Select port register
-        tmp_uint16 = inpw(DATA_PORT_LOW); // Get port
+        tmp_uint16 = ctrlGetPort(MODE_OPLPORT);
         if (tmp_uint16) {
             printf("(AdLib port %x", tmp_uint16);
-            outp(CONTROL_PORT, MODE_OPLWAIT); // Select Adlib wait register
-            tmp_uint8 = inp(DATA_PORT_HIGH);
-            printf("%s)\n", tmp_uint8 ? ", wait on" : "");
-            outp(CONTROL_PORT, MODE_OPLVOL); // Select Adlib volume register
-            tmp_uint8 = inp(DATA_PORT_HIGH);
+            printf("%s)\n", ctrlGetUint8(MODE_OPLWAIT) ? ", wait on" : "");
             printf("Volume:     ");
-            printf("OPL: %u    ", tmp_uint8);
+            printf("OPL: %u    ", ctrlGetUint8(MODE_OPLVOL));
         } else {
             printf("(AdLib port disabled)\n");
             printf("Volume:     ");
         }
-        outp(CONTROL_PORT, MODE_SBVOL); // Select Sound Blaster volume register
-        uint8_t tmp_uint8 = inp(DATA_PORT_HIGH);
-        printf("SB: %u    ", tmp_uint8);
-
-        outp(CONTROL_PORT, MODE_MAINVOL); // Select Sound Blaster volume register
-        tmp_uint8 = inp(DATA_PORT_HIGH);
-        printf("Main: %u    \n", tmp_uint8);
+        printf("SB: %u    ", ctrlGetUint8(MODE_SBVOL));
+        printf("Main: %u    \n", ctrlGetUint8(MODE_MAINVOL));
 
         print_cdemu_status();
         break;
     case NE2000_MODE:
-        outp(CONTROL_PORT, MODE_NE2KPORT); // Select port register
-        tmp_uint16 = inpw(DATA_PORT_LOW); // Get port
-        printf("Running in NE2000 mode on port %x\n", tmp_uint16);
+        printf("Running in NE2000 mode on port %x\n", ctrlGetPort(MODE_NE2KPORT));
         wifi_printStatus();
         break;
     default:
@@ -1220,8 +1204,7 @@ int main(int argc, char* argv[]) {
         break;
     }
     if (mode == USB_MODE || mode == PSG_MODE || mode == ADLIB_MODE) {
-        outp(CONTROL_PORT, MODE_MOUSEPORT); // Select port register
-        tmp_uint16 = inpw(DATA_PORT_LOW); // Get port
+        tmp_uint16 = ctrlGetPort(MODE_MOUSEPORT);
         printf("Serial Mouse ");
         switch (tmp_uint16) {
         case 0:
@@ -1243,16 +1226,10 @@ int main(int argc, char* argv[]) {
             printf("enabled on IO port %x\n", tmp_uint16);
         }
         if (tmp_uint16 != 0) {
-            outp(CONTROL_PORT, MODE_MOUSERATE);
-            tmp_uint8 = inp(DATA_PORT_HIGH);
-            printf("Mouse report rate: %d Hz, ", tmp_uint8);
+            printf("Mouse report rate: %d Hz, ", ctrlGetUint8(MODE_MOUSERATE));
+            printf("protocol: %s\n", mouse_protocol_str[ctrlGetUint8(MODE_MOUSEPROTO)]);
 
-            outp(CONTROL_PORT, MODE_MOUSEPROTO);
-            tmp_uint8 = inp(DATA_PORT_HIGH);
-            printf("protocol: %s\n", mouse_protocol_str[tmp_uint8]);
-
-            outp(CONTROL_PORT, MODE_MOUSESEN);
-            tmp_uint16 = inpw(DATA_PORT_LOW);
+            tmp_uint16 = ctrlGetUint16(MODE_MOUSESEN);
             printf("Mouse sensitivity: %d (%d.%02d)\n", tmp_uint16, (tmp_uint16 >> 8), ((tmp_uint16 & 0xFF) * 100) >> 8);
         }
     }
