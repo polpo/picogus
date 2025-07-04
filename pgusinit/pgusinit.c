@@ -27,6 +27,7 @@
 #include <string.h>
 #include "pgusinit.h"
 
+card_mode_t gMode;
 char mode_name[8] = {0};
 bool wifichg = false;
 
@@ -550,18 +551,18 @@ static void send_string(uint8_t mode, char* str, int16_t max_len)
 
 #define process_port_opt(option) \
 if (i + 1 >= argc) { \
-    usage(mode, false); \
+    usage(gMode, false); \
     return 255; \
 } \
 e = sscanf(argv[++i], "%hx", &option); \
 if (e != 1 || option > 0x3ffu) { \
-    usage(mode, false); \
+    usage(gMode, false); \
     return 4; \
 }
 
 static void cmdDisplayUsage(char* argv[], int index, int mode)
 {
-    usage(mode, false);
+    usage(gMode, false);
 }
 
 static int strcasecmp_bool(const char* a, const char* b) {
@@ -580,7 +581,7 @@ static void cmdSendBool(char* argv[], int i, int mode)
     uint8_t value;
 
     if (!arg) {
-        usage(mode, false);
+        usage(gMode, false);
         return;
     }
 
@@ -589,7 +590,7 @@ static void cmdSendBool(char* argv[], int i, int mode)
     } else if (strcmp(arg, "0") == 0 || strcasecmp_bool(arg, "false") == 0 || strcasecmp_bool(arg, "off") == 0) {
         value = 0;
     } else {
-        usage(mode, false);
+        usage(gMode, false);
         return;
     }
 
@@ -602,7 +603,7 @@ static void cmdSetMode(char *argv[], int i, int mode)
     const char* arg = argv[++i];
     
     if (!arg || strlen(arg) > 7) {
-        usage(mode, false);
+        usage(gMode, false);
         return;
     }
 
@@ -617,14 +618,14 @@ void cmdSetVol(char *argv[], int i, int mode)
     long val;
 
     if (!arg) {
-        usage(mode, false);
+        usage(gMode, false);
         return;
     }
 
     val = strtol(arg, &endptr, 10);
 
     if (*endptr != '\0' || val < 0 || val > 100) {
-        usage(mode, false);
+        usage(gMode, false);
         return;
     }
 
@@ -639,14 +640,14 @@ static void ctrlSendUint8(char *arg, int mode, int min, int max)
     long val;
 
     if (!str) {
-        usage(mode, false);
+        usage(gMode, false);
         return;
     }
 
     val = strtol(str, &endptr, 10);
 
     if (*endptr != '\0' || val < min || val > max) {
-        usage(mode, false);
+        usage(gMode, false);
         return;
     }
 
@@ -667,7 +668,7 @@ static void ctrlSendUint16(char *arg, int mode, long min, long max)
 
     if (!str)
     {
-        usage(mode, false);
+        usage(gMode, false);
         return;
     }
 
@@ -675,7 +676,7 @@ static void ctrlSendUint16(char *arg, int mode, long min, long max)
 
     if (*endptr != '\0' || val < min || val > max)
     {
-        usage(mode, false);
+        usage(gMode, false);
         return;
     }
 
@@ -698,7 +699,7 @@ static int envGetHex(const char *env, const char *key, const char *delims, int m
 
     if (!envVal || !*envVal) {
         printf("%s not set.\n", env);
-        usage(mode, false);
+        usage(gMode, false);
         return -1;
     }
 
@@ -707,7 +708,7 @@ static int envGetHex(const char *env, const char *key, const char *delims, int m
         startPtr = strchr(envVal, key[0]);
         if (!startPtr || !isxdigit(startPtr[1])) {
             printf("%s variable does not contain %sxxx.\n", env, key);
-            usage(mode, false);
+            usage(gMode, false);
             return -2;
         }
         startPtr++;  // Move past key character
@@ -728,13 +729,13 @@ static int envGetHex(const char *env, const char *key, const char *delims, int m
 
     if (*endptr != '\0') {
         printf("Invalid %s port value format: %s\n", env, portStr);
-        usage(mode, false);
+        usage(gMode, false);
         return -3;
     }
 
     if (port < 0 || port > 0x3FF) {
         printf("%s port out of range: 0x%lx\n", env, port);
-        usage(mode, false);
+        usage(gMode, false);
         return -4;
     }
 
@@ -778,7 +779,7 @@ static void cmdSendPort(char *argv[], int i, int mode)
 
     if (!arg)
     {
-        usage(mode, false);
+        usage(gMode, false);
         return;
     }
 
@@ -786,7 +787,7 @@ static void cmdSendPort(char *argv[], int i, int mode)
 
     if (*endptr != '\0' || val < 0 || val > 0x3FF)
     {
-        usage(mode, false);
+        usage(gMode, false);
         return;
     }
 
@@ -802,13 +803,13 @@ static void cmdSendMousePort(char *argv[], int i, int mode)
     uint16_t port;
 
     if (!arg) {
-        usage(mode, false);
+        usage(gMode, false);
         return;
     }
 
     val = strtol(arg, &endptr, 10);
     if (*endptr != '\0' || val < 0 || val > 4) {
-        usage(mode, false);
+        usage(gMode, false);
         return ;
     }
 
@@ -819,7 +820,7 @@ static void cmdSendMousePort(char *argv[], int i, int mode)
         case 3: port = 0x3E8; break;
         case 4: port = 0x2E8; break;
         default:
-            usage(mode, false);
+            usage(gMode, false);
             return;
     }
 
@@ -892,7 +893,7 @@ static void cmdGUSBuffer(char *argv[], int i, int mode)
     uint8_t e = sscanf(argv[++i], "%hhu", &tmp_uint8);
     if (e != 1 || tmp_uint8 < 1)
     {
-        usage(mode, false);
+        usage(gMode, false);
         return;
     }
     outp(CONTROL_PORT, mode);
@@ -1120,9 +1121,9 @@ static void printNE2000Mode()
     wifi_printStatus();
 }
 
-static void printMultiMode(int mode)
+static void printMultiMode()
 {
-    if (mode == USB_MODE || mode == PSG_MODE || mode == ADLIB_MODE)
+    if (gMode == USB_MODE || gMode == PSG_MODE || gMode == ADLIB_MODE)
     {
         uint16_t tmp_uint16 = ctrlGetPort(MODE_MOUSEPORT);
         printf("Serial Mouse ");
@@ -1161,7 +1162,6 @@ int main(int argc, char* argv[]) {
     int e;
     uint8_t enable_joystick = 0;
     char fw_filename[256] = {0};
-    card_mode_t mode;
     int fw_num = 8;
     bool permanent = false;
 
@@ -1201,13 +1201,13 @@ int main(int argc, char* argv[]) {
     }
 
     outp(CONTROL_PORT, MODE_BOOTMODE); // Select mode register
-    mode = inp(DATA_PORT_HIGH);
+    gMode = inp(DATA_PORT_HIGH);
 
     i = 1;
     while (i < argc) {
         if (!parseCommand(argc, argv, i))
         {
-            usage(mode, false);
+            usage(gMode, false);
             return 0;
         }
         else
@@ -1229,7 +1229,7 @@ int main(int argc, char* argv[]) {
             }
         }
         if (i == 7) {
-            usage(mode, false);
+            usage(gMode, false);
             return 255;
         }
         return reboot_to_firmware(fw_num, permanent);
@@ -1242,7 +1242,7 @@ int main(int argc, char* argv[]) {
 
     printPicoGus();
 
-    switch(mode) {
+    switch(gMode) {
     case GUS_MODE:
         printGUSMode();
         break;
@@ -1268,7 +1268,7 @@ int main(int argc, char* argv[]) {
         printf("Running in unknown mode (maybe upgrade pgusinit?)\n");
         break;
     }
-    printMultiMode(mode);
+    printMultiMode();
     printf("PicoGUS initialized!\n");
 
     if (permanent) {
