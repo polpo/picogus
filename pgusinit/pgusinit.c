@@ -1007,11 +1007,159 @@ static uint16_t ctrlGetPort(int mode)
     return tmp_uint16;
 }
 
+static void printPicoGus()
+{
+    outp(CONTROL_PORT, MODE_HWTYPE); // Select hardware type register
+    board_type_t board_type = inp(DATA_PORT_HIGH);
+    if (board_type == PICO_BASED) {
+        printf("Hardware: PicoGUS v1.x or PicoGUS Femto\n");
+    } else if (board_type == PICOGUS_2) {
+        printf("Hardware: PicoGUS v2.0\n");
+    } else {
+        printf("Hardware: Unknown\n");
+    }
+    printf("\n");
+
+    printf("USB joystick support %s\n", ctrlGetUint8(MODE_JOYEN) ? "enabled" : "disabled");
+
+    if (board_type == PICOGUS_2) {
+        printf("Wavetable volume set to %u\n", ctrlGetUint8(MODE_WTVOL));
+    }
+
+    uint16_t mpuPort = ctrlGetPort(MODE_MPUPORT);
+    if (mpuPort) {
+        printf("MPU-401: port %x; sysex delay: %s, ", mpuPort, ctrlGetUint8(MODE_MPUDELAY) ? "on" : "off");
+        printf("fake all notes off: %s\n", ctrlGetUint8(MODE_MPUFAKE) ? "on" : "off");
+    } else {
+        printf("MPU-401 disabled\n");
+    }
+}
+
+static void printGUSMode()
+{
+    if (init_gus())
+    {
+        return;
+    }
+    printf("GUS mode: ");
+    printf("Audio buffer: %u samples; ", ctrlGetUint16(MODE_GUSBUF) + 1);
+
+    uint8_t tmp_uint8 = ctrlGetUint8(MODE_GUSDMA);
+    if (tmp_uint8 == 0)
+    {
+        printf("DMA interval: default; ");
+    }
+    else
+    {
+        printf("DMA interval: %u us; ", tmp_uint8);
+    }
+
+    tmp_uint8 = ctrlGetUint8(MODE_GUS44K);
+    if (tmp_uint8)
+    {
+        printf("Sample rate: fixed 44.1k\n");
+    }
+    else
+    {
+        printf("Sample rate: variable\n");
+    }
+
+    printf("Running in GUS mode on port %x\n", ctrlGetPort(MODE_GUSPORT));
+    printf("Volume:     GUS: %u     Main: %u\n", ctrlGetUint8(MODE_GUSVOL), ctrlGetUint8(MODE_MAINVOL));
+}
+
+static void printAdlibMode()
+{
+    printf("Running in AdLib/OPL2 mode on port %x", ctrlGetPort(MODE_OPLPORT));
+    printf("%s\n", ctrlGetUint8(MODE_OPLWAIT) ? ", wait on" : "");
+}
+
+static void printUSBMode()
+{
+    printf("Running in USB mode\n");
+    print_cdemu_status();
+}
+
+static void printPSGMode()
+{
+    printf("Running in PSG mode (Tandy 3-voice on port %x, ", ctrlGetPort(MODE_TANDYPORT));
+    printf("CMS/Game Blaster on port %x)\n", ctrlGetPort(MODE_CMSPORT));
+    printf("Volume:     PSG: %u     Main: %u\n", ctrlGetUint8(MODE_PSGVOL), ctrlGetUint8(MODE_MAINVOL));
+}
+
+static void printSBMode()
+{
+    if (init_sb())
+    {
+        return;
+    }
+    printf("Running in Sound Blaster 2.0 mode on port %x ", ctrlGetPort(MODE_SBPORT));
+    outp(CONTROL_PORT, MODE_OPLPORT); // Select port register
+    uint16_t tmp_uint16 = ctrlGetPort(MODE_OPLPORT);
+    if (tmp_uint16)
+    {
+        printf("(AdLib port %x", tmp_uint16);
+        printf("%s)\n", ctrlGetUint8(MODE_OPLWAIT) ? ", wait on" : "");
+        printf("Volume:     ");
+        printf("OPL: %u    ", ctrlGetUint8(MODE_OPLVOL));
+    }
+    else
+    {
+        printf("(AdLib port disabled)\n");
+        printf("Volume:     ");
+    }
+    printf("SB: %u    ", ctrlGetUint8(MODE_SBVOL));
+    printf("Main: %u    \n", ctrlGetUint8(MODE_MAINVOL));
+
+    print_cdemu_status();
+}
+
+static void printNE2000Mode()
+{
+    printf("Running in NE2000 mode on port %x\n", ctrlGetPort(MODE_NE2KPORT));
+    wifi_printStatus();
+}
+
+static void printMultiMode(int mode)
+{
+    if (mode == USB_MODE || mode == PSG_MODE || mode == ADLIB_MODE)
+    {
+        uint16_t tmp_uint16 = ctrlGetPort(MODE_MOUSEPORT);
+        printf("Serial Mouse ");
+        switch (tmp_uint16)
+        {
+        case 0:
+            printf("disabled (enable with /mousecom n option)\n");
+            break;
+        case 0x3f8:
+            printf("enabled on COM1\n");
+            break;
+        case 0x2f8:
+            printf("enabled on COM2\n");
+            break;
+        case 0x3e8:
+            printf("enabled on COM3\n");
+            break;
+        case 0x2e8:
+            printf("enabled on COM4\n");
+            break;
+        default:
+            printf("enabled on IO port %x\n", tmp_uint16);
+        }
+        if (tmp_uint16 != 0)
+        {
+            printf("Mouse report rate: %d Hz, ", ctrlGetUint8(MODE_MOUSERATE));
+            printf("protocol: %s\n", mouse_protocol_str[ctrlGetUint8(MODE_MOUSEPROTO)]);
+
+            tmp_uint16 = ctrlGetUint16(MODE_MOUSESEN);
+            printf("Mouse sensitivity: %d (%d.%02d)\n", tmp_uint16, (tmp_uint16 >> 8), ((tmp_uint16 & 0xFF) * 100) >> 8);
+        }
+    }
+}
 
 int main(int argc, char* argv[]) {
     int e;
     uint8_t enable_joystick = 0;
-    uint8_t wtvol;
     char fw_filename[256] = {0};
     card_mode_t mode;
     int fw_num = 8;
@@ -1055,9 +1203,6 @@ int main(int argc, char* argv[]) {
     outp(CONTROL_PORT, MODE_BOOTMODE); // Select mode register
     mode = inp(DATA_PORT_HIGH);
 
-    char tmp_arg[2];
-    uint16_t tmp_uint16;
-    uint8_t tmp_uint8;
     i = 1;
     while (i < argc) {
         if (!parseCommand(argc, argv, i))
@@ -1095,131 +1240,35 @@ int main(int argc, char* argv[]) {
         outp(DATA_PORT_HIGH, 0);
     }
 
-    outp(CONTROL_PORT, MODE_HWTYPE); // Select hardware type register
-    board_type_t board_type = inp(DATA_PORT_HIGH);
-    if (board_type == PICO_BASED) {
-        printf("Hardware: PicoGUS v1.x or PicoGUS Femto\n");
-    } else if (board_type == PICOGUS_2) {
-        printf("Hardware: PicoGUS v2.0\n");
-    } else {
-        printf("Hardware: Unknown\n");
-    }
-    printf("\n");
-
-    printf("USB joystick support %s\n", ctrlGetUint8(MODE_JOYEN) ? "enabled" : "disabled");
-
-    if (board_type == PICOGUS_2) {
-        wtvol = ctrlGetUint8(MODE_WTVOL);
-        printf("Wavetable volume set to %u\n", wtvol);
-    }
-
-    if (tmp_uint16) {
-        printf("MPU-401: port %x; sysex delay: %s, ", ctrlGetPort(MODE_MPUPORT), ctrlGetUint8(MODE_MPUDELAY) ? "on" : "off");
-        printf("fake all notes off: %s\n", ctrlGetUint8(MODE_MPUFAKE) ? "on" : "off");
-    } else {
-        printf("MPU-401 disabled\n");
-    }
+    printPicoGus();
 
     switch(mode) {
     case GUS_MODE:
-        if (init_gus()) {
-            return 1;
-        }
-        printf("GUS mode: ");
-        printf("Audio buffer: %u samples; ", ctrlGetUint16(MODE_GUSBUF) + 1);
-
-        tmp_uint8 = ctrlGetUint8(MODE_GUSDMA);
-        if (tmp_uint8 == 0) {
-            printf("DMA interval: default; ");
-        } else {
-            printf("DMA interval: %u us; ", tmp_uint8);
-        }
-
-        tmp_uint8 = ctrlGetUint8(MODE_GUS44K);
-        if (tmp_uint8) {
-            printf("Sample rate: fixed 44.1k\n");
-        } else {
-            printf("Sample rate: variable\n");
-        }
-        
-        printf("Running in GUS mode on port %x\n", ctrlGetPort(MODE_GUSPORT));
-        printf("Volume:     GUS: %u     Main: %u\n", ctrlGetUint8(MODE_GUSVOL), ctrlGetUint8(MODE_MAINVOL));
+        printGUSMode();
         break;
     case ADLIB_MODE:
-        printf("Running in AdLib/OPL2 mode on port %x", ctrlGetPort(MODE_OPLPORT));
-        printf("%s\n", ctrlGetUint8(MODE_OPLWAIT) ? ", wait on" : "");
+        printAdlibMode();
         break;
     case MPU_MODE:
         printf("Running in MPU-401 only mode (with IRQ)\n");
         break;
     case USB_MODE:
-        printf("Running in USB mode\n");
-        print_cdemu_status();
+        printUSBMode;
         break;
     case PSG_MODE:
-        printf("Running in PSG mode (Tandy 3-voice on port %x, ", ctrlGetPort(MODE_TANDYPORT));
-        printf("CMS/Game Blaster on port %x)\n", ctrlGetPort(MODE_CMSPORT));
-        printf("Volume:     PSG: %u     Main: %u\n", ctrlGetUint8(MODE_PSGVOL), ctrlGetUint8(MODE_MAINVOL));
+        printPSGMode();
         break;
     case SB_MODE:
-        if (init_sb()) {
-            return 1;
-        }
-        printf("Running in Sound Blaster 2.0 mode on port %x ", ctrlGetPort(MODE_SBPORT));
-        outp(CONTROL_PORT, MODE_OPLPORT); // Select port register
-        tmp_uint16 = ctrlGetPort(MODE_OPLPORT);
-        if (tmp_uint16) {
-            printf("(AdLib port %x", tmp_uint16);
-            printf("%s)\n", ctrlGetUint8(MODE_OPLWAIT) ? ", wait on" : "");
-            printf("Volume:     ");
-            printf("OPL: %u    ", ctrlGetUint8(MODE_OPLVOL));
-        } else {
-            printf("(AdLib port disabled)\n");
-            printf("Volume:     ");
-        }
-        printf("SB: %u    ", ctrlGetUint8(MODE_SBVOL));
-        printf("Main: %u    \n", ctrlGetUint8(MODE_MAINVOL));
-
-        print_cdemu_status();
+        printSBMode();
         break;
     case NE2000_MODE:
-        printf("Running in NE2000 mode on port %x\n", ctrlGetPort(MODE_NE2KPORT));
-        wifi_printStatus();
+        printNE2000Mode();
         break;
     default:
         printf("Running in unknown mode (maybe upgrade pgusinit?)\n");
         break;
     }
-    if (mode == USB_MODE || mode == PSG_MODE || mode == ADLIB_MODE) {
-        tmp_uint16 = ctrlGetPort(MODE_MOUSEPORT);
-        printf("Serial Mouse ");
-        switch (tmp_uint16) {
-        case 0:
-            printf("disabled (enable with /mousecom n option)\n");
-            break;
-        case 0x3f8:
-            printf("enabled on COM1\n");
-            break;
-        case 0x2f8:
-            printf("enabled on COM2\n");
-            break;
-        case 0x3e8:
-            printf("enabled on COM3\n");
-            break;
-        case 0x2e8:
-            printf("enabled on COM4\n");
-            break;
-        default:
-            printf("enabled on IO port %x\n", tmp_uint16);
-        }
-        if (tmp_uint16 != 0) {
-            printf("Mouse report rate: %d Hz, ", ctrlGetUint8(MODE_MOUSERATE));
-            printf("protocol: %s\n", mouse_protocol_str[ctrlGetUint8(MODE_MOUSEPROTO)]);
-
-            tmp_uint16 = ctrlGetUint16(MODE_MOUSESEN);
-            printf("Mouse sensitivity: %d (%d.%02d)\n", tmp_uint16, (tmp_uint16 >> 8), ((tmp_uint16 & 0xFF) * 100) >> 8);
-        }
-    }
+    printMultiMode(mode);
     printf("PicoGUS initialized!\n");
 
     if (permanent) {
