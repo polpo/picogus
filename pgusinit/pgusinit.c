@@ -1159,9 +1159,6 @@ static void printMultiMode()
 }
 
 int main(int argc, char* argv[]) {
-    int e;
-    uint8_t enable_joystick = 0;
-    char fw_filename[256] = {0};
     int fw_num = 8;
     bool permanent = false;
 
