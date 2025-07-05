@@ -275,11 +275,16 @@ static cdrom_image_status_t wait_for_cd_status(void) {
     return cd_status;
 }
 
+#include <conio.h>
+
+#define PAGE_LINES 16
+
 static bool print_cdimage_list(void) {
     outp(CONTROL_PORT, 0xCC); // Knock on the door...
     outp(CONTROL_PORT, MODE_CDLOAD); // Get currently loaded index
     uint8_t current_index = inp(DATA_PORT_HIGH);
     printf("Listing CD images on USB drive:\n");
+
     outp(CONTROL_PORT, MODE_CDLIST); // Select CD image list register
     cdrom_image_status_t cd_status = wait_for_cd_status();
     if (cd_status == CD_STATUS_BUSY) {
@@ -290,25 +295,38 @@ static bool print_cdimage_list(void) {
         print_string(MODE_CDERROR);
         return false;
     }
+
     outp(CONTROL_PORT, MODE_CDLIST); // Select CD image list register
     char b[256], c, *p = b;
     uint8_t line = 1;
+    int printed_lines = 0;
+
     while ((c = inp(DATA_PORT_HIGH)) != 4 /* ASCII EOT */) {
         *p++ = c;
         if (!c) {
-	    putchar(current_index == line ? '*' : ' ');
+            putchar(current_index == line ? '*' : ' ');
             printf(" %2d: %s\n", line++, b);
+            printed_lines++;
+
+            if (printed_lines >= PAGE_LINES) {
+                printf("Press any key to continue...\n");
+                getch();
+                printed_lines = 0;
+            }
+
             p = b;
         }
     }
+
     if (current_index) {
-	printf("Currently loaded image marked with \"*\".\n");
+        printf("Currently loaded image marked with \"*\".\n");
     } else {
-	printf("No image currently loaded.\n");
+        printf("No image currently loaded.\n");
     }
     printf("Run \"pgusinit /cdload n\" to load the nth image in the above list, 0 to unload.\n");
     return true;
 }
+
 
 
 static int print_cdimage_current(void) {
