@@ -28,8 +28,11 @@
 #include "pgusinit.h"
 
 card_mode_t gMode;
+board_type_t board_type;
 char mode_name[8] = {0};
 bool wifichg = false;
+int fw_num = 8;
+bool permanent = false;
 
 #include "../common/picogus.h"
 
@@ -363,7 +366,7 @@ static int reboot_to_firmware(const uint8_t value, const bool permanent) {
     outp(DATA_PORT_HIGH, value); // Send firmware number and permanent flag
     delay(100);
 
-    printf("\nMode change requested.\n");
+    printf("Mode change requested.\n");
     if (permanent) {
         write_settings();
     }
@@ -379,6 +382,7 @@ static int reboot_to_firmware(const uint8_t value, const bool permanent) {
     }
     printf("PicoGUS detected: Firmware version: ");
     print_string(MODE_FWSTRING);
+    printf("\n");
     return 0;
 }
 
@@ -609,6 +613,26 @@ static void cmdSetMode(char *argv[], int i, int mode)
 
     strncpy(mode_name, arg, 8); // 7 chars max + null terminator
     mode_name[7] = '\0';        // Ensure null-termination
+
+    if (mode_name[0]) {
+        if (strnicmp(mode_name, "TANDY", 5) == 0 || strnicmp(mode_name, "CMS", 3) == 0) {
+            // Backwards compatibility for old tandy and cms modes
+            strcpy(mode_name, "PSG");
+        } 
+        int j;
+        for (j = 1; j < 7; ++j) {
+            if (strnicmp(modenames[j], mode_name, 7) == 0) {
+                fw_num = j;
+                break;
+            }
+        }
+        if (j == 7) {
+            usage(gMode, false);
+            return;
+        }
+        reboot_to_firmware(fw_num, permanent);
+        gMode = j;
+    }
 }
 
 void cmdSetVol(char *argv[], int i, int mode)
@@ -900,7 +924,18 @@ static void cmdGUSBuffer(char *argv[], int i, int mode)
     outp(DATA_PORT_HIGH, (unsigned char)(tmp_uint8 - 1));
 }
 
+static void cmdFlashPico(char *argv[], int i, int mode)
+{
+    if (strlen(argv[++i]) > 255)
+    {
+        usage(INVALID_MODE, false);
+        return;
+    }
+    write_firmware(argv[i]);
+}
+
 ParseCommand parseCommands[] = {
+    {"/flash", cmdFlashPico, 0, ARG_REQUIRE, "picogus.uf2"},
     {"/?", cmdDisplayUsage, 0, ARG_NONE},
     {"/??", cmdDisplayUsage, 0, ARG_NONE},
     {"/joy", cmdSendBool, MODE_JOYEN, ARG_REQUIRE},
@@ -963,8 +998,17 @@ int parseCommand (int argc, char* argv[], int i)
 
     if (command)
     {
-        if (command->type == ARG_REQUIRE && i + 1 >= argc)                                                                       
+        if (command->type == ARG_REQUIRE && i + 1 >= argc || argv[i + 1][0] == '/')
+        {
+            printf("Error: Command %s requires input argument. ", argv[i]);
+            
+            if (command->def)
+                printf("Example: %s %s\n", argv[i], command->def);
+            else
+                printf("\n");
+
             return retVal;  
+        }
 
         if (!strcmp(argv[i + 1], "default"))
         {
@@ -1010,17 +1054,6 @@ static uint16_t ctrlGetPort(int mode)
 
 static void printPicoGus()
 {
-    outp(CONTROL_PORT, MODE_HWTYPE); // Select hardware type register
-    board_type_t board_type = inp(DATA_PORT_HIGH);
-    if (board_type == PICO_BASED) {
-        printf("Hardware: PicoGUS v1.x or PicoGUS Femto\n");
-    } else if (board_type == PICOGUS_2) {
-        printf("Hardware: PicoGUS v2.0\n");
-    } else {
-        printf("Hardware: Unknown\n");
-    }
-    printf("\n");
-
     printf("USB joystick support %s\n", ctrlGetUint8(MODE_JOYEN) ? "enabled" : "disabled");
 
     if (board_type == PICOGUS_2) {
@@ -1158,84 +1191,62 @@ static void printMultiMode()
     }
 }
 
-int main(int argc, char* argv[]) {
-    int fw_num = 8;
-    bool permanent = false;
-
-    banner();
+static void initPicoGUS()
+{
     // Get magic value from port on PicoGUS that is not on real GUS
     outp(CONTROL_PORT, 0xCC); // Knock on the door...
     outp(CONTROL_PORT, MODE_MAGIC); // Select magic string register
     if (inp(DATA_PORT_HIGH) != 0xDD) {
         err_pigus();
-        return 99;
+        return;
     };
     printf("PicoGUS detected: Firmware version: ");
     print_string(MODE_FWSTRING);
 
-    int i = 1;
-    // /flash option is special and can work across protocol versions, so if it's specified, that's all we do
-    while (i < argc) {
-        if (stricmp(argv[i], "/flash") == 0) {
-            if (i + 1 >= argc) {
-                usage(INVALID_MODE, false);
-                return 255;
-            }
-            if (strlen(argv[++i]) > 255) {
-                usage(INVALID_MODE, false);
-                return 5;
-            }
-            return write_firmware(argv[i]);
-        }
-        ++i;
-    }
+    
 
     outp(CONTROL_PORT, 0x01); // Select protocol version register
     uint8_t protocol_got = inp(DATA_PORT_HIGH);
     if (PICOGUS_PROTOCOL_VER != protocol_got) {
       err_protocol(PICOGUS_PROTOCOL_VER, protocol_got);
-      return 97;
+      return;
     }
 
     outp(CONTROL_PORT, MODE_BOOTMODE); // Select mode register
     gMode = inp(DATA_PORT_HIGH);
 
-    i = 1;
-    while (i < argc) {
-        if (!parseCommand(argc, argv, i))
-        {
-            usage(gMode, false);
-            return 0;
-        }
-        else
-            break;
-        
-        ++i;
+    outp(CONTROL_PORT, MODE_HWTYPE); // Select hardware type register
+    board_type = inp(DATA_PORT_HIGH);
+    if (board_type == PICO_BASED) {
+        printf("Hardware: PicoGUS v1.x or PicoGUS Femto\n");
+    } else if (board_type == PICOGUS_2) {
+        printf("Hardware: PicoGUS v2.0\n");
+    } else {
+        printf("Hardware: Unknown\n");
+    }
+    printf("\n");
+}
+
+int main(int argc, char* argv[]) {
+
+    banner();
+    initPicoGUS();
+
+    int commands = 0;
+    for(int i = 1; i < argc; ++i)
+    {
+        if (parseCommand(argc, argv, i))
+            ++commands;
     }
 
-    if (mode_name[0]) {
-        if (strnicmp(mode_name, "TANDY", 5) == 0 || strnicmp(mode_name, "CMS", 3) == 0) {
-            // Backwards compatibility for old tandy and cms modes
-            strcpy(mode_name, "PSG");
-        } 
-        int i;
-        for (i = 1; i < 7; ++i) {
-            if (strnicmp(modenames[i], mode_name, 7) == 0) {
-                fw_num = i;
-                break;
-            }
-        }
-        if (i == 7) {
-            usage(gMode, false);
-            return 255;
-        }
-        return reboot_to_firmware(fw_num, permanent);
+    if (!commands)
+    {
+        usage(gMode, false);
+        return 0;
     }
 
-    if (wifichg) {
-        outp(CONTROL_PORT, MODE_WIFIAPPLY);
-        outp(DATA_PORT_HIGH, 0);
-    }
+    if (wifichg)
+        ctrlSendUint8("0", MODE_WIFIAPPLY, 0, 255);
 
     printPicoGus();
 
