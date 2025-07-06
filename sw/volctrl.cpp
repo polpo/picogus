@@ -73,7 +73,7 @@ void set_volume(uint16_t mode) {
             sb_volume = set_volume_scale(settings.Volume.sbVol);
             break;
         case MODE_CDVOL:
-            cd_audio_volume = set_volume_scale(settings.Volume.sbVol);
+            cd_audio_volume = set_volume_scale(settings.Volume.cdVol);
             break;
         case MODE_GUSVOL:
             gus_volume = set_volume_scale(settings.Volume.gusVol);
