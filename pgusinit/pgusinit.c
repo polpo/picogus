@@ -1239,12 +1239,6 @@ int main(int argc, char* argv[]) {
             ++commands;
     }
 
-    if (!commands)
-    {
-        usage(gMode, false);
-        return 0;
-    }
-
     if (wifichg)
         ctrlSendUint8("0", MODE_WIFIAPPLY, 0, 255);
 
