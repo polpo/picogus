@@ -934,8 +934,14 @@ static void cmdFlashPico(char *argv[], int i, int mode)
     write_firmware(argv[i]);
 }
 
+static void cmdSave(char *argv[], int i, int mode)
+{
+    permanent = true;
+}
+
 ParseCommand parseCommands[] = {
     {"/flash", cmdFlashPico, 0, ARG_REQUIRE, "picogus.uf2"},
+    {"/save", cmdSave, 0, ARG_NONE},
     {"/?", cmdDisplayUsage, 0, ARG_NONE},
     {"/??", cmdDisplayUsage, 0, ARG_NONE},
     {"/joy", cmdSendBool, MODE_JOYEN, ARG_REQUIRE},
