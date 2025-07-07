@@ -361,9 +361,7 @@ static void print_cdemu_status(void) {
     uint8_t tmp_uint8 = inp(DATA_PORT_HIGH);
     outp(CONTROL_PORT, MODE_CDPORT); // Select port register
     uint16_t tmp_uint16 = inpw(DATA_PORT_LOW); // Get port
-    outp(CONTROL_PORT, MODE_CDVOL); // Select CD volume register
-    uint16_t tmp_vol = inp(DATA_PORT_HIGH);
-    printf("CD-ROM emulation on port %x, image auto-advance %s\nCD-Audio Volume: %u%\n", tmp_uint16, tmp_uint8 ? "enabled" : "disabled", tmp_vol);
+    printf("CD-ROM emulation on port %x, image auto-advance %s\n", tmp_uint16, tmp_uint8 ? "enabled" : "disabled");
     
     print_cdimage_current();
 }
@@ -1123,7 +1121,6 @@ static void printGUSMode()
     }
 
     printf("Running in GUS mode on port %x\n", ctrlGetPort(MODE_GUSPORT));
-    printf("Volume:     GUS: %u     Main: %u\n", ctrlGetUint8(MODE_GUSVOL), ctrlGetUint8(MODE_MAINVOL));
 }
 
 static void printAdlibMode()
@@ -1142,7 +1139,6 @@ static void printPSGMode()
 {
     printf("Running in PSG mode (Tandy 3-voice on port %x, ", ctrlGetPort(MODE_TANDYPORT));
     printf("CMS/Game Blaster on port %x)\n", ctrlGetPort(MODE_CMSPORT));
-    printf("Volume:     PSG: %u     Main: %u\n", ctrlGetUint8(MODE_PSGVOL), ctrlGetUint8(MODE_MAINVOL));
 }
 
 static void printSBMode()
@@ -1158,17 +1154,11 @@ static void printSBMode()
     {
         printf("(AdLib port %x", tmp_uint16);
         printf("%s)\n", ctrlGetUint8(MODE_OPLWAIT) ? ", wait on" : "");
-        printf("Volume:     ");
-        printf("OPL: %u    ", ctrlGetUint8(MODE_OPLVOL));
     }
     else
     {
         printf("(AdLib port disabled)\n");
-        printf("Volume:     ");
     }
-    printf("SB: %u    ", ctrlGetUint8(MODE_SBVOL));
-    printf("Main: %u    \n", ctrlGetUint8(MODE_MAINVOL));
-
     print_cdemu_status();
 }
 
@@ -1213,6 +1203,29 @@ static void printMultiMode()
             printf("Mouse sensitivity: %d (%d.%02d)\n", tmp_uint16, (tmp_uint16 >> 8), ((tmp_uint16 & 0xFF) * 100) >> 8);
         }
     }
+}
+
+static void printVolume()
+{
+    printf("Volume: ");
+    printf("Main: %u    ", ctrlGetUint8(MODE_MAINVOL));
+    
+    if (gMode == GUS_MODE)
+        printf("GUS: %u     ", ctrlGetUint8(MODE_GUSVOL));
+    
+    if (gMode == SB_MODE)
+        printf("SB: %u    ", ctrlGetUint8(MODE_SBVOL));
+    
+    if (gMode == SB_MODE || gMode == ADLIB_MODE)
+        printf("OPL: %u    ", ctrlGetUint8(MODE_OPLVOL));
+    
+    if (gMode == SB_MODE || gMode == USB_MODE)
+        printf("CD: %u    ", ctrlGetUint8(MODE_CDVOL));
+    
+    if (gMode == PSG_MODE)
+        printf("PSG: %u     ", ctrlGetUint8(MODE_PSGVOL));
+
+    printf("\n");
 }
 
 static void initPicoGUS()
@@ -1267,6 +1280,7 @@ int main(int argc, char* argv[]) {
         ctrlSendUint8("0", MODE_WIFIAPPLY, 0, 255);
 
     printPicoGus();
+    printVolume();
 
     switch(gMode) {
     case GUS_MODE:
