@@ -1293,7 +1293,7 @@ int main(int argc, char* argv[]) {
         printf("Running in MPU-401 only mode (with IRQ)\n");
         break;
     case USB_MODE:
-        printUSBMode;
+        printUSBMode();
         break;
     case PSG_MODE:
         printPSGMode();
