@@ -1889,4 +1889,5 @@ void GUS_Setup() {
         interp_set_config(interp0, 1, &cfg);
 #endif
         clamp_setup();
+        set_volume(MODE_GUSVOL);
 }
