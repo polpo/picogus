@@ -1,3 +1,20 @@
+/*
+ *  Copyright (C) 2025  Ian Scott
+ *
+ *  This program is free software; you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation; either version 2 of the License, or
+ *  (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
+ */
 /**
  * audio_fifo.h - Shared header for audio producer and consumer
  *
@@ -49,6 +66,10 @@ bool fifo_add_sample(audio_fifo_t *fifo, audio_sample_t sample);
 bool fifo_add_samples(audio_fifo_t *fifo, const audio_sample_t *samples_buffer, uint32_t num_samples_to_add);
 
 uint32_t fifo_take_samples(audio_fifo_t *fifo, uint32_t num_samples);
+
+inline uint32_t fifo_free_space(audio_fifo_t *fifo) {
+   return AUDIO_FIFO_SIZE - fifo->samples_in_fifo;
+}
 // Helper for consumer to get one sample, this is a more fundamental FIFO op
 
 #ifdef __cplusplus

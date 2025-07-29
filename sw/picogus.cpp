@@ -71,7 +71,7 @@ void play_adlib(void);
 extern "C" int OPL_Pico_Init(unsigned int);
 extern "C" unsigned int OPL_Pico_PortRead(opl_port_t);
 #include "cmd_buffers.h"
-cms_buffer_t opl_buffer = { {0}, 0, 0 };
+cms_buffer_t opl_cmd_buffer = { {0}, 0, 0 };
 #endif
 
 #ifdef CDROM
@@ -664,13 +664,13 @@ __force_inline void handle_iow(void) {
             // Fast write
             pio_sm_put(pio0, IOW_PIO_SM, IO_END);
             // pio_sm_put(pio0, IOW_PIO_SM, IO_WAIT);
-            opl_buffer.cmds[opl_buffer.head].addr = (uint16_t)(iow_read & 0xFF);
+            opl_cmd_buffer.cmds[opl_cmd_buffer.head].addr = (uint16_t)(iow_read & 0xFF);
             // Fast write - return early as we've already written 0x0u to the PIO
             return;
             break;
         case 0x9:
             pio_sm_put(pio0, IOW_PIO_SM, IO_WAIT);
-            opl_buffer.cmds[opl_buffer.head++].data = (uint8_t)(iow_read & 0xFF);
+            opl_cmd_buffer.cmds[opl_cmd_buffer.head++].data = (uint8_t)(iow_read & 0xFF);
             break;
         // DSP ports
         default:
@@ -694,7 +694,7 @@ __force_inline void handle_iow(void) {
         if ((port & 1) == 0) {
             // Fast write
             pio_sm_put(pio0, IOW_PIO_SM, IO_END);
-            opl_buffer.cmds[opl_buffer.head].addr = (uint16_t)(iow_read & 0xFF);
+            opl_cmd_buffer.cmds[opl_cmd_buffer.head].addr = (uint16_t)(iow_read & 0xFF);
             // Fast write - return early as we've already written 0x0u to the PIO
             return;
         } else {
@@ -702,7 +702,7 @@ __force_inline void handle_iow(void) {
             if (settings.SB.oplSpeedSensitive) {
                 busy_wait_us(1); // busy wait for speed sensitive games
             }
-            opl_buffer.cmds[opl_buffer.head++].data = (uint8_t)(iow_read & 0xFF);
+            opl_cmd_buffer.cmds[opl_cmd_buffer.head++].data = (uint8_t)(iow_read & 0xFF);
         }
     } else // if follows down below
 #endif // SOUND_OPL
@@ -841,7 +841,7 @@ __force_inline void handle_ior(void) {
         switch (port - settings.SB.basePort) {
         case 0x8:
             // wait for OPL buffer to process
-            while (opl_buffer.tail != opl_buffer.head) {
+            while (opl_cmd_buffer.tail != opl_cmd_buffer.head) {
                 tight_loop_contents();
             }
             pio_sm_put(pio0, IOR_PIO_SM, IOR_SET_VALUE | OPL_Pico_PortRead(OPL_REGISTER_PORT));
@@ -867,7 +867,7 @@ __force_inline void handle_ior(void) {
         // Tell PIO to wait for data
         pio_sm_put(pio0, IOR_PIO_SM, IO_WAIT);
         // wait for OPL buffer to process
-        while (opl_buffer.tail != opl_buffer.head) {
+        while (opl_cmd_buffer.tail != opl_cmd_buffer.head) {
             tight_loop_contents();
         }
         pio_sm_put(pio0, IOR_PIO_SM, IOR_SET_VALUE | OPL_Pico_PortRead(OPL_REGISTER_PORT));
@@ -988,6 +988,7 @@ __force_inline bool ior_has_data() {
 #include "hardware/structs/xip_ctrl.h"
 int main()
 {
+    busy_wait_ms(250);
 #ifdef ASYNC_UART
     stdio_async_uart_init_full(UART_ID, BAUD_RATE, UART_TX_PIN, UART_RX_PIN);
 #else
@@ -1041,31 +1042,6 @@ int main()
         BOARD_TYPE = PICOGUS_2;
     }
     gpio_set_mask(LED_PIN);
-    printf("Waiting for board to stabilize... ");
-    busy_wait_ms(250);
-    // Overclock!
-    printf("Overclocking... ");
-    vreg_set_voltage(VREG_VOLTAGE_1_25);
-    // vreg_set_voltage(VREG_VOLTAGE_1_15);
-    busy_wait_ms(250);
-    set_sys_clock_khz(rp2_clock, true);
-    busy_wait_ms(250);
-    gpio_xor_mask(LED_PIN);
-#ifdef ASYNC_UART
-    uart_init(UART_ID, 0);
-#else
-    stdio_init_all();
-#endif
-    puts("Done. Continuing!");
-
-    // Set clk_peri to use the XOSC
-    // clock_configure(clk_peri,
-    //                 0,
-    //                 CLOCKS_CLK_PERI_CTRL_AUXSRC_VALUE_XOSC_CLKSRC,
-    //                 12 * MHZ,
-    //                 12 * MHZ);
-    // clock_configure(clk_peri, 0, CLOCKS_CLK_PERI_CTRL_AUXSRC_VALUE_CLK_SYS,
-    //         12 * MHZ, 12 * MHZ);
 
     if (BOARD_TYPE == PICOGUS_2) {
         // Create new interface to M62429 digital volume control

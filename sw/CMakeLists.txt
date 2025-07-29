@@ -57,7 +57,17 @@ endfunction()
 
 # Global definitions across all targets
 add_compile_definitions(
-    RP2_CLOCK_SPEED=366000
+    # 370MHz is extremely closely evenly divisible by 44100Hz
+    RP2_CLOCK_SPEED=370000
+    SYS_CLK_HZ=370000000
+    # Manually set up PLLs because of non-default REFDIV
+    PLL_SYS_REFDIV=2
+    PLL_SYS_VCO_FREQ_HZ=1110000000
+    PLL_SYS_POSTDIV1=3
+    PLL_SYS_POSTDIV2=1
+    # Set voltage before main so no need to do so on the fly
+    SYS_CLK_VREG_VOLTAGE_AUTO_ADJUST=1
+    SYS_CLK_VREG_VOLTAGE_MIN=VREG_VOLTAGE_1_25
     PICO_DEFAULT_UART=0
     PICO_DEFAULT_UART_TX_PIN=28
     PICO_DEFAULT_UART_RX_PIN=-1
@@ -77,6 +87,7 @@ function(config_target TARGET_NAME MULTIFW)
         PICO_AUDIO_I2S_DATA_PIN=16
         PICO_AUDIO_I2S_CLOCK_PIN_BASE=17
         PICO_AUDIO_I2S_PIO=1
+        PICO_AUDIO_I2S_SM=3
         M62429_PIO=1
     )
 
@@ -235,7 +246,7 @@ endfunction()
 # Build SB firmware
 function(build_sb TARGET_NAME MULTIFW)
     set(USB_JOYSTICK TRUE)
-    set(SOUND_MPU TRUE)
+    set(SOUND_MPU FALSE)
     set(SOUND_OPL TRUE)
     set(CDROM TRUE)
     config_target(${TARGET_NAME} ${MULTIFW})
@@ -245,11 +256,14 @@ function(build_sb TARGET_NAME MULTIFW)
         sbplay.cpp
         isa_dma.c
         audio_fifo.c
+        audio_i2s_minimal.c
     )
     target_compile_definitions(${TARGET_NAME} PRIVATE
         SOUND_SB=1
         SOUND_DSP=1
-        # SB_BUFFERLESS=1
+        SB_BUFFERLESS=1
+        SB_BUFFERLESS_NG=1
+        USE_CD_AUDIO_FIFO=1
     )
     pico_generate_pio_header(${TARGET_NAME} ${CMAKE_CURRENT_LIST_DIR}/isa_dma.pio)
 endfunction()
