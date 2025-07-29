@@ -1109,7 +1109,7 @@ int main()
 
 #ifdef SOUND_SB
     puts("Initializing SoundBlaster DSP");
-    sbdsp_init();
+    // sbdsp_init();
 #endif // SOUND_SB
 #ifdef SOUND_OPL
     puts("Creating OPL");

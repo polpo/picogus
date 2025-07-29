@@ -38,6 +38,7 @@ extern "C" void OPL_Pico_WriteRegister(unsigned int reg_num, unsigned int value)
 #include "audio_fifo.h"
 #if SOUND_SB
 extern int16_t sbdsp_sample();
+extern void sbdsp_init();
 #endif // SOUND_SB
 #if defined(SOUND_SB) || defined(USB_MOUSE) || defined(SOUND_MPU)
 #include "pico_pic.h"
@@ -94,11 +95,9 @@ static constexpr uint32_t fixed_ratio(uint16_t a, uint16_t b) {
 
 static constexpr uint32_t opl_ratio = fixed_ratio(49716, 44100);
 static audio_fifo_t opl_out_fifo;
-static constexpr uint32_t OPL_SAMPLE_COUNT = 2;
-static constexpr uint32_t OPL_BUFFER_BITS = (OPL_SAMPLE_COUNT << 1) - 1;
-static constexpr uint32_t OPL_OUT_SAMPLE_COUNT = 1;//(OPL_SAMPLE_COUNT * 44100 / 49716);// - 1;
-static int16_t opl_buffer[OPL_SAMPLE_COUNT << 1] = {0};
-uint32_t opl_frac = 0;
+static int16_t opl_current_sample = 0;
+static int16_t opl_next_sample = 0;
+static bool opl_need_new_sample = true;
 
 /**
  * Linear interpolation in fixed-point
@@ -133,20 +132,21 @@ void audio_sample_handler(void) {
 
 #ifdef CDROM
     static uint32_t cd_index = 0;
-    const uint32_t has_cd_samples = fifo_take_samples(cd_fifo, 2);
+    const uint32_t has_cd_samples = fifo_take_samples_inline(cd_fifo, 2);
     if (has_cd_samples) {
-        sample_l += cd_fifo->buffer[(cd_index++) & AUDIO_FIFO_BITS];
-        sample_r += cd_fifo->buffer[(cd_index++) & AUDIO_FIFO_BITS];
+        sample_l += cd_fifo->buffer[cd_index++];
+        sample_r += cd_fifo->buffer[cd_index++];
+        cd_index &= AUDIO_FIFO_BITS;
     }
 #endif
 
     static uint32_t opl_out_index = 0;
-    const uint32_t has_opl_samples = fifo_take_samples(&opl_out_fifo, 1);
+    const uint32_t has_opl_samples = fifo_take_samples_inline(&opl_out_fifo, 1);
     if (has_opl_samples) {
-        uint32_t idx = opl_out_index & AUDIO_FIFO_BITS;
-        sample_l += opl_out_fifo.buffer[idx];
-        sample_r += opl_out_fifo.buffer[idx];
-        ++opl_out_index;
+        int16_t opl_sample = opl_out_fifo.buffer[opl_out_index++];
+        sample_l += opl_sample;
+        sample_r += opl_sample;
+        opl_out_index &= AUDIO_FIFO_BITS;
     }
 
     const sample_pair clamped = {.data16 = {
@@ -177,12 +177,18 @@ void play_adlib() {
     MPU401_Init(settings.MPU.delaySysex, settings.MPU.fakeAllNotesOff);
 #endif
 
+#if SOUND_SB
+    sbdsp_init();
+#endif
     init_audio();
 
     printf("opl_ratio: %x ", opl_ratio);
     uint32_t opl_pos = 0;
-    uint32_t opl_index = 0;
-    uint32_t opl_buffer_idx = 0x0;
+
+    // Initialize OPL samples
+    OPL_Pico_simple(&opl_current_sample, 1);
+    OPL_Pico_simple(&opl_next_sample, 1);
+    opl_need_new_sample = false;
 
     cd_fifo = cdrom_audio_fifo_peek(&cdrom);
 
@@ -192,43 +198,43 @@ void play_adlib() {
     pwm_init(pwm_slice_num, &pwm_c, false);
     pwm_set_irq_enabled(pwm_slice_num, true);
     irq_set_exclusive_handler(PWM_IRQ_WRAP, audio_sample_handler);
+    irq_set_priority(PWM_IRQ_WRAP, PICO_LOWEST_IRQ_PRIORITY);
     irq_set_enabled(PWM_IRQ_WRAP, true);
-    irq_set_priority(PWM_IRQ_WRAP, 255);
     pwm_set_enabled(pwm_slice_num, true);
 
     for (;;) {
 #if CDROM
-        cdrom_audio_callback(&cdrom, 1024);
+        cdrom_audio_callback(&cdrom, 256);
 #endif
-        uint32_t render_opl_samples = MIN(fifo_free_space(&opl_out_fifo), OPL_OUT_SAMPLE_COUNT);
-        if (fifo_free_space(&opl_out_fifo) >= render_opl_samples) {
-            if (
-                ((opl_index & OPL_SAMPLE_COUNT) && opl_buffer_idx != 0x0) ||
-                (!(opl_index & OPL_SAMPLE_COUNT) && opl_buffer_idx != OPL_SAMPLE_COUNT)
-            ) {
-                opl_buffer_idx = (opl_index + OPL_SAMPLE_COUNT) & OPL_SAMPLE_COUNT;
-                // bool notfirst = false;
-                while (opl_cmd_buffer.tail != opl_cmd_buffer.head) {
-                    // if (!notfirst) {
-#ifndef PICOW
-                    //     gpio_xor_mask(LED_PIN);
-#endif
-                    //     notfirst = true;
-                    // }
-                    auto cmd = opl_cmd_buffer.cmds[opl_cmd_buffer.tail];
-                    OPL_Pico_WriteRegister(cmd.addr, cmd.data);
-                    ++opl_cmd_buffer.tail;
-                }
-                OPL_Pico_simple(opl_buffer + opl_buffer_idx, OPL_SAMPLE_COUNT);
-            }
-            for (int i = 0; i < render_opl_samples; ++i) {
-                opl_index = (opl_pos >> FRAC_BITS);
-                fifo_add_sample(&opl_out_fifo, lerp_fixed(
-                    opl_buffer[opl_index & OPL_BUFFER_BITS],
-                    opl_buffer[(opl_index + 1) & OPL_BUFFER_BITS],
-                    opl_pos & FRAC_MASK)
-                );
-                opl_pos += opl_ratio;
+        // Process any pending OPL commands
+        while (opl_cmd_buffer.tail != opl_cmd_buffer.head) {
+            auto cmd = opl_cmd_buffer.cmds[opl_cmd_buffer.tail];
+            OPL_Pico_WriteRegister(cmd.addr, cmd.data);
+            ++opl_cmd_buffer.tail;
+        }
+
+        // Generate OPL samples and add to output FIFO
+        while (fifo_free_space(&opl_out_fifo) > 0) {
+            // Interpolate at current position
+            fifo_add_sample(&opl_out_fifo, lerp_fixed(
+                opl_current_sample,
+                opl_next_sample,
+                opl_pos & FRAC_MASK
+            ));
+
+            // Advance position
+            opl_pos += opl_ratio;
+            
+            // While we've advanced past one or more OPL samples
+            while ((opl_pos >> FRAC_BITS) > 0) {
+                // Move to next sample
+                opl_current_sample = opl_next_sample;
+                
+                // Generate new next sample
+                OPL_Pico_simple(&opl_next_sample, 1);
+                
+                // Subtract 1.0 from position
+                opl_pos -= (1u << FRAC_BITS);
             }
         }
 #ifdef USB_STACK
