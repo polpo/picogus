@@ -206,6 +206,7 @@ add_subdirectory(rp2040-psram)
 add_subdirectory(opl)
 add_subdirectory(ne2000)
 add_subdirectory(cdrom)
+add_subdirectory(resampler)
 
 ################################################################################
 # Build GUS firmware
@@ -265,6 +266,7 @@ function(build_sb TARGET_NAME MULTIFW)
         SB_BUFFERLESS_NG=1
         USE_CD_AUDIO_FIFO=1
     )
+    target_link_libraries(${TARGET_NAME} resampler)
     pico_generate_pio_header(${TARGET_NAME} ${CMAKE_CURRENT_LIST_DIR}/isa_dma.pio)
 endfunction()
 
@@ -277,7 +279,8 @@ function(build_adlib TARGET_NAME MULTIFW)
     set(SOUND_OPL TRUE)
     config_target(${TARGET_NAME} ${MULTIFW})
     pico_set_program_name(${TARGET_NAME} "picogus-adlib")
-    target_sources(${TARGET_NAME} PRIVATE sbplay.cpp)    
+    target_sources(${TARGET_NAME} PRIVATE sbplay.cpp)  
+    target_link_libraries(${TARGET_NAME} resampler)
 endfunction()
 
 ################################################################################
