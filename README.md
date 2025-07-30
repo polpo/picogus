@@ -38,6 +38,7 @@ See/hear PicoGUS in action on YouTube:
 
 Videos by others:
 
+[<img src="https://img.youtube.com/vi/08IPnmvuatw/hqdefault.jpg" width=400>](https://www.youtube.com/watch?v=08IPnmvuatw)
 [<img src="https://img.youtube.com/vi/bBYUTwKRyNk/hqdefault.jpg" width=400>](https://youtu.be/bBYUTwKRyNk)
 [<img src="https://img.youtube.com/vi/oEHVB0FITqU/hqdefault.jpg" width=400>](https://youtu.be/oEHVB0FITqU)
 [<img src="https://img.youtube.com/vi/aeejxbaAQ4g/hqdefault.jpg" width=400>](https://youtu.be/aeejxbaAQ4g)
