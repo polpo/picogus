@@ -188,9 +188,9 @@ void play_adlib() {
     printf("opl_ratio: %x ", opl_ratio);
     uint32_t opl_pos = 0;
 
-    // Initialize OPL samples
-
+#ifdef CDROM
     cd_fifo = cdrom_audio_fifo_peek(&cdrom);
+#endif
 
     // Use the PWM peripheral to trigger an IRQ at 44100Hz
 #if !AUDIO_CALLBACK_CORE0
