@@ -70,9 +70,17 @@ extern void sbdsp_process();
 void play_adlib(void);
 extern "C" int OPL_Pico_Init(unsigned int);
 extern "C" unsigned int OPL_Pico_PortRead(opl_port_t);
+#if OPL_CMD_BUFFER
 #include "cmd_buffers.h"
 cms_buffer_t opl_cmd_buffer = { {0}, 0, 0 };
-#endif
+#else
+extern "C" void OPL_Pico_WriteRegister(unsigned int reg_num, unsigned int value);
+static uint8_t opl_addr;
+#endif // OPL_CMD_BUFFER
+#if AUDIO_CALLBACK_CORE0
+extern void audio_sample_handler(void);
+#endif // AUDIO_CALLBACK_CORE0
+#endif // SOUND_OPL
 
 #ifdef CDROM
 static uint16_t cdrom_port_test;
@@ -664,13 +672,21 @@ __force_inline void handle_iow(void) {
             // Fast write
             pio_sm_put(pio0, IOW_PIO_SM, IO_END);
             // pio_sm_put(pio0, IOW_PIO_SM, IO_WAIT);
+#if OPL_CMD_BUFFER
             opl_cmd_buffer.cmds[opl_cmd_buffer.head].addr = (uint16_t)(iow_read & 0xFF);
+#else
+            opl_addr = (iow_read & 0xff);
+#endif
             // Fast write - return early as we've already written 0x0u to the PIO
             return;
             break;
         case 0x9:
             pio_sm_put(pio0, IOW_PIO_SM, IO_WAIT);
+#if OPL_CMD_BUFFER
             opl_cmd_buffer.cmds[opl_cmd_buffer.head++].data = (uint8_t)(iow_read & 0xFF);
+#else
+            OPL_Pico_WriteRegister(opl_addr, iow_read & 0xff);
+#endif
             break;
         // DSP ports
         default:
@@ -694,7 +710,11 @@ __force_inline void handle_iow(void) {
         if ((port & 1) == 0) {
             // Fast write
             pio_sm_put(pio0, IOW_PIO_SM, IO_END);
+#if OPL_CMD_BUFFER
             opl_cmd_buffer.cmds[opl_cmd_buffer.head].addr = (uint16_t)(iow_read & 0xFF);
+#else
+            opl_addr = (iow_read & 0xff);
+#endif
             // Fast write - return early as we've already written 0x0u to the PIO
             return;
         } else {
@@ -702,7 +722,11 @@ __force_inline void handle_iow(void) {
             if (settings.SB.oplSpeedSensitive) {
                 busy_wait_us(1); // busy wait for speed sensitive games
             }
+#if OPL_CMD_BUFFER
             opl_cmd_buffer.cmds[opl_cmd_buffer.head++].data = (uint8_t)(iow_read & 0xFF);
+#else
+            OPL_Pico_WriteRegister(opl_addr, iow_read & 0xff);
+#endif
         }
     } else // if follows down below
 #endif // SOUND_OPL
@@ -840,10 +864,12 @@ __force_inline void handle_ior(void) {
         pio_sm_put(pio0, IOR_PIO_SM, IO_WAIT);
         switch (port - settings.SB.basePort) {
         case 0x8:
+#if OPL_CMD_BUFFER
             // wait for OPL buffer to process
             while (opl_cmd_buffer.tail != opl_cmd_buffer.head) {
                 tight_loop_contents();
             }
+#endif
             pio_sm_put(pio0, IOR_PIO_SM, IOR_SET_VALUE | OPL_Pico_PortRead(OPL_REGISTER_PORT));
             break;
         default:
@@ -866,10 +892,12 @@ __force_inline void handle_ior(void) {
     if (port == settings.SB.oplBasePort) {
         // Tell PIO to wait for data
         pio_sm_put(pio0, IOR_PIO_SM, IO_WAIT);
+#if OPL_CMD_BUFFER
         // wait for OPL buffer to process
         while (opl_cmd_buffer.tail != opl_cmd_buffer.head) {
             tight_loop_contents();
         }
+#endif
         pio_sm_put(pio0, IOR_PIO_SM, IOR_SET_VALUE | OPL_Pico_PortRead(OPL_REGISTER_PORT));
     } else // if follows down below
 #endif
@@ -950,16 +978,13 @@ __force_inline void handle_ior(void) {
 }
 
 #ifdef USE_IRQ
-void iow_isr(void) {
-    /* //printf("ints %x\n", pio0->ints0); */
-    handle_iow();
-    // pio_interrupt_clear(pio0, pio_intr_sm0_rxnempty_lsb);
-    irq_clear(PIO0_IRQ_0);
-}
-void ior_isr(void) {
-    handle_ior();
-    // pio_interrupt_clear(pio0, PIO_INTR_SM0_RXNEMPTY_LSB);
-    irq_clear(PIO0_IRQ_1);
+void io_isr(void) {
+    // Prioritize handling of ior because we need to react faster for IOCHRDY
+    if (__builtin_expect(!!(pio0->ints1 & (1 << IOR_PIO_SM)), true)) {
+        handle_ior();
+    } else {
+        handle_iow();
+    }
 }
 #endif
 
@@ -984,6 +1009,11 @@ constexpr uint32_t ior_rxempty = 1u << (PIO_FSTAT_RXEMPTY_LSB + IOR_PIO_SM);
 __force_inline bool ior_has_data() {
     return !(pio0->fstat & ior_rxempty);
 }
+
+#if AUDIO_CALLBACK_CORE0
+static constexpr uint32_t clocks_per_sample_minus_one = (SYS_CLK_HZ / 44100) - 1;
+static constexpr uint pwm_slice_num = 4; // slices 0-3 are taken by USB joystick support
+#endif
 
 #include "hardware/structs/xip_ctrl.h"
 int main()
@@ -1204,21 +1234,26 @@ extern void PIC_DeActivateIRQ(void);
 
 #ifdef USE_IRQ
     puts("Enabling IRQ on ISA IOR/IOW events");
-    // iow irq
-    irq_set_enabled(PIO0_IRQ_0, false);
-    pio_set_irq0_source_enabled(pio0, pis_sm0_rx_fifo_not_empty, true);
-    irq_set_priority(PIO0_IRQ_0, PICO_HIGHEST_IRQ_PRIORITY);
-    irq_set_exclusive_handler(PIO0_IRQ_0, iow_isr);
-    irq_set_enabled(PIO0_IRQ_0, true);
-    // ior irq
     irq_set_enabled(PIO0_IRQ_1, false);
-    pio_set_irq1_source_enabled(pio0, pis_sm1_rx_fifo_not_empty, true);
+    pio_set_irq1_source_enabled(pio0, pio_get_rx_fifo_not_empty_interrupt_source(IOW_PIO_SM), true);
+    pio_set_irq1_source_enabled(pio0, pio_get_rx_fifo_not_empty_interrupt_source(IOR_PIO_SM), true);
     irq_set_priority(PIO0_IRQ_1, PICO_HIGHEST_IRQ_PRIORITY);
-    irq_set_exclusive_handler(PIO0_IRQ_1, ior_isr);
+    irq_set_exclusive_handler(PIO0_IRQ_1, io_isr);
     irq_set_enabled(PIO0_IRQ_1, true);
 #endif
 
     gpio_xor_mask(LED_PIN);
+
+#if AUDIO_CALLBACK_CORE0
+    pwm_c = pwm_get_default_config();
+    pwm_config_set_wrap(&pwm_c, clocks_per_sample_minus_one);
+    pwm_init(pwm_slice_num, &pwm_c, false);
+    pwm_set_irq_enabled(pwm_slice_num, true);
+    irq_set_exclusive_handler(PWM_IRQ_WRAP, audio_sample_handler);
+    irq_set_priority(PWM_IRQ_WRAP, PICO_LOWEST_IRQ_PRIORITY);
+    irq_set_enabled(PWM_IRQ_WRAP, true);
+    pwm_set_enabled(pwm_slice_num, true);
+#endif
 
     processSettings();
 

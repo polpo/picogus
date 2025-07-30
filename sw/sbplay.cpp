@@ -51,8 +51,10 @@ extern void sbdsp_init();
 
 #include "clamp.h"
 
+#if OPL_CMD_BUFFER
 #include "cmd_buffers.h"
 extern cms_buffer_t opl_cmd_buffer;
+#endif
 
 #ifdef USB_STACK
 #include "tusb.h"
@@ -191,6 +193,7 @@ void play_adlib() {
     cd_fifo = cdrom_audio_fifo_peek(&cdrom);
 
     // Use the PWM peripheral to trigger an IRQ at 44100Hz
+#if !AUDIO_CALLBACK_CORE0
     pwm_config pwm_c = pwm_get_default_config();
     pwm_config_set_wrap(&pwm_c, clocks_per_sample_minus_one);
     pwm_init(pwm_slice_num, &pwm_c, false);
@@ -199,17 +202,21 @@ void play_adlib() {
     irq_set_priority(PWM_IRQ_WRAP, PICO_LOWEST_IRQ_PRIORITY);
     irq_set_enabled(PWM_IRQ_WRAP, true);
     pwm_set_enabled(pwm_slice_num, true);
+#endif
 
     for (;;) {
 #if CDROM
-        cdrom_audio_callback(&cdrom, 256);
+        cdrom_audio_callback(&cdrom, 1024);
 #endif
+
+#if OPL_CMD_BUFFER
         // Process any pending OPL commands
         while (opl_cmd_buffer.tail != opl_cmd_buffer.head) {
             auto cmd = opl_cmd_buffer.cmds[opl_cmd_buffer.tail];
             OPL_Pico_WriteRegister(cmd.addr, cmd.data);
             ++opl_cmd_buffer.tail;
         }
+#endif
 
         // Generate OPL samples and add to output FIFO
         while (fifo_free_space(&opl_out_fifo) > 0) {

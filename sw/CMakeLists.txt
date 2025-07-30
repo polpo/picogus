@@ -265,6 +265,8 @@ function(build_sb TARGET_NAME MULTIFW)
         SB_BUFFERLESS=1
         SB_BUFFERLESS_NG=1
         USE_CD_AUDIO_FIFO=1
+        # USE_IRQ=1
+        # AUDIO_CALLBACK_CORE0=1
     )
     target_link_libraries(${TARGET_NAME} resampler)
     pico_generate_pio_header(${TARGET_NAME} ${CMAKE_CURRENT_LIST_DIR}/isa_dma.pio)
