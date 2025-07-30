@@ -30,6 +30,7 @@
 
 #include "pico/stdlib.h"
 #include "audio_i2s_minimal.h"
+#include <resampler.hpp>
 
 #include "opl.h"
 extern "C" void OPL_Pico_simple(int16_t *buffer, uint32_t nsamples);
@@ -95,17 +96,15 @@ static constexpr uint32_t fixed_ratio(uint16_t a, uint16_t b) {
 
 static constexpr uint32_t opl_ratio = fixed_ratio(49716, 44100);
 static audio_fifo_t opl_out_fifo;
-static int16_t opl_current_sample = 0;
-static int16_t opl_next_sample = 0;
-static bool opl_need_new_sample = true;
 
-/**
- * Linear interpolation in fixed-point
- * v0 and v1 are sample values, frac is the fractional position
- */
-static inline int16_t lerp_fixed(int16_t v0, int16_t v1, uint32_t frac) {
-    return v0 + (int16_t)(((int32_t)(v1 - v0) * frac) >> FRAC_BITS);
+static int16_t get_opl_sample()
+{
+	int16_t opl_current_sample;
+    OPL_Pico_simple(&opl_current_sample, 1);
+	return opl_current_sample;
 }
+
+static Resampler<get_opl_sample> resampler;
 
 // Setup values for audio sample clock
 // 8390 clock cycles per sample (370MHz / 8390 ~= 44100Hz)
@@ -182,13 +181,12 @@ void play_adlib() {
 #endif
     init_audio();
 
+	resampler.set_ratio(49716,44100);
+
     printf("opl_ratio: %x ", opl_ratio);
     uint32_t opl_pos = 0;
 
     // Initialize OPL samples
-    OPL_Pico_simple(&opl_current_sample, 1);
-    OPL_Pico_simple(&opl_next_sample, 1);
-    opl_need_new_sample = false;
 
     cd_fifo = cdrom_audio_fifo_peek(&cdrom);
 
@@ -216,27 +214,8 @@ void play_adlib() {
         // Generate OPL samples and add to output FIFO
         while (fifo_free_space(&opl_out_fifo) > 0) {
             // Interpolate at current position
-            fifo_add_sample(&opl_out_fifo, lerp_fixed(
-                opl_current_sample,
-                opl_next_sample,
-                opl_pos & FRAC_MASK
-            ));
-
-            // Advance position
-            opl_pos += opl_ratio;
-            
-            // While we've advanced past one or more OPL samples
-            while ((opl_pos >> FRAC_BITS) > 0) {
-                // Move to next sample
-                opl_current_sample = opl_next_sample;
-                
-                // Generate new next sample
-                OPL_Pico_simple(&opl_next_sample, 1);
-                
-                // Subtract 1.0 from position
-                opl_pos -= (1u << FRAC_BITS);
-            }
-        }
+            fifo_add_sample(&opl_out_fifo, resampler.get_sample());
+		}
 #ifdef USB_STACK
         // Service TinyUSB events
         tuh_task();
