@@ -28,6 +28,7 @@
 
 #include "pico/stdlib.h"
 #include "pico/audio_i2s.h"
+#include "volctrl.h"
 
 #include "opl.h"
 extern "C" void OPL_Pico_simple(int16_t *buffer, uint32_t nsamples);
@@ -121,6 +122,7 @@ struct audio_buffer_pool *init_audio() {
     ok = audio_i2s_connect_extra(producer_pool, false, 0, 0, NULL);
     assert(ok);
     audio_i2s_set_enabled(true);
+
     return producer_pool;
 }
 
@@ -140,11 +142,11 @@ static inline int16_t lerp_fixed(int16_t v0, int16_t v1, uint32_t frac) {
     return v0 + (int16_t)(((int32_t)(v1 - v0) * frac) >> FRAC_BITS);
 }
 
-
 void play_adlib() {
     puts("starting core 1");
     // flash_safe_execute_core_init();
     uint32_t start, end;
+    set_volume(MODE_OPLVOL);
 
 #if defined(SOUND_SB) || defined(USB_MOUSE) || defined(SOUND_MPU)
     // Init PIC on this core so it handles timers
@@ -182,6 +184,7 @@ void play_adlib() {
     uint32_t sb_frac = 0;
     // uint32_t sb_sample_idx = 0x0;
     uint32_t sb_left = 0;
+    set_volume(MODE_SBVOL);
 #endif
 
     uint32_t cd_left = 0;
@@ -244,9 +247,13 @@ void play_adlib() {
             int32_t opl_sample = lerp_fixed(
                 opl_samples[opl_index & OPL_BUFFER_BITS],
                 opl_samples[(opl_index + 1) & OPL_BUFFER_BITS],
-                opl_frac);
+                opl_frac);            
+           
+            opl_sample = scale_sample(opl_sample << 2, opl_volume, 1);
+
             accum[0] += opl_sample;
             accum[1] += opl_sample;
+
 #if SOUND_SB
             if (!sb_left) {
                 // putchar('t');
@@ -260,11 +267,26 @@ void play_adlib() {
                 }
                 sb_index_old = sb_index;
                 sb_frac = sb_pos & FRAC_MASK;
-                sb_ratio = fixed_ratio(sbdsp_sample_rate(), 44100);
+                //sb_ratio = fixed_ratio(sbdsp_sample_rate(), 44100);
+
+                static uint16_t last_sb_rate = 0;
+                uint16_t current_rate = sbdsp_sample_rate();
+                if (current_rate != last_sb_rate)
+                {
+                    sb_ratio = fixed_ratio(current_rate, 44100);
+                    last_sb_rate = current_rate;
+                }
+
                 sb_pos += sb_ratio;
                 // putchar('p');
                 if (!sbdsp_muted()) {
-                    int16_t sb_sample = sb_fifo->buffer[sb_index & AUDIO_FIFO_BITS];
+                    //int16_t sb_sample = sb_fifo->buffer[sb_index & AUDIO_FIFO_BITS];
+
+                    int16_t *fifo_buf = sb_fifo->buffer;
+                    int16_t sb_sample = fifo_buf[sb_index & AUDIO_FIFO_BITS];
+                    
+                    sb_sample = scale_sample((int32_t)sb_sample >> 1, sb_volume, 1);
+
                     accum[0] += sb_sample;
                     accum[1] += sb_sample;
                 }

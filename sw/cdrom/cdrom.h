@@ -15,6 +15,7 @@
  *          Copyright 2016-2019 Miran Grca.
  *          Copyright (C) 2024 Kevin Moonlight
  *          Copyright (C) 2025 Ian Scott
+ *          Copyright (C) 2025 Daniel Arnold
  */
 
 #ifndef EMU_CDROM_H
@@ -60,7 +61,6 @@
 #define STAT_ERROR	    0x10
 #define STAT_DISK	    0x40
 #define STAT_TRAY	    0x80
-
 
 /* This is so that if/when this is changed to something else,
    changing this one define will be enough. */
@@ -201,6 +201,7 @@ typedef struct cdrom {
     int16_t *current_sector_samples;       // Convenience pointer: (int16_t*)audio_sector_buffer
     int audio_sector_total_samples;        // Samples available in current_sector_samples after a read
     int audio_sector_consumed_samples;     // Samples consumed from current_sector_samples
+
 #if USE_CD_AUDIO_FIFO
     audio_fifo_t audio_fifo;
 #endif
@@ -271,6 +272,9 @@ extern int find_cdrom_for_scsi_id(uint8_t scsi_id);
 
 extern void cdrom_close(void);
 extern void cdrom_global_init(void);
+
+extern int32_t cd_audio_volume; 
+extern void cdrom_set_volume_scale(uint8_t percent);
 
 #ifdef __cplusplus
 }

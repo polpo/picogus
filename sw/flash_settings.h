@@ -80,6 +80,14 @@ typedef struct Settings {
     struct {
         uint16_t basePort;
     } MMB;
+    struct {
+        uint8_t mainVol;
+        uint8_t oplVol;
+        uint8_t sbVol;
+        uint8_t cdVol;
+        uint8_t gusVol;
+        uint8_t psgVol;
+    } Volume;
 } Settings;
 
 
