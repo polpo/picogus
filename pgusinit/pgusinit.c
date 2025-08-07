@@ -15,9 +15,11 @@
  *  with this program; if not, write to the Free Software Foundation, Inc.,
  *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
+#include <io.h>
 #include <conio.h>
 #include <dos.h>
 #include <stdio.h>
+#include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
@@ -36,92 +38,117 @@ bool permanent = false;
 
 #include "../common/picogus.h"
 
+
+const uint8_t get_screen_lines(void) {
+    uint16_t bios_screensize = *(uint16_t far *)MK_FP(0x40, 0x4c);
+    uint8_t bios_screencols = *(uint8_t far *)MK_FP(0x40, 0x4a);
+
+    if (bios_screensize && bios_screencols) {
+        return bios_screensize / bios_screencols / 2;
+    }
+    return 25;
+}
+
+static bool is_console;
+static uint8_t page_lines;
+
+static void pageprintf(char *format, ...) {
+    static uint8_t printed_lines = 0;
+
+    va_list arglist;
+    va_start(arglist, format);
+    vprintf(format, arglist);
+    va_end(arglist);
+    printed_lines++;
+    if (is_console && (printed_lines >= page_lines)) {
+        fprintf(stderr, "Press any key to continue...");
+        getch();
+        putchar('\n');
+        printed_lines = 0;
+    }
+}
+
 static void banner(void) {
-    printf("PicoGUSinit v3.6.0 (c) 2025 Ian Scott - licensed under the GNU GPL v2\n");
+    pageprintf("PicoGUSinit v3.6.0 (c) 2025 Ian Scott - licensed under the GNU GPL v2\n");
 }
 
 
 static void usage(card_mode_t mode, bool print_all) {
     // Max line length @ 80 chars:
-    //     "...............................................................................\n"
-    printf("Usage:\n");
-    printf("   /?            - show this message (/?? to show options for all modes)\n");
-    printf("   /flash fw.uf2 - program the PicoGUS with the firmware file fw.uf2\n");
-    printf("   /mode x       - change card mode to x (gus, sb, mpu, psg, adlib, usb)\n");
-    printf("   /save         - save settings to the card to persist on system boot\n");
-    printf("   /defaults     - set all settings for all modes to defaults\n");
-    printf("   /wtvol x      - set volume of WT header. 0-100, Default 100 (2.0 cards only)\n");
-    printf("   /joy 1|0      - enable/disable USB joystick support, Default: 0\n");
-    printf("   /mainvol x    - set the main audio volume: 0 - 100\n");
-    //     "...............................................................................\n"
-    printf("MPU-401 settings:\n");
-    printf("   /mpuport x    - set the base port of the MPU-401. Default: 330, 0 to disable\n");
-    printf("   /mpudelay 1|0 - delay SYSEX (for rev.0 Roland MT-32)\n");
-    printf("   /mpufake 1|0  - fake all notes off (for Roland RA-50)\n");
-    if (mode == GUS_MODE || mode == MODE_GUSVOL || print_all) {
-        //     "...............................................................................\n"
-        printf("GUS settings:\n");
-        printf("   /gusport x  - set the base port of the GUS. Default: 240\n");
-        printf("   /gusbuf n   - set audio buffer to n samples. Default: 4, Min: 1, Max: 256\n");
-        printf("                 (tweaking can help programs that hang or have audio glitches)\n");
-        printf("   /gusdma n   - force DMA interval to n us. Default: 0, Min: 0, Max: 255\n");
-        printf("                 Specifying 0 restores the GUS default behavior.\n");
-        printf("                 (increase to fix games with streaming audio like Doom)\n");
-        printf("   /gus44k 1|0 - Fixed 44.1kHz output for all active voice #s [EXPERIMENTAL]\n");
-        printf("   /gusvol x   - set the GUS audio volume: 0 - 100\n");
+    //         "...............................................................................\n"
+    pageprintf("Usage:\n");
+    pageprintf("   /?            - show this message (/?? to show options for all modes)\n");
+    pageprintf("   /flash fw.uf2 - program the PicoGUS with the firmware file fw.uf2\n");
+    pageprintf("   /mode x       - change card mode to x (gus, sb, mpu, psg, adlib, usb)\n");
+    pageprintf("   /save         - save settings to the card to persist on system boot\n");
+    pageprintf("   /defaults     - set all settings for all modes to defaults\n");
+    pageprintf("   /wtvol x      - set volume of WT header. 0-100, Default 100 (2.0 cards only)\n");
+    pageprintf("   /joy 1|0      - enable/disable USB joystick support, Default: 0\n");
+    pageprintf("   /mainvol x    - set the main audio volume: 0 - 100\n");
+    //         "...............................................................................\n"
+    pageprintf("MPU-401 settings:\n");
+    pageprintf("   /mpuport x    - set the base port of the MPU-401. Default: 330, 0 to disable\n");
+    pageprintf("   /mpudelay 1|0 - delay SYSEX (for rev.0 Roland MT-32)\n");
+    pageprintf("   /mpufake 1|0  - fake all notes off (for Roland RA-50)\n");
+    if (mode == GUS_MODE || print_all) {
+        //         "...............................................................................\n"
+        pageprintf("GUS settings:\n");
+        pageprintf("   /gusport x  - set the base port of the GUS. Default: 240\n");
+        pageprintf("   /gusbuf n   - set audio buffer to n samples. Default: 4, Min: 1, Max: 256\n");
+        pageprintf("                 (tweaking can help programs that hang or have audio glitches)\n");
+        pageprintf("   /gusdma n   - force DMA interval to n us. Default: 0, Min: 0, Max: 255\n");
+        pageprintf("                 Specifying 0 restores the GUS default behavior.\n");
+        pageprintf("                 (increase to fix games with streaming audio like Doom)\n");
+        pageprintf("   /gus44k 1|0 - Fixed 44.1kHz output for all active voice #s [EXPERIMENTAL]\n");
+        pageprintf("   /gusvol x   - set the GUS audio volume: 0 - 100\n");
     }
-    if (mode == SB_MODE || mode == MODE_SBVOL || print_all) {
-        //     "...............................................................................\n"
-        printf("Sound Blaster settings:\n");
-        printf("   /sbport x    - set the base port of the Sound Blaster. Default: 220\n");
-        printf("   /sbvol x     - set the Sound Blaster audio volume: 0 - 100%\n");
+    if (mode == SB_MODE || print_all) {
+        //         "...............................................................................\n"
+        pageprintf("Sound Blaster settings:\n");
+        pageprintf("   /sbport x    - set the base port of the Sound Blaster. Default: 220\n");
+        pageprintf("   /sbvol x     - set the Sound Blaster audio volume: 0 - 100%\n");
     }
-    if (mode == SB_MODE || mode == ADLIB_MODE || mode == MODE_OPLVOL || print_all) {
-        printf("AdLib settings:\n");
-        printf("   /oplport x   - set the base port of the OPL2. Default: 388, 0 to disable\n");
-        printf("   /oplwait 1|0 - wait on OPL2 write. Can fix speed-sensitive early AdLib games\n");
-        printf("   /oplvol x    - set the OPL2 audio volume: 0 - 100\n");
+    if (mode == SB_MODE || mode == ADLIB_MODE || print_all) {
+        pageprintf("AdLib settings:\n");
+        pageprintf("   /oplport x   - set the base port of the OPL2. Default: 388, 0 to disable\n");
+        pageprintf("   /oplwait 1|0 - wait on OPL2 write. Can fix speed-sensitive early AdLib games\n");
+        pageprintf("   /oplvol x    - set the OPL2 audio volume: 0 - 100\n");
     }
-    if (mode == SB_MODE || mode == USB_MODE || mode == MODE_CDVOL || print_all) {
-        printf("CD-ROM settings:\n");
-        printf("   /cdport x     - set base port of CD interface. Default: 250, 0 to disable\n");
-        printf("   /cdlist       - list CD images on the inserted USB drive\n");
-        printf("   /cdload n     - load image n in the list given by /cdlist. 0 to unload image\n");
-        printf("   /cdloadname x - load CD image by name. Names with spaces can be quoted\n");
-        printf("   /cdvol n      - set the CD audio volume: 0 - 100\n");
-        printf("   /cdauto 1|0   - auto-advance loaded image when same USB drive is reinserted\n");
+    if (mode == SB_MODE || mode == USB_MODE || print_all) {
+        pageprintf("CD-ROM settings:\n");
+        pageprintf("   /cdport x     - set base port of CD interface. Default: 250, 0 to disable\n");
+        pageprintf("   /cdlist       - list CD images on the inserted USB drive\n");
+        pageprintf("   /cdload n     - load image n in the list given by /cdlist. 0 to unload image\n");
+        pageprintf("   /cdloadname x - load CD image by name. Names with spaces can be quoted\n");
+        pageprintf("   /cdvol n      - set the CD audio volume: 0 - 100\n");
+        pageprintf("   /cdauto 1|0   - auto-advance loaded image when same USB drive is reinserted\n");
     }
-    if (mode == PSG_MODE || mode == MODE_PSGVOL || print_all) {
-        //     "...............................................................................\n"
-        printf("Tandy settings:\n");
-        printf("   /tandyport x - set the base port of the Tandy 3-voice. Default: 2C0\n");
-        printf("   /psgvol x    - set the PSG audio volume: 0 - 100\n");
-    }
-    if (mode == PSG_MODE || mode == MODE_PSGVOL || print_all) {
-        //     "...............................................................................\n"
-        printf("CMS settings:\n");
-        printf("   /cmsport x - set the base port of the CMS. Default: 220\n");
-        printf("   /psgvol x  - set the PSG audio volume: 0 - 100\n");
+    if (mode == PSG_MODE || print_all) {
+        //         "...............................................................................\n"
+        pageprintf("PSG settings:\n");
+        pageprintf("   /tandyport x - set the base port of the Tandy 3-voice. Default: 2C0\n");
+        pageprintf("   /cmsport x   - set the base port of the CMS. Default: 220\n");
+        pageprintf("   /psgvol x    - set the PSG audio volume: 0 - 100\n");
     }
     if (mode == USB_MODE || mode == PSG_MODE || mode == ADLIB_MODE || print_all) {
-        //     "...............................................................................\n"
-        printf("Serial Mouse settings:\n");
-        printf("   /mousecom n - mouse COM port. Default: 0, Choices: 0 (disable), 1, 2, 3, 4\n");
-        printf("   /mouseproto n - set mouse protocol. Default: 0 (Microsoft)\n");
-        printf("          0 - Microsoft Mouse 2-button,      1 - Logitech 3-button\n");
-        printf("          2 - IntelliMouse 3-button + wheel, 3 - Mouse Systems 3-button\n");
-        printf("   /mouserate n  - set report rate in Hz. Default: 60, Min: 20, Max: 200\n");
-        printf("          (increase for smoother cursor movement, decrease for lower CPU load)\n");
-        printf("   /mousesen n   - set mouse sensitivity (256 - 100%, 128 - 50%, 512 - 200%)\n");
+        //         "...............................................................................\n"
+        pageprintf("Serial Mouse settings:\n");
+        pageprintf("   /mousecom n - mouse COM port. Default: 0, Choices: 0 (disable), 1, 2, 3, 4\n");
+        pageprintf("   /mouseproto n - set mouse protocol. Default: 0 (Microsoft)\n");
+        pageprintf("          0 - Microsoft Mouse 2-button,      1 - Logitech 3-button\n");
+        pageprintf("          2 - IntelliMouse 3-button + wheel, 3 - Mouse Systems 3-button\n");
+        pageprintf("   /mouserate n  - set report rate in Hz. Default: 60, Min: 20, Max: 200\n");
+        pageprintf("          (increase for smoother cursor movement, decrease for lower CPU load)\n");
+        pageprintf("   /mousesen n   - set mouse sensitivity (256 - 100%, 128 - 50%, 512 - 200%)\n");
     }
-    if (mode == NE2000_MODE || print_all) {
-        //     "...............................................................................\n"
-        printf("NE2000/WiFi settings:\n");
-        printf("   /ne2kport x   - set the base port of the NE2000. Default: 300\n");
-        printf("   /wifissid abc - set the WiFi SSID to abc\n");
-        printf("   /wifipass xyz - set the WiFi WPA/WPA2 password/key to xyz\n");
-        printf("   /wifinopass   - unset the WiFi password to connect to an open access point\n");
-        printf("   /wifistatus   - print current WiFi status\n");
+    if (mode == NE2000_MODE) { // NE2000 mode is special enough it should only be shown if the card is running the dedicated pg-ne2k firmware
+        //         "...............................................................................\n"
+        pageprintf("NE2000/WiFi settings:\n");
+        pageprintf("   /ne2kport x   - set the base port of the NE2000. Default: 300\n");
+        pageprintf("   /wifissid abc - set the WiFi SSID to abc\n");
+        pageprintf("   /wifipass xyz - set the WiFi WPA/WPA2 password/key to xyz\n");
+        pageprintf("   /wifinopass   - unset the WiFi password to connect to an open access point\n");
+        pageprintf("   /wifistatus   - print current WiFi status\n");
     }
 }
 
@@ -275,9 +302,6 @@ static cdrom_image_status_t wait_for_cd_status(void) {
     return cd_status;
 }
 
-#include <conio.h>
-
-#define PAGE_LINES 16
 
 static bool print_cdimage_list(void) {
     outp(CONTROL_PORT, 0xCC); // Knock on the door...
@@ -299,21 +323,12 @@ static bool print_cdimage_list(void) {
     outp(CONTROL_PORT, MODE_CDLIST); // Select CD image list register
     char b[256], c, *p = b;
     uint8_t line = 1;
-    int printed_lines = 0;
 
     while ((c = inp(DATA_PORT_HIGH)) != 4 /* ASCII EOT */) {
         *p++ = c;
         if (!c) {
             putchar(current_index == line ? '*' : ' ');
-            printf(" %2d: %s\n", line++, b);
-            printed_lines++;
-
-            if (printed_lines >= PAGE_LINES) {
-                printf("Press any key to continue...\n");
-                getch();
-                printed_lines = 0;
-            }
-
+            pageprintf(" %2d: %s\n", line++, b);
             p = b;
         }
     }
@@ -582,9 +597,10 @@ if (e != 1 || option > 0x3ffu) { \
 
 static void cmdDisplayUsage(char* argv[], int index, int mode)
 {
-    usage(gMode, false);
+    usage(gMode, mode);
 }
 
+/*
 static int strcasecmp_bool(const char* a, const char* b) {
     while (*a && *b) {
         if (tolower((unsigned char)*a) != tolower((unsigned char)*b)) {
@@ -594,6 +610,7 @@ static int strcasecmp_bool(const char* a, const char* b) {
     }
     return (*a || *b); // Not equal if either has remaining chars
 }
+*/
 
 static void cmdSendBool(char* argv[], int i, int mode)
 {
@@ -605,9 +622,9 @@ static void cmdSendBool(char* argv[], int i, int mode)
         return;
     }
 
-    if (strcmp(arg, "1") == 0 || strcasecmp_bool(arg, "true") == 0 || strcasecmp_bool(arg, "on") == 0) {
+    if (!strcmp(arg, "1") || !stricmp(arg, "true") || !stricmp(arg, "on")) {
         value = 1;
-    } else if (strcmp(arg, "0") == 0 || strcasecmp_bool(arg, "false") == 0 || strcasecmp_bool(arg, "off") == 0) {
+    } else if (!strcmp(arg, "0") || !stricmp(arg, "false") || !stricmp(arg, "off")) {
         value = 0;
     } else {
         usage(gMode, false);
@@ -631,13 +648,13 @@ static void cmdSetMode(char *argv[], int i, int mode)
     mode_name[7] = '\0';        // Ensure null-termination
 
     if (mode_name[0]) {
-        if (strnicmp(mode_name, "TANDY", 5) == 0 || strnicmp(mode_name, "CMS", 3) == 0) {
+        if (!stricmp(mode_name, "TANDY") || !stricmp(mode_name, "CMS")) {
             // Backwards compatibility for old tandy and cms modes
             strcpy(mode_name, "PSG");
         } 
         int j;
         for (j = 1; j < 7; ++j) {
-            if (strnicmp(modenames[j], mode_name, 7) == 0) {
+            if (stricmp(modenames[j], mode_name) == 0) {
                 fw_num = j;
                 break;
             }
@@ -955,11 +972,22 @@ static void cmdSave(char *argv[], int i, int mode)
     permanent = true;
 }
 
+ParseCommand parseCommandsMinimal[] = {
+    {"/?", cmdDisplayUsage, 0, ARG_NONE},
+    {"/??", cmdDisplayUsage, 1, ARG_NONE},
+    {0}
+};
+ParseCommand parseCommandsFlash[] = {
+    {"/?", cmdDisplayUsage, 0, ARG_NONE},
+    {"/??", cmdDisplayUsage, 1, ARG_NONE},
+    {"/flash", cmdFlashPico, 0, ARG_REQUIRE, "picogus.uf2"},
+    {0}
+};
 ParseCommand parseCommands[] = {
     {"/flash", cmdFlashPico, 0, ARG_REQUIRE, "picogus.uf2"},
     {"/save", cmdSave, 0, ARG_NONE},
     {"/?", cmdDisplayUsage, 0, ARG_NONE},
-    {"/??", cmdDisplayUsage, 0, ARG_NONE},
+    {"/??", cmdDisplayUsage, 1, ARG_NONE},
     {"/joy", cmdSendBool, MODE_JOYEN, ARG_REQUIRE},
     {"/mode", cmdSetMode, 0, ARG_REQUIRE},
     {"/wtvol", cmdSetVol, MODE_WTVOL, ARG_REQUIRE},
@@ -994,29 +1022,30 @@ ParseCommand parseCommands[] = {
     {"/sbvol", cmdSetVol, MODE_SBVOL, ARG_REQUIRE, "100"},
     {"/cdvol", cmdSetVol, MODE_CDVOL, ARG_REQUIRE, "100"},
     {"/gusvol", cmdSetVol, MODE_GUSVOL, ARG_REQUIRE, "100"},
-    {"/psgvol", cmdSetVol, MODE_PSGVOL, ARG_REQUIRE, "100"}
+    {"/psgvol", cmdSetVol, MODE_PSGVOL, ARG_REQUIRE, "100"},
+    {0}
 };
  
-ParseCommand *matchCommand (char *str)
+ParseCommand *matchCommand (char *str, ParseCommand commands[])
 {
-    for(int i = 0; parseCommands[i].name != NULL; i++ )
+    for(int i = 0; commands[i].name != NULL; i++ )
     {
 	
-        if ( !strcmp ( parseCommands[i].name, str ) )
-			return &parseCommands[i];
+        if ( !stricmp ( commands[i].name, str ) )
+			return &commands[i];
 	}
 
 	return NULL;
 }
 
-int parseCommand (int argc, char* argv[], int i)
+int parseCommand (int argc, char* argv[], int i, ParseCommand commands[])
 {
-	int retVal = 0;
+	bool retVal = false;
 
 	if ( !argv[i] )
 		return retVal;
 
-	ParseCommand *command = matchCommand(argv[i]);                            
+	ParseCommand *command = matchCommand(argv[i], commands);
 
     if (command)
     {
@@ -1032,7 +1061,7 @@ int parseCommand (int argc, char* argv[], int i)
             return retVal;  
         }
 
-        if (!strcmp(argv[i + 1], "default"))
+        if (!stricmp(argv[i + 1], "default"))
         {
             if (command->def)
                 argv[i + 1] = command->def;
@@ -1041,7 +1070,9 @@ int parseCommand (int argc, char* argv[], int i)
         }
 
         command->routine(argv, i, command->mode);
-        retVal = 1;
+        retVal = true;
+    } else {
+        printf("Invalid command %s. Run pgusinit /? for usage help", argv[i]);
     }
 
     return retVal;
@@ -1228,25 +1259,29 @@ static void printVolume()
     printf("\n");
 }
 
-static void initPicoGUS()
+typedef enum {
+    INIT_OK,
+    INIT_FW_MISMATCH,
+    INIT_NOT_DETECTED
+} init_status;
+
+static init_status initPicoGUS()
 {
     // Get magic value from port on PicoGUS that is not on real GUS
     outp(CONTROL_PORT, 0xCC); // Knock on the door...
     outp(CONTROL_PORT, MODE_MAGIC); // Select magic string register
     if (inp(DATA_PORT_HIGH) != 0xDD) {
         err_pigus();
-        return;
+        return INIT_NOT_DETECTED;
     };
     printf("PicoGUS detected: Firmware version: ");
     print_string(MODE_FWSTRING);
-
-    
 
     outp(CONTROL_PORT, 0x01); // Select protocol version register
     uint8_t protocol_got = inp(DATA_PORT_HIGH);
     if (PICOGUS_PROTOCOL_VER != protocol_got) {
       err_protocol(PICOGUS_PROTOCOL_VER, protocol_got);
-      return;
+      return INIT_FW_MISMATCH;
     }
 
     outp(CONTROL_PORT, MODE_BOOTMODE); // Select mode register
@@ -1262,18 +1297,43 @@ static void initPicoGUS()
         printf("Hardware: Unknown\n");
     }
     printf("\n");
+    return INIT_OK;
 }
 
+
 int main(int argc, char* argv[]) {
+    is_console = isatty(fileno(stdout));
+    if (is_console) {
+        page_lines = get_screen_lines() - 1;
+    }
 
     banner();
-    initPicoGUS();
+    init_status status = initPicoGUS();
+    if (status == INIT_FW_MISMATCH) {
+        // Still allow firmware upgrade if firmware version mismatches
+        for(int i = 1; i < argc; ++i)
+        {
+            if (!parseCommand(argc, argv, i, parseCommandsFlash))
+                return 1;
+            else
+                return 0;
+        }
+        return 1;
+    } else if (status == INIT_NOT_DETECTED) {
+        // Still allow /? and /?? commands if not detected
+        for(int i = 1; i < argc; ++i)
+        {
+            if (!parseCommand(argc, argv, i, parseCommandsMinimal))
+                return 1;
+        }
+        return 1;
+    }
 
     int commands = 0;
     for(int i = 1; i < argc; ++i)
     {
-        if (parseCommand(argc, argv, i))
-            ++commands;
+        if (!parseCommand(argc, argv, i, parseCommands))
+            return 1;
     }
 
     if (wifichg)
