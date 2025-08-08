@@ -67,8 +67,6 @@ static uint16_t sb_port_test;
 #ifdef SOUND_OPL
 #include "opl.h"
 void play_adlib(void);
-extern "C" int OPL_Pico_Init(unsigned int);
-extern "C" unsigned int OPL_Pico_PortRead(opl_port_t);
 #if OPL_CMD_BUFFER
 #include "include/cmd_buffers.h"
 cms_buffer_t opl_cmd_buffer = { {0}, 0, 0 };

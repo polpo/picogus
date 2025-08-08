@@ -34,8 +34,6 @@
 #include "audio/volctrl.h"
 
 #include "opl.h"
-extern "C" void OPL_Pico_simple(int16_t *buffer, uint32_t nsamples);
-extern "C" void OPL_Pico_WriteRegister(unsigned int reg_num, unsigned int value);
 
 #include "audio/audio_fifo.h"
 #if SOUND_SB
