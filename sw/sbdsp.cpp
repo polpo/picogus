@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "pico_pic.h"
+#include "volctrl.h"
 
 /*
 Title  : SoundBlaster DSP Emulation 
@@ -211,7 +212,7 @@ static uint32_t DSP_DMA_EventHandler(Bitu val) {
 static void sbdsp_dma_isr(void) {
     const uint32_t dma_data = DMA_Complete_Write(&dma_config);    
 #ifdef SB_BUFFERLESS
-    sbdsp.cur_sample = (int16_t)((dma_data & 0xFF) ^ 0x80) << 8;
+    sbdsp.cur_sample = (int16_t)scale_sample(((dma_data & 0xFF) ^ 0x80) << 8, sb_volume, 0);
 #else
     sbdsp_fifo_rx(dma_data & 0xFF);
 #endif

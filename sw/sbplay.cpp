@@ -102,9 +102,10 @@ static audio_fifo_t opl_out_fifo;
 
 static int16_t get_opl_sample()
 {
-	int16_t opl_current_sample;
+    int16_t opl_current_sample;
     OPL_Pico_simple(&opl_current_sample, 1);
-	return opl_current_sample;
+    opl_current_sample = scale_sample(opl_current_sample << 2, opl_volume, 0);
+    return opl_current_sample;
 }
 
 static Resampler<get_opl_sample> resampler;
@@ -130,7 +131,6 @@ void audio_sample_handler(void) {
 
 #ifdef SOUND_SB
     uint32_t sb_sample = sbdsp_sample();
-    sb_sample = scale_sample((int32_t)sb_sample >> 1, sb_volume, 1);
     sample_l = sample_r = sb_sample;
 #endif
 
@@ -138,8 +138,10 @@ void audio_sample_handler(void) {
     static uint32_t cd_index = 0;
     const uint32_t has_cd_samples = fifo_take_samples_inline(cd_fifo, 2);
     if (has_cd_samples) {
-        sample_l += cd_fifo->buffer[cd_index++];
-        sample_r += cd_fifo->buffer[cd_index++];
+        sample_l += scale_sample(cd_fifo->buffer[cd_index++], cd_audio_volume, 0);
+        sample_r += scale_sample(cd_fifo->buffer[cd_index++], cd_audio_volume, 0);
+        // sample_l += cd_fifo->buffer[cd_index++];
+        // sample_r += cd_fifo->buffer[cd_index++];
         cd_index &= AUDIO_FIFO_BITS;
     }
 #endif
@@ -148,7 +150,6 @@ void audio_sample_handler(void) {
     const uint32_t has_opl_samples = fifo_take_samples_inline(&opl_out_fifo, 1);
     if (has_opl_samples) {
         int16_t opl_sample = opl_out_fifo.buffer[opl_out_index++];
-        opl_sample = scale_sample(opl_sample << 2, opl_volume, 0);
         sample_l += opl_sample;
         sample_r += opl_sample;
         opl_out_index &= AUDIO_FIFO_BITS;

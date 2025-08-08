@@ -401,7 +401,6 @@ uint32_t cdrom_audio_callback_simple(cdrom_t *dev, int16_t *buffer, uint32_t len
         /* printf("%u\n", samples_to_transfer); */
         // Add samples from sector buffer to FIFO
         //memcpy(buffer + samples_produced, &dev->current_sector_samples[dev->audio_sector_consumed_samples], samples_to_transfer * sizeof(int16_t));
-
         for (uint32_t i = 0; i < samples_to_transfer; i++)
         {
             int32_t sample = dev->current_sector_samples[dev->audio_sector_consumed_samples + i];       
