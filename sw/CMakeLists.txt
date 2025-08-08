@@ -2,7 +2,7 @@
 
 cmake_minimum_required(VERSION 3.13)
 
-set(PICO_BOARD_HEADER_DIRS ${CMAKE_CURRENT_LIST_DIR})
+set(PICO_BOARD_HEADER_DIRS ${CMAKE_CURRENT_LIST_DIR}/boards)
 if(NOT PICO_BOARD)
     set(PICO_BOARD "picogus2")
     message("PICO_BOARD not set, defaulting to ${PICO_BOARD}")
@@ -82,6 +82,11 @@ function(config_target TARGET_NAME MULTIFW)
     add_executable(${TARGET_NAME} picogus.cpp)
     pico_set_program_version(${TARGET_NAME} ${CMAKE_PROJECT_VERSION})
 
+    # Add include directory for the new structure
+    target_include_directories(${TARGET_NAME} PRIVATE
+        ${CMAKE_CURRENT_LIST_DIR}
+    )
+
     target_compile_definitions(${TARGET_NAME} PRIVATE
         USE_AUDIO_I2S=1
         PICO_AUDIO_I2S_DATA_PIN=16
@@ -98,7 +103,7 @@ function(config_target TARGET_NAME MULTIFW)
         target_compile_options(${TARGET_NAME} PRIVATE -flto=jobserver)
     endif()
 
-    target_sources(${TARGET_NAME} PRIVATE pico_reflash.c flash_settings.c)
+    target_sources(${TARGET_NAME} PRIVATE system/pico_reflash.c system/flash_settings.c)
     # target_compile_options(${TARGET_NAME} PRIVATE -save-temps -fverbose-asm)
     if(MULTIFW)
         set_linker_script(${TARGET_NAME} ${CMAKE_BINARY_DIR}/${TARGET_NAME}.ld)
@@ -148,10 +153,10 @@ function(config_target TARGET_NAME MULTIFW)
 
     target_sources(${TARGET_NAME} PRIVATE
         M62429/M62429.cpp
-        pico_pic.c
+        system/pico_pic.c
     )
     pico_generate_pio_header(${TARGET_NAME} ${CMAKE_CURRENT_LIST_DIR}/M62429/M62429.pio)
-    pico_generate_pio_header(${TARGET_NAME} ${CMAKE_CURRENT_LIST_DIR}/isa_io.pio)
+    pico_generate_pio_header(${TARGET_NAME} ${CMAKE_CURRENT_LIST_DIR}/isa/isa_io.pio)
 
     if(SOUND_MPU)
         target_sources(${TARGET_NAME} PRIVATE mpu401/mpu401.c mpu401/midi.c)
@@ -216,9 +221,9 @@ function(build_gus TARGET_NAME MULTIFW)
     config_target(${TARGET_NAME} ${MULTIFW})
     pico_set_program_name(${TARGET_NAME} "picogus-gus")
     target_sources(${TARGET_NAME} PRIVATE
-        volctrl.cpp
+        audio/volctrl.cpp
         gusplay.cpp
-        isa_dma.c
+        isa/isa_dma.c
     )
     target_compile_definitions(${TARGET_NAME} PRIVATE
         SOUND_GUS=1
@@ -240,7 +245,7 @@ function(build_gus TARGET_NAME MULTIFW)
         SCALE_22K_TO_44K=1
         # FORCE_28CH_27CH=1
     )
-    pico_generate_pio_header(${TARGET_NAME} ${CMAKE_CURRENT_LIST_DIR}/isa_dma.pio)
+    pico_generate_pio_header(${TARGET_NAME} ${CMAKE_CURRENT_LIST_DIR}/isa/isa_dma.pio)
     target_link_libraries(${TARGET_NAME} rp2040-psram hardware_interp)
 endfunction()
 
@@ -254,12 +259,12 @@ function(build_sb TARGET_NAME MULTIFW)
     config_target(${TARGET_NAME} ${MULTIFW})
     pico_set_program_name(${TARGET_NAME} "picogus-sb")
     target_sources(${TARGET_NAME} PRIVATE
-        volctrl.cpp
-        sbdsp.cpp
+        audio/volctrl.cpp
+        sbdsp/sbdsp.cpp
         sbplay.cpp
-        isa_dma.c
-        audio_fifo.c
-        audio_i2s_minimal.c
+        isa/isa_dma.c
+        audio/audio_fifo.c
+        audio/audio_i2s_minimal.c
     )
     target_compile_definitions(${TARGET_NAME} PRIVATE
         SOUND_SB=1
@@ -271,7 +276,7 @@ function(build_sb TARGET_NAME MULTIFW)
         # AUDIO_CALLBACK_CORE0=1
     )
     target_link_libraries(${TARGET_NAME} resampler)
-    pico_generate_pio_header(${TARGET_NAME} ${CMAKE_CURRENT_LIST_DIR}/isa_dma.pio)
+    pico_generate_pio_header(${TARGET_NAME} ${CMAKE_CURRENT_LIST_DIR}/isa/isa_dma.pio)
 endfunction()
 
 ################################################################################
@@ -284,9 +289,9 @@ function(build_adlib TARGET_NAME MULTIFW)
     config_target(${TARGET_NAME} ${MULTIFW})
     pico_set_program_name(${TARGET_NAME} "picogus-adlib")
     target_sources(${TARGET_NAME} PRIVATE
-        volctrl.cpp
+        audio/volctrl.cpp
         sbplay.cpp
-        audio_i2s_minimal.c
+        audio/audio_i2s_minimal.c
     )  
     target_link_libraries(${TARGET_NAME} resampler)
 endfunction()
@@ -320,7 +325,7 @@ function(build_psg TARGET_NAME MULTIFW)
         SOUND_CMS=1
     )
     target_sources(${TARGET_NAME} PRIVATE
-        volctrl.cpp
+        audio/volctrl.cpp
         square/square.cpp
     )
     target_sources(${TARGET_NAME} PRIVATE psgplay.cpp)
@@ -339,7 +344,7 @@ function(build_usb TARGET_NAME MULTIFW)
         USB_ONLY=1
     )
     target_sources(${TARGET_NAME} PRIVATE 
-        volctrl.cpp
+        audio/volctrl.cpp
         usbplay.cpp
     )
 endfunction()
@@ -434,11 +439,14 @@ if(PROJECT_TYPE STREQUAL "MULTIFW")
     add_dependencies(pg-usb-multifw pg-usb generate_flash_firmware_h)
 
     add_executable(bootloader)
-    target_sources(bootloader PRIVATE multifw/bootloader.c flash_settings.c)
+    target_sources(bootloader PRIVATE multifw/bootloader.c system/flash_settings.c)
     target_link_libraries(bootloader PRIVATE pico_stdlib hardware_flash pico_flash hardware_exception)
     pico_add_extra_outputs(bootloader)
     # set_linker_script(bootloader ${CMAKE_SOURCE_DIR}/multifw/bootloader.ld)
-    target_include_directories(bootloader PRIVATE ${CMAKE_BINARY_DIR}/generated/multifw)
+    target_include_directories(bootloader PRIVATE 
+        ${CMAKE_CURRENT_LIST_DIR}
+        ${CMAKE_BINARY_DIR}/generated/multifw
+    )
     pico_enable_stdio_uart(bootloader 0)
     pico_enable_stdio_usb(bootloader 0)
     pico_enable_stdio_semihosting(bootloader 0)

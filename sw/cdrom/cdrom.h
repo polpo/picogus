@@ -136,7 +136,7 @@ typedef struct cdrom_fifo_t {
 
 
 #if USE_CD_AUDIO_FIFO
-#include "../audio_fifo.h"
+#include "audio/audio_fifo.h"
 #endif
 
 typedef struct cdrom {

@@ -23,7 +23,7 @@
 #include <sstream>
 #include <cmath>
 
-#include "dosbox-x-compat.h"
+#include "include/dosbox-x-compat.h"
 
 #include "hardware/gpio.h"
 #ifdef PSRAM
@@ -38,12 +38,12 @@ extern psram_spi_inst_t psram_spi;
 #include "pico/critical_section.h"
 critical_section_t gus_crit;
 
-#include "pico_pic.h"
-#include "isa_dma.h"
+#include "system/pico_pic.h"
+#include "isa/isa_dma.h"
 extern dma_inst_t dma_config;
 
-#include "clamp.h"
-#include "volctrl.h"
+#include "audio/clamp.h"
+#include "audio/volctrl.h"
 
 using namespace std;
 

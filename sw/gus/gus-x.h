@@ -1,6 +1,6 @@
 #pragma once
 
-#include "dosbox-x-compat.h"
+#include "include/dosbox-x-compat.h"
 
 extern void GUS_OnReset(Bitu base_port);
 extern Bitu read_gus(Bitu port);

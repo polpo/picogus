@@ -2,8 +2,8 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
-#include "pico_pic.h"
-#include "volctrl.h"
+#include "system/pico_pic.h"
+#include "audio/volctrl.h"
 #include "sbdsp.h"
 
 /*
@@ -37,7 +37,7 @@ SPDX-License-Identifier: MIT
 
 extern uint LED_PIN;
 
-#include "isa_dma.h"
+#include "isa/isa_dma.h"
 
 #ifndef MAX
 #define MAX(x, y) (((x) > (y)) ? (x) : (y))
@@ -89,7 +89,7 @@ static dma_inst_t dma_config;
 
 // #define DSP_DMA_FIFO_SIZE       256
 // constexpr uint16_t DSP_DMA_FIFO_BITS = DSP_DMA_FIFO_SIZE - 1;
-#include "audio_fifo.h"
+#include "audio/audio_fifo.h"
 
 #define DSP_UNUSED_STATUS_BITS_PULLED_HIGH 0x7F
 

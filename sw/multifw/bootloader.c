@@ -5,7 +5,7 @@
 #include "hardware/structs/watchdog.h"
 #include <hardware/flash.h>
 #include "flash_firmware.h"
-#include "../flash_settings.h"
+#include "system/flash_settings.h"
 #include <stdio.h>
 
 static uint32_t sStart = 0;

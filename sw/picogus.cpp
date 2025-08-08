@@ -27,8 +27,8 @@
 #include "hardware/vreg.h"
 #include "hardware/clocks.h"
 
-#include "pico_reflash.h"
-#include "flash_settings.h"
+#include "system/pico_reflash.h"
+#include "system/flash_settings.h"
 
 // For multifw
 #include "hardware/watchdog.h"
@@ -61,7 +61,7 @@ M62429* m62429;
 
 
 #ifdef SOUND_SB
-#include "sbdsp.h"
+#include "sbdsp/sbdsp.h"
 static uint16_t sb_port_test;
 #endif
 #ifdef SOUND_OPL
@@ -70,7 +70,7 @@ void play_adlib(void);
 extern "C" int OPL_Pico_Init(unsigned int);
 extern "C" unsigned int OPL_Pico_PortRead(opl_port_t);
 #if OPL_CMD_BUFFER
-#include "cmd_buffers.h"
+#include "include/cmd_buffers.h"
 cms_buffer_t opl_cmd_buffer = { {0}, 0, 0 };
 #else
 extern "C" void OPL_Pico_WriteRegister(unsigned int reg_num, unsigned int value);
@@ -95,8 +95,8 @@ static uint32_t cur_read_idx;
 #endif
 
 #ifdef SOUND_GUS
-#include "gus-x.cpp"
-#include "isa_dma.h"
+#include "gus/gus-x.cpp"
+#include "isa/isa_dma.h"
 dma_inst_t dma_config;
 static uint16_t gus_port_test;
 void play_gus(void);
@@ -111,7 +111,7 @@ void play_mpu(void);
 #endif
 
 #if SOUND_TANDY || SOUND_CMS
-#include "cmd_buffers.h"
+#include "include/cmd_buffers.h"
 #include "square/square.h"
 void play_psg(void);
 #endif
@@ -147,7 +147,7 @@ void play_usb(void);
 #endif
 
 #if SOUND_GUS || SOUND_SB || SOUND_OPL || CDROM || SOUND_TANDY || SOUND_CMS
-#include "volctrl.h"
+#include "audio/volctrl.h"
 #endif
 
 

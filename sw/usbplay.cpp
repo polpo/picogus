@@ -29,12 +29,12 @@
 #endif
 
 #ifdef SOUND_MPU
-#include "flash_settings.h"
+#include "system/flash_settings.h"
 extern Settings settings;
 #include "mpu401/export.h"
 #endif
 
-#include "pico_pic.h"
+#include "system/pico_pic.h"
 
 #ifdef CDROM
 #define SAMPLES_PER_BUFFER 256

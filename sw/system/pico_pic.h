@@ -23,7 +23,7 @@
 #include "pico/time.h"
 #include "hardware/gpio.h"
 
-#include "dosbox-x-compat.h"
+#include "include/dosbox-x-compat.h"
 
 #define IRQ_PIN 21 // TODO don't spread around pin definitions like this
 

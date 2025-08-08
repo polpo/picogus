@@ -45,7 +45,7 @@ Modifications for use with Pico by Kevin Moonlight (me@yyzkevin.com)
 #include "cyw43_stats.h"
 #include "ne2000.h"
 
-#include "../pico_pic.h"
+#include "system/pico_pic.h"
 
 uint8_t ne2000_asic_read(uint16_t offset, void *p) ;
 void ne2000_asic_write(uint16_t offset, uint8_t value, void *p);

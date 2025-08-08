@@ -32,7 +32,7 @@ SPDX-License-Identifier: MIT
 
 #include <inttypes.h>
 #include <stdbool.h>
-#include "audio_fifo.h"
+#include "audio/audio_fifo.h"
 
 typedef struct sbdsp_t {
     uint8_t inbox;

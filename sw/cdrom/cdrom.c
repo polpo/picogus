@@ -32,7 +32,7 @@
 #include "cdrom_error_msg.h"
 #include "pico/multicore.h"
 #include "hardware/structs/timer.h"
-#include "../volctrl.h"
+#include "audio/volctrl.h"
 
 
 /* The addresses sent from the guest are absolute, ie. a LBA of 0 corresponds to a MSF of 00:00:00. Otherwise, the counter displayed by the guest is wrong:

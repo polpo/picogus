@@ -31,8 +31,8 @@
 
 #include "square/square.h"
 
-#include "cmd_buffers.h"
-#include "volctrl.h"
+#include "include/cmd_buffers.h"
+#include "audio/volctrl.h"
 
 #if SOUND_TANDY
 extern tandy_buffer_t tandy_buffer;
@@ -47,7 +47,7 @@ extern uint LED_PIN;
 #include "tusb.h"
 #endif
 #if defined(USB_MOUSE) || defined(SOUND_MPU)
-#include "pico_pic.h"
+#include "system/pico_pic.h"
 #endif
 
 #ifdef USB_MOUSE
@@ -63,7 +63,7 @@ bi_decl(bi_3pins_with_names(PICO_AUDIO_I2S_DATA_PIN, "I2S DIN", PICO_AUDIO_I2S_C
 #endif
 
 #ifdef SOUND_MPU
-#include "flash_settings.h"
+#include "system/flash_settings.h"
 extern Settings settings;
 #include "mpu401/export.h"
 #endif

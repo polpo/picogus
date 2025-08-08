@@ -29,30 +29,30 @@
 #endif
 
 #include "pico/stdlib.h"
-#include "audio_i2s_minimal.h"
+#include "audio/audio_i2s_minimal.h"
 #include <resampler.hpp>
-#include "volctrl.h"
+#include "audio/volctrl.h"
 
 #include "opl.h"
 extern "C" void OPL_Pico_simple(int16_t *buffer, uint32_t nsamples);
 extern "C" void OPL_Pico_WriteRegister(unsigned int reg_num, unsigned int value);
 
-#include "audio_fifo.h"
+#include "audio/audio_fifo.h"
 #if SOUND_SB
-#include "sbdsp.h"
+#include "sbdsp/sbdsp.h"
 #endif // SOUND_SB
 #if defined(SOUND_SB) || defined(USB_MOUSE) || defined(SOUND_MPU)
-#include "pico_pic.h"
+#include "system/pico_pic.h"
 #endif
 
 #if CDROM
 #include "cdrom/cdrom.h"
 #endif // CDROM
 
-#include "clamp.h"
+#include "audio/clamp.h"
 
 #if OPL_CMD_BUFFER
-#include "cmd_buffers.h"
+#include "include/cmd_buffers.h"
 extern cms_buffer_t opl_cmd_buffer;
 #endif
 
@@ -65,7 +65,7 @@ extern cms_buffer_t opl_cmd_buffer;
 #endif
 
 #ifdef SOUND_MPU
-#include "flash_settings.h"
+#include "system/flash_settings.h"
 extern Settings settings;
 #include "mpu401/export.h"
 #endif

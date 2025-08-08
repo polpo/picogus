@@ -19,7 +19,7 @@
 #include <string.h>
 #include <stdio.h>
 
-#include "flash_settings.h"
+#include "system/flash_settings.h"
 #include "pico/stdlib.h"
 #include "volctrl.h"
 extern Settings settings;

@@ -47,7 +47,7 @@ typedef uint16_t Bit16u;
 typedef int32_t Bits;
 typedef int8_t Bit8s;
 
-#include "../pico_pic.h"
+#include "system/pico_pic.h"
 
 void MIDI_Init(bool delaysysex,bool fakeallnotesoff);
 void MIDI_RawOutByte(Bit8u data);

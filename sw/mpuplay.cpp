@@ -18,10 +18,10 @@
 
 #include <stdio.h>
 
-#include "flash_settings.h"
+#include "system/flash_settings.h"
 extern Settings settings;
 
-#include "pico_pic.h"
+#include "system/pico_pic.h"
 
 #ifdef USB_STACK
 #include "tusb.h"

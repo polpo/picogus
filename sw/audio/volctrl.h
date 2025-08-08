@@ -24,7 +24,7 @@ extern "C" {
 #include <stdint.h>
 #include <stdbool.h>
 #include "../common/picogus.h"
-#include "flash_settings.h"
+#include "system/flash_settings.h"
 #include "clamp.h"
 
 extern int32_t opl_volume;
