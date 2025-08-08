@@ -61,11 +61,8 @@ M62429* m62429;
 
 
 #ifdef SOUND_SB
+#include "sbdsp.h"
 static uint16_t sb_port_test;
-extern void sbdsp_write(uint8_t address, uint8_t value);
-extern uint8_t sbdsp_read(uint8_t address);
-extern void sbdsp_init();
-extern void sbdsp_process();
 #endif
 #ifdef SOUND_OPL
 #include "opl.h"

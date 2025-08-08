@@ -4,6 +4,7 @@
 #include <string.h>
 #include "pico_pic.h"
 #include "volctrl.h"
+#include "sbdsp.h"
 
 /*
 Title  : SoundBlaster DSP Emulation 
@@ -92,45 +93,7 @@ static dma_inst_t dma_config;
 
 #define DSP_UNUSED_STATUS_BITS_PULLED_HIGH 0x7F
 
-typedef struct sbdsp_t {
-    uint8_t inbox;
-    uint8_t outbox;
-    uint8_t test_register;
-    uint8_t current_command;
-    uint8_t current_command_index;
-
-    uint16_t dma_interval;     
-    int16_t dma_interval_trim;
-    audio_fifo_t audio_fifo;
-
-    uint16_t dac_pause_duration;
-    uint8_t dac_pause_duration_low;
-
-    uint16_t dma_block_size;
-    uint32_t dma_sample_count;
-    uint32_t dma_sample_count_rx;
-
-    uint8_t time_constant;
-    uint16_t sample_rate;
-                
-    bool autoinit;    
-    bool dma_enabled;
-
-    bool speaker_on;
-        
-    volatile bool dav_pc;
-    volatile bool dav_dsp;
-    volatile bool dsp_busy;
-    bool dac_resume_pending;
-
-    uint8_t reset_state;  
-   
-#ifdef SB_BUFFERLESS
-    volatile int16_t cur_sample;
-#endif
-} sbdsp_t;
-
-static sbdsp_t sbdsp;
+sbdsp_t sbdsp;
 
 #ifndef SB_BUFFERLESS
 
@@ -226,12 +189,6 @@ static uint32_t DSP_DAC_Resume_eventHandler(Bitu val) {
 static PIC_TimerEvent DSP_DAC_Resume_event = {
     .handler = DSP_DAC_Resume_eventHandler,
 };
-
-#ifdef SB_BUFFERLESS
-int16_t sbdsp_sample() {
-    return (sbdsp.speaker_on & ~sbdsp.dac_resume_pending) ? sbdsp.cur_sample : 0;
-}
-#endif
 
 int16_t sbdsp_muted() {
     return (!sbdsp.speaker_on || sbdsp.dac_resume_pending);

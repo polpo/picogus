@@ -39,8 +39,7 @@ extern "C" void OPL_Pico_WriteRegister(unsigned int reg_num, unsigned int value)
 
 #include "audio_fifo.h"
 #if SOUND_SB
-extern int16_t sbdsp_sample();
-extern void sbdsp_init();
+#include "sbdsp.h"
 #endif // SOUND_SB
 #if defined(SOUND_SB) || defined(USB_MOUSE) || defined(SOUND_MPU)
 #include "pico_pic.h"
