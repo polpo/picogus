@@ -25,6 +25,7 @@ extern "C" {
 #include <stdbool.h>
 #include "../common/picogus.h"
 #include "flash_settings.h"
+#include "clamp.h"
 
 extern int32_t opl_volume;
 extern int32_t sb_volume;
@@ -34,7 +35,15 @@ extern int32_t psg_volume;
 
 
 extern int32_t set_volume_scale (uint8_t percent);
-extern int32_t scale_sample (int32_t sample, int32_t scale, int clamp);
+
+static inline int32_t scale_sample (int32_t sample, int32_t scale, int clamp) {
+    sample = (sample * scale) >> 16;
+
+    if (clamp)
+        sample = clamp16(sample);
+
+    return sample;
+}
 
 void set_volume(uint16_t mode);
 

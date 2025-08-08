@@ -22,8 +22,6 @@
 #include "flash_settings.h"
 #include "pico/stdlib.h"
 #include "volctrl.h"
-#include "clamp.h"
-#include "flash_settings.h"
 extern Settings settings;
 
 int32_t opl_volume = 0x10000; // default 1.0x volume
@@ -47,14 +45,6 @@ int32_t set_volume_scale (uint8_t percent) {
     return volume;
 }
 
-int32_t scale_sample (int32_t sample, int32_t scale, int clamp) {
-    sample = (sample * scale) >> 16;
-
-    if (clamp)
-        clamp16(sample);
-
-    return sample;
-}
 
 void set_volume(uint16_t mode) {
 
