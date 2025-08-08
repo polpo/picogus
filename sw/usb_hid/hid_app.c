@@ -246,6 +246,13 @@ static inline void process_generic_report(uint8_t dev_addr, uint8_t instance, ui
 {
     (void) dev_addr;
 
+#ifdef USB_JOYSTICK
+    if (is_sony_ds4(dev_addr)) {
+        process_sony_ds4(report, len);
+        return;
+    }
+#endif
+
     uint8_t const rpt_count = hid_info[instance].report_count;
     tuh_hid_report_info_t* rpt_info_arr = hid_info[instance].report_info;
     tuh_hid_report_info_t* rpt_info = NULL;
@@ -291,11 +298,6 @@ static inline void process_generic_report(uint8_t dev_addr, uint8_t instance, ui
             break;
         case HID_USAGE_DESKTOP_JOYSTICK:
             TU_LOG1("HID receive joystick report\r\n");
-#ifdef USB_JOYSTICK
-            if (is_sony_ds4(dev_addr)) {
-                process_sony_ds4(report, len);
-            }
-#endif
             break;
         case HID_USAGE_DESKTOP_GAMEPAD:
             TU_LOG1("HID receive gamepad report\r\n");
