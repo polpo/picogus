@@ -169,60 +169,60 @@ __force_inline void select_picogus(uint8_t value) {
     // printf("select picogus %x\n", value);
     sel_reg = value;
     switch (sel_reg) {
-    case MODE_MAGIC: // Magic string
-    case MODE_PROTOCOL: // Protocol version
+    case CMD_MAGIC: // Magic string
+    case CMD_PROTOCOL: // Protocol version
         break;
-    case MODE_FWSTRING: // Firmware string
+    case CMD_FWSTRING: // Firmware string
         cur_read = 0;
         break;
-    case MODE_BOOTMODE: // Mode (GUS, OPL, MPU, etc...)
+    case CMD_BOOTMODE: // Mode (GUS, OPL, MPU, etc...)
         break;
-    case MODE_GUSPORT: // GUS Base port
-    case MODE_OPLPORT: // Adlib Base port
-    case MODE_SBPORT: // SB Base port
-    case MODE_MPUPORT: // MPU Base port
-    case MODE_TANDYPORT: // Tandy Base port
-    case MODE_CMSPORT: // CMS Base port
+    case CMD_GUSPORT: // GUS Base port
+    case CMD_OPLPORT: // Adlib Base port
+    case CMD_SBPORT: // SB Base port
+    case CMD_MPUPORT: // MPU Base port
+    case CMD_TANDYPORT: // Tandy Base port
+    case CMD_CMSPORT: // CMS Base port
         basePort_low = 0;
         break;
-    case MODE_JOYEN: // enable joystick
+    case CMD_JOYEN: // enable joystick
         break;
-    case MODE_GUSBUF: // Audio buffer size
-    case MODE_GUSDMA: // DMA interval
-    case MODE_GUS44K: // Force 44k
+    case CMD_GUSBUF: // Audio buffer size
+    case CMD_GUSDMA: // DMA interval
+    case CMD_GUS44K: // Force 44k
         break;
-    case MODE_WTVOL: // Wavetable mixer volume
+    case CMD_WTVOL: // Wavetable mixer volume
         break;
-    case MODE_MPUDELAY: // MPU sysex delay
-    case MODE_MPUFAKE: // MPU fake all notes off
+    case CMD_MPUDELAY: // MPU sysex delay
+    case CMD_MPUFAKE: // MPU fake all notes off
         break;
-    case MODE_OPLWAIT: // Adlib speed sensitive fix
+    case CMD_OPLWAIT: // Adlib speed sensitive fix
         break;
-    case MODE_MOUSEPORT:
+    case CMD_MOUSEPORT:
         basePort_low = 0;
         break;
-    case MODE_MOUSEPROTO:
-    case MODE_MOUSERATE:
-    case MODE_MOUSESEN:
+    case CMD_MOUSEPROTO:
+    case CMD_MOUSERATE:
+    case CMD_MOUSESEN:
         break;
-    case MODE_NE2KPORT:
+    case CMD_NE2KPORT:
         basePort_low = 0;
         break;
-    case MODE_WIFISSID:
+    case CMD_WIFISSID:
         memset(settings.WiFi.ssid, 0, sizeof(settings.WiFi.ssid));
         cur_write = 0;
         break;
-    case MODE_WIFIPASS:
+    case CMD_WIFIPASS:
         memset(settings.WiFi.password, 0, sizeof(settings.WiFi.password));
         cur_write = 0;
         break;
-    case MODE_WIFIAPPLY:
-    case MODE_WIFISTAT:
+    case CMD_WIFIAPPLY:
+    case CMD_WIFISTAT:
         break;
-    case MODE_CDPORT: // CMS Base port
+    case CMD_CDPORT: // CMS Base port
         basePort_low = 0;
         break;
-    case MODE_CDLIST:
+    case CMD_CDLIST:
 #ifdef CDROM
         if (cdrom.image_status == CD_STATUS_IDLE) {
             cdrom.image_status = CD_STATUS_BUSY;
@@ -234,28 +234,28 @@ __force_inline void select_picogus(uint8_t value) {
         cur_read_idx = 0;
 #endif
         break;
-    case MODE_CDSTATUS:
-    case MODE_CDLOAD:
-    case MODE_CDAUTOADV:
-    case MODE_MAINVOL:
-    case MODE_OPLVOL:
-    case MODE_SBVOL:
-    case MODE_CDVOL:
-    case MODE_GUSVOL:
-    case MODE_PSGVOL:
+    case CMD_CDSTATUS:
+    case CMD_CDLOAD:
+    case CMD_CDAUTOADV:
+    case CMD_MAINVOL:
+    case CMD_OPLVOL:
+    case CMD_SBVOL:
+    case CMD_CDVOL:
+    case CMD_GUSVOL:
+    case CMD_PSGVOL:
         break;
-    case MODE_CDNAME:
+    case CMD_CDNAME:
         cur_write = 0;
-    case MODE_CDERROR:
+    case CMD_CDERROR:
         cur_read = 0;
         break;
-    case MODE_SAVE: // Select save settings register
-    case MODE_REBOOT: // Select reboot register
-    case MODE_DEFAULTS: // Select reset to defaults register
+    case CMD_SAVE: // Select save settings register
+    case CMD_REBOOT: // Select reboot register
+    case CMD_DEFAULTS: // Select reset to defaults register
         break;
-    case MODE_HWTYPE: // Hardware version
+    case CMD_HWTYPE: // Hardware version
         break;
-    case MODE_FLASH: // Firmware write mode
+    case CMD_FLASH: // Firmware write mode
         pico_firmware_start();
         break;
     default:
@@ -266,17 +266,17 @@ __force_inline void select_picogus(uint8_t value) {
 
 __force_inline void write_picogus_low(uint8_t value) {
     switch (sel_reg) {
-    case MODE_GUSPORT: // GUS Base port
-    case MODE_OPLPORT: // Adlib Base port
-    case MODE_SBPORT: // SB Base port
-    case MODE_MPUPORT: // MPU Base port
-    case MODE_TANDYPORT: // Tandy Base port
-    case MODE_CMSPORT: // CMS Base port
-    case MODE_MOUSEPORT:  // USB Mouse port (0 - disabled)
-    case MODE_CDPORT:  // USB Mouse port (0 - disabled)
+    case CMD_GUSPORT: // GUS Base port
+    case CMD_OPLPORT: // Adlib Base port
+    case CMD_SBPORT: // SB Base port
+    case CMD_MPUPORT: // MPU Base port
+    case CMD_TANDYPORT: // Tandy Base port
+    case CMD_CMSPORT: // CMS Base port
+    case CMD_MOUSEPORT:  // USB Mouse port (0 - disabled)
+    case CMD_CDPORT:  // USB Mouse port (0 - disabled)
         basePort_low = value;
         break;
-    case MODE_MOUSESEN:  // USB Mouse Sensitivity (8.8 fixedpoint)
+    case CMD_MOUSESEN:  // USB Mouse Sensitivity (8.8 fixedpoint)
         mouseSensitivity_low = value;
         break;
     }
@@ -284,128 +284,128 @@ __force_inline void write_picogus_low(uint8_t value) {
 
 __force_inline void write_picogus_high(uint8_t value) {
     switch (sel_reg) {
-    case MODE_GUSPORT: // GUS Base port
+    case CMD_GUSPORT: // GUS Base port
         settings.GUS.basePort = (value || basePort_low) ? ((value << 8) | basePort_low) : 0xFFFF;
 #ifdef SOUND_GUS
         gus_port_test = settings.GUS.basePort >> 4 | 0x10;
 #endif
         break;
-    case MODE_OPLPORT: // Adlib Base port
+    case CMD_OPLPORT: // Adlib Base port
         settings.SB.oplBasePort = (value || basePort_low) ? ((value << 8) | basePort_low) : 0xFFFF;
         break;
-    case MODE_SBPORT: // SB Base port
+    case CMD_SBPORT: // SB Base port
         settings.SB.basePort = (value || basePort_low) ? ((value << 8) | basePort_low) : 0xFFFF;
 #ifdef SOUND_SB
         sb_port_test = settings.SB.basePort >> 4;
 #endif
         break;
-    case MODE_MPUPORT: // MPU Base port
+    case CMD_MPUPORT: // MPU Base port
         settings.MPU.basePort = (value || basePort_low) ? ((value << 8) | basePort_low) : 0xFFFF;
         break;
-    case MODE_TANDYPORT: // Tandy Base port
+    case CMD_TANDYPORT: // Tandy Base port
         settings.Tandy.basePort = (value || basePort_low) ? ((value << 8) | basePort_low) : 0xFFFF;
         break;
-    case MODE_CMSPORT: // CMS Base port
+    case CMD_CMSPORT: // CMS Base port
         settings.CMS.basePort = (value || basePort_low) ? ((value << 8) | basePort_low) : 0xFFFF;
         break;
-    case MODE_JOYEN: // enable joystick
+    case CMD_JOYEN: // enable joystick
         settings.Joy.basePort = value ? 0x201u : 0xffff;
         break;
-    case MODE_GUSBUF: // GUS audio buffer size
+    case CMD_GUSBUF: // GUS audio buffer size
         // Value is sent by pgusinit as the size - 1, so we need to add 1 back to it
         settings.GUS.audioBuffer = value + 1;
 #ifdef SOUND_GUS
         GUS_SetAudioBuffer(settings.GUS.audioBuffer);
 #endif
         break;
-    case MODE_GUSDMA: // GUS DMA interval
+    case CMD_GUSDMA: // GUS DMA interval
         settings.GUS.dmaInterval = value;
 #ifdef SOUND_GUS
         GUS_SetDMAInterval(settings.GUS.dmaInterval);
 #endif
         break;
-    case MODE_GUS44K: // Force 44k output
+    case CMD_GUS44K: // Force 44k output
         settings.GUS.force44k = value;
 #ifdef SOUND_GUS
         GUS_SetFixed44k(settings.GUS.force44k);
 #endif
         break;
-    case MODE_WTVOL: // Wavetable mixer volume
+    case CMD_WTVOL: // Wavetable mixer volume
         settings.Global.waveTableVolume = value;
         if (BOARD_TYPE == PICOGUS_2) {
             m62429->setVolume(M62429_BOTH, settings.Global.waveTableVolume);
         }
         break;
-    case MODE_MPUDELAY: // MPU SYSEX delay
+    case CMD_MPUDELAY: // MPU SYSEX delay
         settings.MPU.delaySysex = value;
 #ifdef SOUND_MPU
         MPU401_Init(settings.MPU.delaySysex, settings.MPU.fakeAllNotesOff);
 #endif
         break;
-    case MODE_MPUFAKE: // MPU fake all notes off
+    case CMD_MPUFAKE: // MPU fake all notes off
         settings.MPU.fakeAllNotesOff = value;
 #ifdef SOUND_MPU
         MPU401_Init(settings.MPU.delaySysex, settings.MPU.fakeAllNotesOff);
 #endif
         break;
-    case MODE_OPLWAIT: // Adlib speed sensitive fix
+    case CMD_OPLWAIT: // Adlib speed sensitive fix
         settings.SB.oplSpeedSensitive = value;
         break;
-    case MODE_MOUSEPORT:  // USB Mouse port (0 - disabled)
+    case CMD_MOUSEPORT:  // USB Mouse port (0 - disabled)
         settings.Mouse.basePort = (value || basePort_low) ? ((value << 8) | basePort_low) : 0xFFFF;
         break;
-    case MODE_MOUSEPROTO:  // USB Mouse protocol
+    case CMD_MOUSEPROTO:  // USB Mouse protocol
         settings.Mouse.protocol = value;
 #ifdef USB_MOUSE
         sermouse_set_protocol(settings.Mouse.protocol);
 #endif
         break;
-    case MODE_MOUSERATE:  // USB Mouse Report Rate
+    case CMD_MOUSERATE:  // USB Mouse Report Rate
         settings.Mouse.reportRate = value;
 #ifdef USB_MOUSE
         sermouse_set_report_rate_hz(settings.Mouse.reportRate);
 #endif
         break;
-    case MODE_MOUSESEN:  // USB Mouse Sensitivity (8.8 fixedpoint)
+    case CMD_MOUSESEN:  // USB Mouse Sensitivity (8.8 fixedpoint)
         settings.Mouse.sensitivity = (value << 8) | (mouseSensitivity_low & 0xFF);
 #ifdef USB_MOUSE
         sermouse_set_sensitivity(settings.Mouse.sensitivity);
 #endif
         break;
-    case MODE_NE2KPORT: // NE2000 Base port
+    case CMD_NE2KPORT: // NE2000 Base port
         settings.NE2K.basePort = (value || basePort_low) ? ((value << 8) | basePort_low) : 0xFFFF;
         break;
-    case MODE_WIFISSID:
+    case CMD_WIFISSID:
         settings.WiFi.ssid[cur_write++] = value;
         break;
-    case MODE_WIFIPASS:
+    case CMD_WIFIPASS:
         settings.WiFi.password[cur_write++] = value;
         /* printf("%s\n", settings.WiFi.password); */
         break;
-    case MODE_WIFIAPPLY:
+    case CMD_WIFIAPPLY:
         printf("Applying wifi settings: %s %s\n", settings.WiFi.ssid, settings.WiFi.password);
 #ifdef PICOW
         PG_Wifi_Connect(settings.WiFi.ssid, settings.WiFi.password);
 #endif
         break;
-    case MODE_WIFISTAT:
+    case CMD_WIFISTAT:
 #ifdef PICOW
         multicore_fifo_push_blocking(FIFO_WIFI_STATUS);
 #endif
         break;
-    case MODE_CDPORT: // CD Base port
+    case CMD_CDPORT: // CD Base port
         settings.CD.basePort = (value || basePort_low) ? ((value << 8) | basePort_low) : 0xFFFF;
 #ifdef CDROM
         cdrom_port_test = settings.CD.basePort >> 4;
 #endif
         break;
 #ifdef CDROM
-    case MODE_CDLOAD: // Load CD image
+    case CMD_CDLOAD: // Load CD image
         cdrom.image_data = value;
         cdrom.image_status = CD_STATUS_BUSY;
         cdrom.image_command = CD_COMMAND_IMAGE_LOAD_INDEX;
         break;
-    case MODE_CDNAME:
+    case CMD_CDNAME:
         if (!cur_write) {
             memset(cdrom.image_path, 0, sizeof(cdrom.image_path));
         }
@@ -417,69 +417,69 @@ __force_inline void write_picogus_high(uint8_t value) {
         }
         break;
 #endif
-    case MODE_CDAUTOADV: // enable auto advance of CD image on USB reinsert
+    case CMD_CDAUTOADV: // enable auto advance of CD image on USB reinsert
         settings.CD.autoAdvance = value;
 #ifdef CDROM
         cdman_set_autoadvance(settings.CD.autoAdvance);
 #endif
         break;
 
-    case MODE_MAINVOL: // Set the volume for CD Audio
+    case CMD_MAINVOL: // Set the volume for CD Audio
         settings.Volume.mainVol = value;
 
 #if SOUND_GUS || SOUND_SB || SOUND_OPL || CDROM || SOUND_TANDY || SOUND_CMS
-        set_volume(MODE_MAINVOL);
+        set_volume(CMD_MAINVOL);
 #endif
         break;
-    case MODE_OPLVOL: // Set the volume for Adlib
+    case CMD_OPLVOL: // Set the volume for Adlib
         settings.Volume.oplVol = value;
-#ifdef SOUND_SB
-        set_volume(MODE_OPLVOL);
+#ifdef SOUND_OPL
+        set_volume(CMD_OPLVOL);
 #endif
         break;
-    case MODE_SBVOL: // Set the volume for Sound Blaster
+    case CMD_SBVOL: // Set the volume for Sound Blaster
         settings.Volume.sbVol = value;
 #ifdef SOUND_SB
-        set_volume(MODE_SBVOL);
+        set_volume(CMD_SBVOL);
 #endif
         break;
-        case MODE_CDVOL: // Set the volume for CD Audio
+        case CMD_CDVOL: // Set the volume for CD Audio
         settings.Volume.cdVol = value;
 #ifdef CDROM
-        set_volume(MODE_CDVOL);
+        set_volume(CMD_CDVOL);
 #endif
         break;
-        case MODE_GUSVOL: // Set the volume for GUS
+        case CMD_GUSVOL: // Set the volume for GUS
         settings.Volume.gusVol = value;
 #ifdef SOUND_GUS
-        set_volume(MODE_GUSVOL);
+        set_volume(CMD_GUSVOL);
 #endif
         break;
-        case MODE_PSGVOL: // Set the volume for PSG
+        case CMD_PSGVOL: // Set the volume for PSG
         settings.Volume.psgVol = value;
-#if SOUND_PSG || SOUND_TANDY || SOUND_CMS
-        set_volume(MODE_PSGVOL);
+#if SOUND_TANDY || SOUND_CMS
+        set_volume(CMD_PSGVOL);
 #endif
         break;
 
     // For multifw
-    case MODE_BOOTMODE:
+    case CMD_BOOTMODE:
         settings.startupMode = value;
         printf("requesting startup mode: %u\n", value);
         break;
-    case MODE_SAVE:
+    case CMD_SAVE:
         queueSaveSettings = true;
         break;
-    case MODE_REBOOT:
+    case CMD_REBOOT:
         watchdog_hw->scratch[3] = settings.startupMode;
         printf("rebooting into mode: %u\n", settings.startupMode);
         watchdog_reboot(0, 0, 0);
         break;
-    case MODE_DEFAULTS:
+    case CMD_DEFAULTS:
         getDefaultSettings(&settings);
         processSettings();
         break;
-    case MODE_FLASH: // Firmware write
+    case CMD_FLASH: // Firmware write
         pico_firmware_write(value);
         break;
     }
@@ -487,25 +487,25 @@ __force_inline void write_picogus_high(uint8_t value) {
 
 __force_inline uint8_t read_picogus_low(void) {
     switch (sel_reg) {
-    case MODE_GUSPORT: // GUS Base port
+    case CMD_GUSPORT: // GUS Base port
         return settings.GUS.basePort == 0xFFFF ? 0 : (settings.GUS.basePort & 0xFF);
-    case MODE_OPLPORT: // Adlib Base port
+    case CMD_OPLPORT: // Adlib Base port
         return settings.SB.oplBasePort == 0xFFFF ? 0 : (settings.SB.oplBasePort & 0xFF);
-    case MODE_SBPORT: // SB Base port
+    case CMD_SBPORT: // SB Base port
         return settings.SB.basePort == 0xFFFF ? 0 : (settings.SB.basePort & 0xFF);
-    case MODE_MPUPORT: // MPU Base port
+    case CMD_MPUPORT: // MPU Base port
         return settings.MPU.basePort == 0xFFFF ? 0 : (settings.MPU.basePort & 0xFF);
-    case MODE_TANDYPORT: // Tandy Base port
+    case CMD_TANDYPORT: // Tandy Base port
         return settings.Tandy.basePort == 0xFFFF ? 0 : (settings.Tandy.basePort & 0xFF);
-    case MODE_CMSPORT: // CMS Base port
+    case CMD_CMSPORT: // CMS Base port
         return settings.CMS.basePort == 0xFFFF ? 0 : (settings.CMS.basePort & 0xFF);
-    case MODE_MOUSEPORT:  // USB Mouse port (0 - disabled)
+    case CMD_MOUSEPORT:  // USB Mouse port (0 - disabled)
         return settings.Mouse.basePort == 0xFFFF ? 0 : (settings.Mouse.basePort & 0xFF);
-    case MODE_MOUSESEN:  // USB Mouse Sensitivity (8.8 fixedpoint)
+    case CMD_MOUSESEN:  // USB Mouse Sensitivity (8.8 fixedpoint)
         return settings.Mouse.sensitivity & 0xFF;
-    case MODE_NE2KPORT:  // NE2000 Base port (0 - disabled)
+    case CMD_NE2KPORT:  // NE2000 Base port (0 - disabled)
         return settings.NE2K.basePort == 0xFFFF ? 0 : (settings.NE2K.basePort & 0xFF);
-    case MODE_CDPORT: // SB Base port
+    case CMD_CDPORT: // SB Base port
         return settings.CD.basePort == 0xFFFF ? 0 : (settings.CD.basePort & 0xFF);
     default:
         return 0x0;
@@ -515,76 +515,76 @@ __force_inline uint8_t read_picogus_low(void) {
 __force_inline uint8_t read_picogus_high(void) {
     uint8_t ret;
     switch (sel_reg) {
-    case MODE_MAGIC:  // PicoGUS magic string
+    case CMD_MAGIC:  // PicoGUS magic string
         return 0xdd;
-    case MODE_PROTOCOL:  // PicoGUS protocol version
+    case CMD_PROTOCOL:  // PicoGUS protocol version
         return PICOGUS_PROTOCOL_VER;
-    case MODE_FWSTRING: // Firmware string
+    case CMD_FWSTRING: // Firmware string
         ret = firmware_string[cur_read++];
         if (ret == 0) { // Null terminated
             cur_read = 0;
         }
         return ret;
-    case MODE_BOOTMODE: // Mode (GUS, OPL, MPU, etc...)
+    case CMD_BOOTMODE: // Mode (GUS, OPL, MPU, etc...)
         return settings.startupMode;
-    case MODE_GUSPORT: // GUS Base port
+    case CMD_GUSPORT: // GUS Base port
         return settings.GUS.basePort == 0xFFFF ? 0 : (settings.GUS.basePort >> 8);
-    case MODE_OPLPORT: // Adlib Base port
+    case CMD_OPLPORT: // Adlib Base port
         return settings.SB.oplBasePort == 0xFFFF ? 0 : (settings.SB.oplBasePort >> 8);
-    case MODE_SBPORT: // SB Base port
+    case CMD_SBPORT: // SB Base port
         return settings.SB.basePort == 0xFFFF ? 0 : (settings.SB.basePort >> 8);
-    case MODE_MPUPORT: // MPU Base port
+    case CMD_MPUPORT: // MPU Base port
         return settings.MPU.basePort == 0xFFFF ? 0 : (settings.MPU.basePort >> 8);
-    case MODE_TANDYPORT: // Tandy Base port
+    case CMD_TANDYPORT: // Tandy Base port
         return settings.Tandy.basePort == 0xFFFF ? 0 : (settings.Tandy.basePort >> 8);
-    case MODE_CMSPORT: // CMS Base port
+    case CMD_CMSPORT: // CMS Base port
         return settings.CMS.basePort == 0xFFFF ? 0 : (settings.CMS.basePort >> 8);
-    case MODE_JOYEN: // enable joystick
+    case CMD_JOYEN: // enable joystick
         return settings.Joy.basePort == 0x201u;
-    case MODE_GUSBUF: // GUS audio buffer size
+    case CMD_GUSBUF: // GUS audio buffer size
         return settings.GUS.audioBuffer - 1;
-    case MODE_GUSDMA: // GUS DMA interval
+    case CMD_GUSDMA: // GUS DMA interval
         return settings.GUS.dmaInterval;
-    case MODE_GUS44K: // Force 44k output
+    case CMD_GUS44K: // Force 44k output
         return settings.GUS.force44k;
-    case MODE_WTVOL: // Wavetable mixer volume
+    case CMD_WTVOL: // Wavetable mixer volume
         return (BOARD_TYPE == PICOGUS_2) ? m62429->getVolume(0) : 0;
-    case MODE_MPUDELAY: // SYSEX delay
+    case CMD_MPUDELAY: // SYSEX delay
         return settings.MPU.delaySysex;
-    case MODE_MPUFAKE: // MPU fake all notes off
+    case CMD_MPUFAKE: // MPU fake all notes off
         return settings.MPU.fakeAllNotesOff;
-    case MODE_OPLWAIT: // Adlib speed sensitive fix
+    case CMD_OPLWAIT: // Adlib speed sensitive fix
         return settings.SB.oplSpeedSensitive;
-    case MODE_MOUSEPORT:  // USB Mouse port (0 - disabled)
+    case CMD_MOUSEPORT:  // USB Mouse port (0 - disabled)
         return settings.Mouse.basePort == 0xFFFF ? 0 : (settings.Mouse.basePort >> 8);
-    case MODE_MOUSEPROTO:  // USB Mouse protocol
+    case CMD_MOUSEPROTO:  // USB Mouse protocol
         return settings.Mouse.protocol;
-    case MODE_MOUSERATE:  // USB Mouse Report Rate
+    case CMD_MOUSERATE:  // USB Mouse Report Rate
         return settings.Mouse.reportRate;
-    case MODE_MOUSESEN:  // USB Mouse Sensitivity (8.8 fixedpoint)
+    case CMD_MOUSESEN:  // USB Mouse Sensitivity (8.8 fixedpoint)
         return settings.Mouse.sensitivity >> 8;
-    case MODE_NE2KPORT: // NE2000 Base port
+    case CMD_NE2KPORT: // NE2000 Base port
         return settings.NE2K.basePort == 0xFFFF ? 0 : (settings.NE2K.basePort >> 8);
     /*
-    case MODE_WIFISSID:
+    case CMD_WIFISSID:
         break;
-    case MODE_WIFIPASS:
+    case CMD_WIFIPASS:
         break;
     */
-    case MODE_WIFISTAT:
+    case CMD_WIFISTAT:
 #ifdef PICOW
         return PG_Wifi_ReadStatusStr();
 #else
         return 0;
 #endif
         break;
-    case MODE_CDPORT: // CD Base port
+    case CMD_CDPORT: // CD Base port
         return settings.CD.basePort == 0xFFFF ? 0 : (settings.CD.basePort >> 8);
 #ifdef CDROM
-    case MODE_CDSTATUS:
+    case CMD_CDSTATUS:
         // printf("cdstatus %x\n", cdrom.image_status);
         return cdrom.image_status;
-    case MODE_CDLIST:
+    case CMD_CDLIST:
         if (cur_read_idx == cdrom.image_count) { // If end of the images
             cur_read_idx = cur_read = 0;
             cdrom.image_status = CD_STATUS_IDLE;
@@ -598,38 +598,38 @@ __force_inline uint8_t read_picogus_high(void) {
             cur_read = 0;
         }
         return ret;
-    case MODE_CDLOAD: // Load CD image
+    case CMD_CDLOAD: // Load CD image
         return cdman_current_image_index();
-    case MODE_CDNAME: // Firmware string
+    case CMD_CDNAME: // Firmware string
         ret = cdrom.image_path[cur_read++];
         if (ret == 0) { // Null terminated
             cur_read = 0;
         }
         return ret;
-    case MODE_CDERROR: // Error string
+    case CMD_CDERROR: // Error string
         ret = cdrom.error_str[cur_read++];
         if (ret == 0) { // Null terminated
             cur_read = 0;
         }
         return ret;
 #endif
-    case MODE_CDAUTOADV: // enable joystick
+    case CMD_CDAUTOADV: // enable joystick
         return settings.CD.autoAdvance;
-    case MODE_MAINVOL: // CD audio volume
+    case CMD_MAINVOL: // CD audio volume
         return settings.Volume.mainVol;
-    case MODE_OPLVOL: // Adlib volume
+    case CMD_OPLVOL: // Adlib volume
         return settings.Volume.oplVol;
-    case MODE_SBVOL: // Sound Blaster volume
+    case CMD_SBVOL: // Sound Blaster volume
         return settings.Volume.sbVol;
-    case MODE_CDVOL: // CD audio volume
+    case CMD_CDVOL: // CD audio volume
         return settings.Volume.cdVol;
-    case MODE_GUSVOL: // GUS volume
+    case CMD_GUSVOL: // GUS volume
         return settings.Volume.gusVol;
-    case MODE_PSGVOL: // PSG volume
+    case CMD_PSGVOL: // PSG volume
         return settings.Volume.psgVol;
-    case MODE_HWTYPE: // Hardware version
+    case CMD_HWTYPE: // Hardware version
         return BOARD_TYPE;
-    case MODE_FLASH:
+    case CMD_FLASH:
         // Get status of firmware write
         return pico_firmware_getStatus();
     default:
@@ -641,16 +641,17 @@ __force_inline uint8_t read_picogus_high(void) {
 void processSettings(void) {
 #if defined(SOUND_GUS)
     settings.startupMode = GUS_MODE;
-    set_volume(MODE_GUSVOL);
+    set_volume(CMD_GUSVOL);
 #elif (SOUND_TANDY || SOUND_CMS)
     settings.startupMode = PSG_MODE;
-    set_volume(MODE_PSGVOL);
+    set_volume(CMD_PSGVOL);
 #elif defined(SOUND_SB)
     settings.startupMode = SB_MODE;
-    set_volume(MODE_SBVOL);
+    set_volume(CMD_SBVOL);
+    set_volume(CMD_OPLVOL);
 #elif defined(SOUND_OPL)
     settings.startupMode = ADLIB_MODE;
-    set_volume(MODE_OPLVOL);
+    set_volume(CMD_OPLVOL);
 #elif defined(MPU_ONLY)
     settings.startupMode = MPU_MODE;
 #elif defined(USB_ONLY)

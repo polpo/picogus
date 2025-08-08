@@ -102,7 +102,7 @@ struct audio_buffer_pool *init_audio() {
     ok = audio_i2s_connect_extra(producer_pool, false, 0, 0, NULL);
     assert(ok);
     audio_i2s_set_enabled(true);
-    set_volume(MODE_PSGVOL);
+    set_volume(CMD_PSGVOL);
     return producer_pool;
 }
 

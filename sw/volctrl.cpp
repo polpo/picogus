@@ -59,26 +59,26 @@ int32_t scale_sample (int32_t sample, int32_t scale, int clamp) {
 void set_volume(uint16_t mode) {
 
     switch (mode){
-        case MODE_MAINVOL:
-            set_volume(MODE_OPLVOL);
-            set_volume(MODE_SBVOL);
-            set_volume(MODE_CDVOL);
-            set_volume(MODE_GUSVOL);
-            set_volume(MODE_PSGVOL);
+        case CMD_MAINVOL:
+            set_volume(CMD_OPLVOL);
+            set_volume(CMD_SBVOL);
+            set_volume(CMD_CDVOL);
+            set_volume(CMD_GUSVOL);
+            set_volume(CMD_PSGVOL);
             break;
-        case MODE_OPLVOL:
+        case CMD_OPLVOL:
             opl_volume = set_volume_scale(settings.Volume.oplVol);
             break;
-        case MODE_SBVOL:
+        case CMD_SBVOL:
             sb_volume = set_volume_scale(settings.Volume.sbVol);
             break;
-        case MODE_CDVOL:
+        case CMD_CDVOL:
             cd_audio_volume = set_volume_scale(settings.Volume.cdVol);
             break;
-        case MODE_GUSVOL:
+        case CMD_GUSVOL:
             gus_volume = set_volume_scale(settings.Volume.gusVol);
             break;
-        case MODE_PSGVOL:
+        case CMD_PSGVOL:
             psg_volume = set_volume_scale(settings.Volume.psgVol);
             break;
     }   

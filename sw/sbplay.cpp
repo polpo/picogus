@@ -146,7 +146,7 @@ void play_adlib() {
     puts("starting core 1");
     // flash_safe_execute_core_init();
     uint32_t start, end;
-    set_volume(MODE_OPLVOL);
+    set_volume(CMD_OPLVOL);
 
 #if defined(SOUND_SB) || defined(USB_MOUSE) || defined(SOUND_MPU)
     // Init PIC on this core so it handles timers
@@ -184,7 +184,7 @@ void play_adlib() {
     uint32_t sb_frac = 0;
     // uint32_t sb_sample_idx = 0x0;
     uint32_t sb_left = 0;
-    set_volume(MODE_SBVOL);
+    set_volume(CMD_SBVOL);
 #endif
 
     uint32_t cd_left = 0;

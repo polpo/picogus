@@ -47,56 +47,56 @@ static const char *modenames[8] = {
     "NE2000"
 };
 
-#define MODE_MAGIC      0x00 // Magic string
-#define MODE_PROTOCOL   0x01 // Protocol version
-#define MODE_FWSTRING   0x02 // Firmware string
-#define MODE_BOOTMODE   0x03 // Mode (GUS, OPL, MPU, etc...)
-#define MODE_GUSPORT    0x04 // GUS Base port
-#define MODE_OPLPORT    0x05 // Adlib Base port
-#define MODE_SBPORT     0x06 // SB Base port
-#define MODE_MPUPORT    0x07 // MPU Base port
-#define MODE_TANDYPORT  0x08 // Tandy Base port
-#define MODE_CMSPORT    0x09 // CMS Base port
-#define MODE_JOYEN      0x0f // enable joystick
+#define CMD_MAGIC      0x00 // Magic string
+#define CMD_PROTOCOL   0x01 // Protocol version
+#define CMD_FWSTRING   0x02 // Firmware string
+#define CMD_BOOTMODE   0x03 // Mode (GUS, OPL, MPU, etc...)
+#define CMD_GUSPORT    0x04 // GUS Base port
+#define CMD_OPLPORT    0x05 // Adlib Base port
+#define CMD_SBPORT     0x06 // SB Base port
+#define CMD_MPUPORT    0x07 // MPU Base port
+#define CMD_TANDYPORT  0x08 // Tandy Base port
+#define CMD_CMSPORT    0x09 // CMS Base port
+#define CMD_JOYEN      0x0f // enable joystick
 
-#define MODE_GUSBUF     0x10 // Audio buffer size
-#define MODE_GUSDMA     0x11 // DMA interval
-#define MODE_GUS44K     0x12 // Force 44k
+#define CMD_GUSBUF     0x10 // Audio buffer size
+#define CMD_GUSDMA     0x11 // DMA interval
+#define CMD_GUS44K     0x12 // Force 44k
 
-#define MODE_WTVOL      0x20 // Wavetable mixer volume
-#define MODE_MPUDELAY   0x21 // MPU sysex delay
-#define MODE_MPUFAKE    0x22 // MPU fake all notes off
+#define CMD_WTVOL      0x20 // Wavetable mixer volume
+#define CMD_MPUDELAY   0x21 // MPU sysex delay
+#define CMD_MPUFAKE    0x22 // MPU fake all notes off
 
-#define MODE_OPLWAIT    0x30 // Adlib speed sensitive fix
+#define CMD_OPLWAIT    0x30 // Adlib speed sensitive fix
 
-#define MODE_MOUSEPORT  0x40 // Mouse Base port
-#define MODE_MOUSEPROTO 0x41 // Mouse protocol
-#define MODE_MOUSERATE  0x42 // Mouse report rate
-#define MODE_MOUSESEN   0x43 // Mouse sensitivity
+#define CMD_MOUSEPORT  0x40 // Mouse Base port
+#define CMD_MOUSEPROTO 0x41 // Mouse protocol
+#define CMD_MOUSERATE  0x42 // Mouse report rate
+#define CMD_MOUSESEN   0x43 // Mouse sensitivity
 
-#define MODE_NE2KPORT   0x50 // NE2000 Base port
-#define MODE_WIFISSID   0x51 // WiFi SSID
-#define MODE_WIFIPASS   0x52 // WiFi password
-#define MODE_WIFIAPPLY  0x53 // apply WiFi settings
-#define MODE_WIFISTAT   0x54 // WiFi status
+#define CMD_NE2KPORT   0x50 // NE2000 Base port
+#define CMD_WIFISSID   0x51 // WiFi SSID
+#define CMD_WIFIPASS   0x52 // WiFi password
+#define CMD_WIFIAPPLY  0x53 // apply WiFi settings
+#define CMD_WIFISTAT   0x54 // WiFi status
 
-#define MODE_CDPORT     0x60 // CD base port
-#define MODE_CDSTATUS   0x61 // Get CD image command status
-#define MODE_CDERROR    0x62 // Get CD image error
-#define MODE_CDLIST     0x63 // List CD images
-#define MODE_CDLOAD     0x64 // Load CD image or get loaded image index
-#define MODE_CDNAME     0x65 // Get name of loaded CD image
-#define MODE_CDAUTOADV  0x66 // Set autoadvance for CD image on USB reinsert
+#define CMD_CDPORT     0x60 // CD base port
+#define CMD_CDSTATUS   0x61 // Get CD image command status
+#define CMD_CDERROR    0x62 // Get CD image error
+#define CMD_CDLIST     0x63 // List CD images
+#define CMD_CDLOAD     0x64 // Load CD image or get loaded image index
+#define CMD_CDNAME     0x65 // Get name of loaded CD image
+#define CMD_CDAUTOADV  0x66 // Set autoadvance for CD image on USB reinsert
 
-#define MODE_MAINVOL    0x70 // Main Volume
-#define MODE_OPLVOL     0x71 // Adlib volume
-#define MODE_SBVOL      0x72 // Sound Blaster volume
-#define MODE_CDVOL      0x73 // CD Audio Volume
-#define MODE_GUSVOL     0x74 // GUS Volume
-#define MODE_PSGVOL     0x75 // PSG Volume
+#define CMD_MAINVOL    0x70 // Main Volume
+#define CMD_OPLVOL     0x71 // Adlib volume
+#define CMD_SBVOL      0x72 // Sound Blaster volume
+#define CMD_CDVOL      0x73 // CD Audio Volume
+#define CMD_GUSVOL     0x74 // GUS Volume
+#define CMD_PSGVOL     0x75 // PSG Volume
 
-#define MODE_DEFAULTS   0xE0 // Select reset to defaults register
-#define MODE_SAVE       0xE1 // Select save settings register
-#define MODE_REBOOT     0xE2 // Select reboot register
-#define MODE_HWTYPE     0xF0 // Hardware type 
-#define MODE_FLASH      0xFF // Firmware write mode
+#define CMD_DEFAULTS   0xE0 // Select reset to defaults register
+#define CMD_SAVE       0xE1 // Select save settings register
+#define CMD_REBOOT     0xE2 // Select reboot register
+#define CMD_HWTYPE     0xF0 // Hardware type 
+#define CMD_FLASH      0xFF // Firmware write mode
