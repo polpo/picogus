@@ -32,6 +32,7 @@
 #include "cdrom_error_msg.h"
 #include "pico/multicore.h"
 #include "hardware/structs/timer.h"
+#include "../volctrl.h"
 
 
 /* The addresses sent from the guest are absolute, ie. a LBA of 0 corresponds to a MSF of 00:00:00. Otherwise, the counter displayed by the guest is wrong:
@@ -399,7 +400,14 @@ uint32_t cdrom_audio_callback_simple(cdrom_t *dev, int16_t *buffer, uint32_t len
 
         /* printf("%u\n", samples_to_transfer); */
         // Add samples from sector buffer to FIFO
-        memcpy(buffer + samples_produced, &dev->current_sector_samples[dev->audio_sector_consumed_samples], samples_to_transfer * sizeof(int16_t));
+        //memcpy(buffer + samples_produced, &dev->current_sector_samples[dev->audio_sector_consumed_samples], samples_to_transfer * sizeof(int16_t));
+
+        for (uint32_t i = 0; i < samples_to_transfer; i++)
+        {
+            int32_t sample = dev->current_sector_samples[dev->audio_sector_consumed_samples + i];       
+            buffer[samples_produced + i] = (int16_t)scale_sample(sample, cd_audio_volume, 0);
+        }
+
         samples_produced += samples_to_transfer;
         dev->audio_sector_consumed_samples += samples_to_transfer;
     } // End while (fifo_level < len && ret)
@@ -600,6 +608,7 @@ cdrom_global_init(void)
     memset(&cdrom, 0x00, sizeof(cdrom));
     cdrom.error_str = cdrom_errorstr_get();
     cdrom.current_sector_samples = (int16_t*)cdrom.audio_sector_buffer;
+    set_volume(CMD_CDVOL);
 }
 
 static void

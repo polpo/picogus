@@ -31,6 +31,7 @@
 #include "pico/stdlib.h"
 #include "audio_i2s_minimal.h"
 #include <resampler.hpp>
+#include "volctrl.h"
 
 #include "opl.h"
 extern "C" void OPL_Pico_simple(int16_t *buffer, uint32_t nsamples);
@@ -128,7 +129,9 @@ void audio_sample_handler(void) {
     int32_t sample_l = 0, sample_r = 0;
 
 #ifdef SOUND_SB
-    sample_l = sample_r = sbdsp_sample();
+    uint32_t sb_sample = sbdsp_sample();
+    sb_sample = scale_sample((int32_t)sb_sample >> 1, sb_volume, 1);
+    sample_l = sample_r = sb_sample;
 #endif
 
 #ifdef CDROM
@@ -145,6 +148,7 @@ void audio_sample_handler(void) {
     const uint32_t has_opl_samples = fifo_take_samples_inline(&opl_out_fifo, 1);
     if (has_opl_samples) {
         int16_t opl_sample = opl_out_fifo.buffer[opl_out_index++];
+        opl_sample = scale_sample(opl_sample << 2, opl_volume, 0);
         sample_l += opl_sample;
         sample_r += opl_sample;
         opl_out_index &= AUDIO_FIFO_BITS;
@@ -161,6 +165,7 @@ void play_adlib() {
     puts("starting core 1");
     // flash_safe_execute_core_init();
     uint32_t start, end;
+    set_volume(CMD_OPLVOL);
 
 #if defined(SOUND_SB) || defined(USB_MOUSE) || defined(SOUND_MPU)
     // Init PIC on this core so it handles timers
@@ -184,6 +189,10 @@ void play_adlib() {
     init_audio();
 
 	resampler.set_ratio(49716,44100);
+
+#ifdef SOUND_SB
+    set_volume(CMD_SBVOL);
+#endif
 
     printf("opl_ratio: %x ", opl_ratio);
     uint32_t opl_pos = 0;
