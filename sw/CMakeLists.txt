@@ -253,7 +253,7 @@ endfunction()
 # Build SB firmware
 function(build_sb TARGET_NAME MULTIFW)
     set(USB_JOYSTICK TRUE)
-    set(SOUND_MPU FALSE)
+    set(SOUND_MPU TRUE)
     set(SOUND_OPL TRUE)
     set(CDROM TRUE)
     config_target(${TARGET_NAME} ${MULTIFW})
