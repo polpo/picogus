@@ -430,7 +430,6 @@ static int reboot_to_firmware(const uint8_t value, const bool permanent)
     }
     printf("PicoGUS detected: Firmware version: ");
     print_string(CMD_FWSTRING);
-    printf("\n");
     return 0;
 }
 
@@ -451,14 +450,20 @@ void print_progress_bar(uint16_t current, uint16_t total)
         next_pct = pct_step;
     }
 
-    while (current >= next_bar && filled < BAR_WIDTH) {
-        filled++;
-        next_bar += bar_step;
-    }
+    // Special case: if we're at 100% completion, ensure we show it
+    if (current == total) {
+        filled = BAR_WIDTH;
+        percent = 100;
+    } else {
+        while (current >= next_bar && filled < BAR_WIDTH) {
+            filled++;
+            next_bar += bar_step;
+        }
 
-    while (current >= next_pct && percent < 100) {
-        percent++;
-        next_pct += pct_step;
+        while (current >= next_pct && percent < 100) {
+            percent++;
+            next_pct += pct_step;
+        }
     }
 
     if (filled != last_filled) {
@@ -536,7 +541,7 @@ static int write_firmware(const char* fw_filename)
                 return 13;
             }
             fflush(stdout);
-            fprintf(stderr, "Programming %d blocks", numBlocks);
+            fprintf(stderr, "Preparing to program %d blocks...", numBlocks);
         }
 
         if (i != uf2_buf.uf2.blockNo) {
