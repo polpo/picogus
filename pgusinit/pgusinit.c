@@ -441,7 +441,8 @@ void print_progress_bar(uint32_t current, uint32_t total) {
     }
 }
 
-static int write_firmware(const char* fw_filename) {
+static int write_firmware(const char* fw_filename)
+{
     union {
         uint8_t buf[512];
         struct UF2_Block {
@@ -467,7 +468,7 @@ static int write_firmware(const char* fw_filename) {
 
     outp(CONTROL_PORT, 0x01); // Select protocol version register
     uint8_t protocol = inp(DATA_PORT_HIGH);
-    if (PICOGUS_PROTOCOL_VER != protocol && protocol < 3) {
+    if (protocol < PICOGUS_PROTOCOL_VER) {
         printf("Older fw protocol version %d detected, upgrading firmware in compatibility mode\n", protocol);
     }
 
@@ -570,7 +571,7 @@ static void wifi_printStatus(void)
     putchar('\n');
 }
 
-static void send_string(uint8_t mode, char* str, int16_t max_len)
+static void send_string(const uint8_t mode, const char* str, const int16_t max_len)
 {
     outp(CONTROL_PORT, 0xCC); // Knock on the door...
     outp(CONTROL_PORT, mode);
@@ -595,31 +596,19 @@ if (e != 1 || option > 0x3ffu) { \
     return 4; \
 }
 
-static void cmdDisplayUsage(char* argv[], int index, int mode)
+static bool cmdDisplayUsage(const char* arg, const int mode)
 {
     usage(gMode, mode);
+    return true;
 }
 
-/*
-static int strcasecmp_bool(const char* a, const char* b) {
-    while (*a && *b) {
-        if (tolower((unsigned char)*a) != tolower((unsigned char)*b)) {
-            return 1; // Not equal
-        }
-        a++; b++;
-    }
-    return (*a || *b); // Not equal if either has remaining chars
-}
-*/
-
-static void cmdSendBool(char* argv[], int i, int mode)
+static bool cmdSendBool(const char* arg, const int mode)
 {
-    const char* arg = argv[++i];
     uint8_t value;
 
     if (!arg) {
         usage(gMode, false);
-        return;
+        return false;
     }
 
     if (!strcmp(arg, "1") || !stricmp(arg, "true") || !stricmp(arg, "on")) {
@@ -628,20 +617,19 @@ static void cmdSendBool(char* argv[], int i, int mode)
         value = 0;
     } else {
         usage(gMode, false);
-        return;
+        return false;
     }
 
     outp(CONTROL_PORT, mode);
     outp(DATA_PORT_HIGH, value);
+    return true;
 }
 
-static void cmdSetMode(char *argv[], int i, int mode)
+static bool cmdSetMode(const char* arg, const int mode)
 {
-    const char* arg = argv[++i];
-    
     if (!arg || strlen(arg) > 7) {
         usage(gMode, false);
-        return;
+        return false;
     }
 
     strncpy(mode_name, arg, 8); // 7 chars max + null terminator
@@ -661,213 +649,95 @@ static void cmdSetMode(char *argv[], int i, int mode)
         }
         if (j == 7) {
             usage(gMode, false);
-            return;
+            return false;
         }
         reboot_to_firmware(fw_num, permanent);
         gMode = j;
     }
+    return true;
 }
 
-void cmdSetVol(char *argv[], int i, int mode)
+static bool ctrlSendUint8(const char *arg, int mode, int min, int max)
 {
-    const char* arg = argv[++i];
     char* endptr;
-    long val;
+    uint8_t val;
 
     if (!arg) {
         usage(gMode, false);
-        return;
+        return false;
     }
 
-    val = strtol(arg, &endptr, 10);
-
-    if (*endptr != '\0' || val < 0 || val > 100) {
-        usage(gMode, false);
-        return;
-    }
-
-    outp(CONTROL_PORT, mode);
-    outp(DATA_PORT_HIGH, (uint8_t)val);
-}
-
-static void ctrlSendUint8(char *arg, int mode, int min, int max)
-{
-    const char* str = arg;
-    char* endptr;
-    long val;
-
-    if (!str) {
-        usage(gMode, false);
-        return;
-    }
-
-    val = strtol(str, &endptr, 10);
+    val = (uint8_t)strtol(arg, &endptr, 10);
 
     if (*endptr != '\0' || val < min || val > max) {
         usage(gMode, false);
-        return;
+        return false;
     }
 
     outp(CONTROL_PORT, mode);
     outp(DATA_PORT_HIGH, (uint8_t)val);
+    return true;
 }
 
-static void cmdSendUint8(char *argv[], int i, int mode)
+static bool cmdSendUint8(const char* arg, const int mode)
 {   
-    ctrlSendUint8(argv[++i], mode, 0, 255);
+    return ctrlSendUint8(arg, mode, 0, 255);
 }
 
-static void ctrlSendUint16(char *arg, int mode, long min, long max)
+static bool ctrlSendUint16(const char *arg, int mode, long min, long max)
 {
-    const char *str = arg;
     char *endptr;
-    long val;
-
-    if (!str)
-    {
-        usage(gMode, false);
-        return;
-    }
-
-    val = strtol(str, &endptr, 10);
-
-    if (*endptr != '\0' || val < min || val > max)
-    {
-        usage(gMode, false);
-        return;
-    }
-
-    outp(CONTROL_PORT, mode);
-    outpw(DATA_PORT_LOW, (uint16_t)val);
-}
-
-static void cmdSendUint16(char *argv[], int i, int mode)
-{
-    ctrlSendUint16(argv[++i], mode, 0, 65535);
-}
-
-static int envGetHex(const char *env, const char *key, const char *delims, int mode)
-{
-    const char *envVal = getenv(env);
-    const char *startPtr;
-    char portStr[6] = {0};  // enough for 5-digit hex + null
-    char *endptr;
-    long port;
-
-    if (!envVal || !*envVal) {
-        printf("%s not set.\n", env);
-        usage(gMode, false);
-        return -1;
-    }
-
-    if (key && *key) {
-        // Keyed mode, e.g., "A220" → look for 'A'
-        startPtr = strchr(envVal, key[0]);
-        if (!startPtr || !isxdigit(startPtr[1])) {
-            printf("%s variable does not contain %sxxx.\n", env, key);
-            usage(gMode, false);
-            return -2;
-        }
-        startPtr++;  // Move past key character
-    } else {
-        // No key → parse from beginning
-        startPtr = envVal;
-    }
-
-    // Copy until delimiter or space
-    int i = 0;
-    while (startPtr[i] && !strchr(delims, startPtr[i]) && !isspace((unsigned char)startPtr[i]) && i < 5) {
-        portStr[i] = startPtr[i];
-        i++;
-    }
-    portStr[i] = '\0';
-
-    port = strtol(portStr, &endptr, 16);  // always parse as hex
-
-    if (*endptr != '\0') {
-        printf("Invalid %s port value format: %s\n", env, portStr);
-        usage(gMode, false);
-        return -3;
-    }
-
-    if (port < 0 || port > 0x3FF) {
-        printf("%s port out of range: 0x%lx\n", env, port);
-        usage(gMode, false);
-        return -4;
-    }
-
-    return (int)port;
-}
-
-void setBlaster()
-{    
-    int mode = CMD_SBPORT;
-    outp(CONTROL_PORT, mode);
-    outpw(DATA_PORT_LOW, (uint16_t)envGetHex("BLASTER", "A", " ", mode));
-
-    return;
-}
-
-static void cmdSetBlaster(char *argv[], int i, int mode)
-{
-    setBlaster();
-}
-
-void setUltrasnd()
-{
-    int mode = CMD_GUSPORT;
-    outp(CONTROL_PORT, mode);
-    outpw(DATA_PORT_LOW, (uint16_t)envGetHex("ULTRASND", "", ",", mode));
-
-    return;
-}
-
-static void cmdSetUltrasnd(char *argv[], int i, int mode)
-{
-    setUltrasnd();
-}
-
-static void cmdSendPort(char *argv[], int i, int mode)
-{
-
-    const char *arg = argv[++i];
-    char *endptr;
-    long val;
+    uint16_t val;
 
     if (!arg)
     {
         usage(gMode, false);
-        return;
+        return false;
     }
 
-    val = strtol(arg, &endptr, 16);
+    val = (uint16_t)strtol(arg, &endptr, 10);
 
-    if (*endptr != '\0' || val < 0 || val > 0x3FF)
+    if (*endptr != '\0' || val < min || val > max)
     {
         usage(gMode, false);
-        return;
+        return false;
     }
 
     outp(CONTROL_PORT, mode);
     outpw(DATA_PORT_LOW, (uint16_t)val);
+    return true;
 }
 
-static void cmdSendMousePort(char *argv[], int i, int mode)
+static bool cmdSendUint16(const char* arg, const int mode)
 {
-    const char* arg = argv[++i];
+    return ctrlSendUint16(arg, mode, 0, 65535);
+}
+
+static bool cmdSendPort(const char* arg, const int mode)
+{
+    return ctrlSendUint16(arg, mode, 0, 0x3FF);
+}
+
+static bool cmdSetVol(const char* arg, const int mode)
+{
+    return ctrlSendUint8(arg, mode, 0, 100);
+}
+
+static bool cmdSendMousePort(const char *arg, const int mode)
+{
     char* endptr;
-    long val;
+    uint8_t val;
     uint16_t port;
 
     if (!arg) {
         usage(gMode, false);
-        return;
+        return false;
     }
 
-    val = strtol(arg, &endptr, 10);
+    val = (uint8_t)strtol(arg, &endptr, 10);
     if (*endptr != '\0' || val < 0 || val > 4) {
         usage(gMode, false);
-        return ;
+        return false;
     }
 
     switch (val) {
@@ -878,98 +748,105 @@ static void cmdSendMousePort(char *argv[], int i, int mode)
         case 4: port = 0x2E8; break;
         default:
             usage(gMode, false);
-            return;
+            return false;
     }
 
     outp(CONTROL_PORT, CMD_MOUSEPORT);
     outpw(DATA_PORT_LOW, port);
-
+    return true;
 }
 
-static void cmdSendMouseSen(char *argv[], int i, int mode)
+static bool cmdSendMouseSen(const char* arg, const int mode)
 {
-    ctrlSendUint16(argv[++i], mode, 0, 1024);
+    return ctrlSendUint16(arg, mode, 0, 1024);
 }
 
-static void cmdSendMouseProto(char *argv[], int i, int mode)
+static bool cmdSendMouseProto(const char* arg, const int mode)
 {
-    ctrlSendUint8(argv[++i], mode, 0, 3);
+    return ctrlSendUint8(arg, mode, 0, 3);
 }
 
-static void cmdSendMouseRate(char *argv[], int i, int mode)
+static bool cmdSendMouseRate(const char* arg, const int mode)
 {
-    ctrlSendUint8(argv[++i], mode, 20, 200);
+    return ctrlSendUint8(arg, mode, 20, 200);
 }
 
-static void cmdWifiStatus(char *argv[], int i, int mode)
+static bool cmdWifiStatus(const char* arg, const int mode)
 {
     wifi_printStatus();
+    exit(0);
 }
 
-static void cmdWifiSSID(char *argv[], int i, int mode)
+static bool cmdWifiSSID(const char* arg, const int mode)
 {
     wifichg = true;
-    send_string(mode, argv[i], 32);
+    send_string(mode, arg, 32);
+    return true;
 }
 
-static void cmdWifiPass(char *argv[], int i, int mode)
+static bool cmdWifiPass(const char* arg, const int mode)
 {
     wifichg = true;
-    send_string(mode, argv[i], 63);
+    send_string(mode, arg, 63);
+    return true;
 }
 
-static void cmdWifiNoPass(char *argv[], int i, int mode)
+static bool cmdWifiNoPass(const char* arg, const int mode)
 {
     wifichg = true;
     send_string(mode, "", 1);
+    return true;
 }
 
-static void cmdCDLoadName(char *argv[], int i, int mode)
+static bool cmdCDLoadName(const char* arg, const int mode)
 {
-    send_string(mode, argv[++i], 127);
+    send_string(mode, arg, 127);
     wait_for_cd_load();
     exit(0);
 }
 
-static void cmdCDList(char *argv[], int i, int mode)
+static bool cmdCDList(const char* arg, const int mode)
 {
     print_cdimage_list();
     exit(0);
 }
 
-static void cmdCDLoad(char *argv[], int i, int mode)
+static bool cmdCDLoad(const char* arg, const int mode)
 {
-    ctrlSendUint8(argv[++i], mode, 0, 255);
+    ctrlSendUint8(arg, mode, 0, 255);
     wait_for_cd_load();
     exit(0);
 }
 
-static void cmdGUSBuffer(char *argv[], int i, int mode)
+static bool cmdGUSBuffer(const char* arg, const int mode)
 {
     uint8_t tmp_uint8;
-    uint8_t e = sscanf(argv[++i], "%hhu", &tmp_uint8);
+    uint8_t e = sscanf(arg, "%hhu", &tmp_uint8);
     if (e != 1 || tmp_uint8 < 1)
     {
         usage(gMode, false);
-        return;
+        return false;
     }
     outp(CONTROL_PORT, mode);
     outp(DATA_PORT_HIGH, (unsigned char)(tmp_uint8 - 1));
+    return true;
 }
 
-static void cmdFlashPico(char *argv[], int i, int mode)
+static bool cmdFlashPico(const char* arg, const int mode)
 {
-    if (strlen(argv[++i]) > 255)
+    if (strlen(arg) > 255)
     {
         usage(INVALID_MODE, false);
-        return;
+        return false;
     }
-    write_firmware(argv[i]);
+    write_firmware(arg);
+    return true;
 }
 
-static void cmdSave(char *argv[], int i, int mode)
+static bool cmdSave(const char* arg, const int mode)
 {
     permanent = true;
+    return true;
 }
 
 ParseCommand parseCommandsMinimal[] = {
@@ -994,8 +871,8 @@ ParseCommand parseCommands[] = {
     {"/gus44k", cmdSendBool, CMD_GUS44K, ARG_REQUIRE, "false"},
     {"/gusbuf", cmdGUSBuffer, CMD_GUSBUF, ARG_REQUIRE, "4"},
     {"/gusdma", cmdSendUint8, CMD_GUSDMA, ARG_REQUIRE, "0"},
-    {"/gusport", cmdSetUltrasnd, CMD_GUSPORT, ARG_NONE, "240"},
-    {"/sbport", cmdSetBlaster, CMD_SBPORT, ARG_NONE, "220"},
+    {"/gusport", cmdSendPort, CMD_GUSPORT, ARG_NONE, "240"},
+    {"/sbport", cmdSendPort, CMD_SBPORT, ARG_NONE, "220"},
     {"/oplport", cmdSendPort, CMD_OPLPORT, ARG_REQUIRE, "388"},
     {"/oplwait", cmdSendBool, CMD_OPLWAIT, ARG_REQUIRE, "false"},
     {"/mpuport", cmdSendPort, CMD_MPUPORT, ARG_REQUIRE, "330"},
@@ -1018,7 +895,7 @@ ParseCommand parseCommands[] = {
     {"/cdauto", cmdSendBool, CMD_CDAUTOADV, ARG_REQUIRE, "true"},
     {"/cdloadname", cmdCDLoadName, CMD_CDNAME, ARG_REQUIRE},
     {"/mainvol", cmdSetVol, CMD_MAINVOL, ARG_REQUIRE, "100"},
-    {"/oplvol", cmdSetVol, CMD_OPLVOL, ARG_REQUIRE, "80"},
+    {"/oplvol", cmdSetVol, CMD_OPLVOL, ARG_REQUIRE, "100"},
     {"/sbvol", cmdSetVol, CMD_SBVOL, ARG_REQUIRE, "100"},
     {"/cdvol", cmdSetVol, CMD_CDVOL, ARG_REQUIRE, "100"},
     {"/gusvol", cmdSetVol, CMD_GUSVOL, ARG_REQUIRE, "100"},
@@ -1038,41 +915,44 @@ ParseCommand *matchCommand (char *str, ParseCommand commands[])
 	return NULL;
 }
 
-int parseCommand (int argc, char* argv[], int i, ParseCommand commands[])
+int parseCommand (int argc, char* argv[], int* i, ParseCommand commands[])
 {
-	bool retVal = false;
+    bool retVal = false;
+    int idx = *i;
 
-	if ( !argv[i] )
-		return retVal;
+    if ( !argv[idx] )
+        return retVal;
 
-	ParseCommand *command = matchCommand(argv[i], commands);
+    ParseCommand *command = matchCommand(argv[idx], commands);
 
     if (command)
     {
-        if (command->type == ARG_REQUIRE && i + 1 >= argc || argv[i + 1][0] == '/')
-        {
-            printf("Error: Command %s requires input argument. ", argv[i]);
-            
-            if (command->def)
-                printf("Example: %s %s\n", argv[i], command->def);
-            else
-                printf("\n");
+        char* arg = NULL;
+        if (command->type == ARG_REQUIRE) {
+            if (idx + 1 >= argc || argv[idx + 1][0] == '/') {
+                printf("Error: Command %s requires input argument. ", argv[idx]);
 
-            return retVal;  
+                if (command->def)
+                    printf("Example: %s %s\n", argv[idx], command->def);
+                else
+                    printf("\n");
+
+                return retVal;  
+            }
+            arg = argv[++(*i)];
         }
 
-        if (!stricmp(argv[i + 1], "default"))
+        if (!stricmp(argv[idx + 1], "default"))
         {
             if (command->def)
-                argv[i + 1] = command->def;
+                argv[idx + 1] = command->def;
             else
                 return retVal;
         }
 
-        command->routine(argv, i, command->mode);
-        retVal = true;
+        return command->routine(arg, command->mode);
     } else {
-        printf("Invalid command %s. Run pgusinit /? for usage help", argv[i]);
+        printf("Invalid command %s. Run pgusinit /? for usage help", argv[idx]);
     }
 
     return retVal;
@@ -1272,7 +1152,7 @@ static init_status initPicoGUS()
     outp(CONTROL_PORT, CMD_MAGIC); // Select magic string register
     if (inp(DATA_PORT_HIGH) != 0xDD) {
         err_pigus();
-        return INIT_NOT_DETECTED;
+        /* return INIT_NOT_DETECTED; */
     };
     printf("PicoGUS detected: Firmware version: ");
     print_string(CMD_FWSTRING);
@@ -1281,7 +1161,7 @@ static init_status initPicoGUS()
     uint8_t protocol_got = inp(DATA_PORT_HIGH);
     if (PICOGUS_PROTOCOL_VER != protocol_got) {
       err_protocol(PICOGUS_PROTOCOL_VER, protocol_got);
-      return INIT_FW_MISMATCH;
+      /* return INIT_FW_MISMATCH; */
     }
 
     outp(CONTROL_PORT, CMD_BOOTMODE); // Select mode register
@@ -1313,7 +1193,7 @@ int main(int argc, char* argv[]) {
         // Still allow firmware upgrade if firmware version mismatches
         for(int i = 1; i < argc; ++i)
         {
-            if (!parseCommand(argc, argv, i, parseCommandsFlash))
+            if (!parseCommand(argc, argv, &i, parseCommandsFlash))
                 return 1;
             else
                 return 0;
@@ -1323,7 +1203,7 @@ int main(int argc, char* argv[]) {
         // Still allow /? and /?? commands if not detected
         for(int i = 1; i < argc; ++i)
         {
-            if (!parseCommand(argc, argv, i, parseCommandsMinimal))
+            if (!parseCommand(argc, argv, &i, parseCommandsMinimal))
                 return 1;
         }
         return 1;
@@ -1332,7 +1212,7 @@ int main(int argc, char* argv[]) {
     int commands = 0;
     for(int i = 1; i < argc; ++i)
     {
-        if (!parseCommand(argc, argv, i, parseCommands))
+        if (!parseCommand(argc, argv, &i, parseCommands))
             return 1;
     }
 
