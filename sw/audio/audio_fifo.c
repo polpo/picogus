@@ -1,3 +1,20 @@
+/*
+ *  Copyright (C) 2025  Ian Scott
+ *
+ *  This program is free software; you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation; either version 2 of the License, or
+ *  (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
+ */
 /**
  * audio_fifo.c - Implementation of shared FIFO functionality
  *
@@ -14,11 +31,6 @@
 #define MIN(x, y) (((x) < (y)) ? (x) : (y))
 #endif
 
-// Current samples in fifo
-uint32_t fifo_level(audio_fifo_t *fifo) {
-    return fifo->samples_in_fifo;
-}
-
 // Initialize the FIFO (called by producer_init or directly by user)
 void fifo_init(audio_fifo_t *fifo) {
     // Initialize FIFO structure
@@ -34,20 +46,6 @@ void fifo_reset(audio_fifo_t *fifo) {
     fifo->state = FIFO_STATE_STOPPED;
     fifo->write_idx = fifo->read_idx;
     fifo->samples_in_fifo = 0;
-}
-
-// Add a sample to the FIFO (called by producer)
-bool fifo_add_sample(audio_fifo_t *fifo, audio_sample_t sample) {
-    if (fifo->samples_in_fifo == AUDIO_FIFO_SIZE) {
-        return false;
-    }
-    fifo->buffer[fifo->write_idx] = sample;
-    fifo->write_idx = (fifo->write_idx + 1) & (AUDIO_FIFO_BITS);
-    fifo->samples_in_fifo++;
-    if (fifo->samples_in_fifo >= AUDIO_FIFO_START_THRESHOLD) {
-        fifo->state = FIFO_STATE_RUNNING;
-    }
-    return true;
 }
 
 // Add multiple samples to the FIFO

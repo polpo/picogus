@@ -24,7 +24,7 @@
 
 #include <stdio.h>
 #include "8250uart.h"
-#include "../pico_pic.h"
+#include "system/pico_pic.h"
 
 // ----------------------
 // static UART state

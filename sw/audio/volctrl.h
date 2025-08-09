@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2022-2024  Ian Scott
+ *  Copyright (C) 2025  Daniel Arnold
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -15,39 +15,38 @@
  *  with this program; if not, write to the Free Software Foundation, Inc.,
  *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
+#pragma once
 
-#include <stdio.h>
+#ifdef __cplusplus
+extern "C" {
+#endif
 
+#include <stdint.h>
+#include <stdbool.h>
+#include "../common/picogus.h"
 #include "system/flash_settings.h"
-extern Settings settings;
+#include "clamp.h"
 
-#include "system/pico_pic.h"
+extern int32_t opl_volume;
+extern int32_t sb_volume;
+extern int32_t cd_audio_volume;
+extern int32_t gus_volume;
+extern int32_t psg_volume;
 
-#ifdef USB_STACK
-#include "tusb.h"
-#endif
 
-#include "mpu401/export.h"
+extern int32_t set_volume_scale (uint8_t percent);
 
-void play_mpu() {
-    puts("starting core 1 MPU");
-    // flash_safe_execute_core_init();
+static inline int32_t scale_sample (int32_t sample, const int32_t scale, const bool clamp) {
+    sample = (sample * scale) >> 16;
 
-#ifdef USB_STACK
-    // Init TinyUSB for joystick support
-    tuh_init(BOARD_TUH_RHPORT);
-#endif
+    if (clamp)
+        sample = clamp16(sample);
 
-    // Init PIC on this core so it handles timers
-    PIC_Init();
-    puts("pic inited on core 1");
-    MPU401_Init(settings.MPU.delaySysex, settings.MPU.fakeAllNotesOff);
-
-    for (;;) {
-        send_midi_bytes(8);
-#ifdef USB_STACK
-        // Service TinyUSB events
-        tuh_task();
-#endif
-    }
+    return sample;
 }
+
+void set_volume(uint16_t mode);
+
+#ifdef __cplusplus
+}
+#endif

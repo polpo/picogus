@@ -28,7 +28,7 @@
 #include "pico/stdlib.h"
 #include "pico/audio_i2s.h"
 
-#include "pico_pic.h"
+#include "system/pico_pic.h"
 
 #ifdef USB_STACK
 #include "tusb.h"
@@ -45,16 +45,16 @@ bi_decl(bi_3pins_with_names(PICO_AUDIO_I2S_DATA_PIN, "I2S DIN", PICO_AUDIO_I2S_C
 #endif
 
 #ifdef SOUND_MPU
-#include "flash_settings.h"
+#include "system/flash_settings.h"
 extern Settings settings;
 #include "mpu401/export.h"
 #endif
 
-#include "isa_dma.h"
+#include "isa/isa_dma.h"
 extern irq_handler_t GUS_DMA_isr_pt;
 extern dma_inst_t dma_config;
 
-#include "gus-x.h"
+#include "gus/gus-x.h"
 #define SAMPLES_PER_BUFFER 1024
 
 #define DMA_PIO_SM 2

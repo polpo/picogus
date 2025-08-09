@@ -5,7 +5,7 @@
 #include "hardware/structs/watchdog.h"
 #include <hardware/flash.h>
 #include "flash_firmware.h"
-#include "../flash_settings.h"
+#include "system/flash_settings.h"
 #include <stdio.h>
 
 static uint32_t sStart = 0;
@@ -14,7 +14,7 @@ static const uint32_t offset[NR_OF_FIRMWARES] = {FLASH_FIRMWARE1, FLASH_FIRMWARE
 uint8_t read_permMode(void)
 {
     Settings settings;
-    loadSettings(&settings);
+    loadSettings(&settings, false /* don't migrate - we just need the startupMode */);
     uint8_t pModeByte = settings.startupMode;
 
     if (pModeByte >= 1 && pModeByte <= NR_OF_FIRMWARES)

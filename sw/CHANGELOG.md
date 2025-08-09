@@ -1,3 +1,33 @@
+# v3.2.0
+
+## Fixes/improvements
+
+### General
+
+- Settings saved in flash with `pgusinit /save` are now preserved when upgrading to a firmware version that introduces new settings
+- Volume control is now available for all sources. For example, in SB mode, the SB DSP, OPL2, and CD-ROM audio volumes can be independently controlled. Thanks to [Daniel Arnold (Delphius)](https://github.com/RetroLoom) for contributing this!
+- DualShock 4 gamepad support has been fixed
+
+### SB mode
+
+Sound Blaster playback has been almost completely rewritten, removing a major bottleneck and freeing up way more CPU time.
+
+- Crashing on titles with simultaneous SB DSP & OPL2 fixed
+- High-quality assembly optimized FIR polyphase resampler for much better sounding OPL2 output. Huge thanks to [korneliuszo](https://github.com/korneliuszo/) for contributing this and other optimizations!
+- Direct DAC mode is back after being dropped in firmware v3.0.0
+- Too-slow MPU-401 output in SB mode fixed (main symptom was long delay until music starts in Sierra titles)
+- CD-ROM speed now faster in SB mode - improved from 2x to 3x
+
+### pgusinit
+
+pgusinit has been almost completely refactored, thanks again to [Daniel Arnold (Delphius)](https://github.com/RetroLoom). It not only helps future maintainability but brings new quality of life features:
+
+- Long output like CD image listing and extended help text now pauses instead of scrolling off the screen
+- Progress bar when flashing firmware instead of filling the screen with dots
+- More helpful text if there are missing arguments
+- Values can be set back to their default values with a `default` argument. Example: `pgusinit /cdport default`
+- Added support for volume control via commands like /sbvol, /cdvol, etc.
+
 # v3.1.0
 
 ## Fixes

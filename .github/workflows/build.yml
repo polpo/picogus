@@ -13,10 +13,24 @@ jobs:
         PICO_EXTRAS_PATH: ${{github.workspace}}/pico/pico-extras
         OUTPUT_DIR: ${{github.workspace}}/binaries
       steps:
+      # Act is a utility for testing github actions locally. Only run when in act.
+      - name: Install Act dependencies
+        if: ${{ env.ACT }}
+        run: apt-get update && sudo apt-get install curl build-essential cmake -y
+
       - name: Checkout repo with submodules
         uses: actions/checkout@v4
         with:
             submodules: recursive
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: 'pip' # caching pip dependencies
+
+      - name: Install Python dependencies
+        run: pip install sympy scipy more-itertools
 
       - name: Install Arm GNU Toolchain (arm-none-eabi-gcc)
         uses: carlosperate/arm-none-eabi-gcc-action@v1
@@ -93,7 +107,7 @@ jobs:
         uses: open-watcom/setup-watcom@v0
         with:
           version: "2.0-64"
-          tag: "2024-03-01-Build"
+          tag: "2025-07-01-Build"
 
       - name: Build pgusinit
         working-directory: ${{github.workspace}}/pgusinit

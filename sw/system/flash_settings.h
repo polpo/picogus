@@ -25,7 +25,14 @@ extern "C" {
 #include <stdbool.h>
 
 #define SETTINGS_MAGIC 0x70677573  // "pgus" in ascii
-#define SETTINGS_VERSION 3
+#define SETTINGS_VERSION 4
+
+// When adding new fields to Settings struct:
+// 1. Increment SETTINGS_VERSION
+// 2. Add new fields to the struct (including in padding/holes if there's room)
+// 3. Update defaultSettings in flash_settings.c with default values
+// 4. Add FieldInfo entries in flash_settings.c for the new fields
+// This allows preserving existing settings during upgrades
 
 // Settings struct has generous padding for future settings by aligning to 4 bytes
 typedef struct Settings {
@@ -80,10 +87,18 @@ typedef struct Settings {
     struct {
         uint16_t basePort;
     } MMB;
+    struct {
+        uint8_t mainVol;
+        uint8_t oplVol;
+        uint8_t sbVol;
+        uint8_t cdVol;
+        uint8_t gusVol;
+        uint8_t psgVol;
+    } Volume;
 } Settings;
 
 
-void loadSettings(Settings* settings);
+void loadSettings(Settings* settings, bool migrate);
 void saveSettings(const Settings* settings);
 void getDefaultSettings(Settings* settings);
 

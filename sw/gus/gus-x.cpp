@@ -23,7 +23,7 @@
 #include <sstream>
 #include <cmath>
 
-#include "dosbox-x-compat.h"
+#include "include/dosbox-x-compat.h"
 
 #include "hardware/gpio.h"
 #ifdef PSRAM
@@ -38,11 +38,12 @@ extern psram_spi_inst_t psram_spi;
 #include "pico/critical_section.h"
 critical_section_t gus_crit;
 
-#include "pico_pic.h"
-#include "isa_dma.h"
+#include "system/pico_pic.h"
+#include "isa/isa_dma.h"
 extern dma_inst_t dma_config;
 
-#include "clamp.h"
+#include "audio/clamp.h"
+#include "audio/volctrl.h"
 
 using namespace std;
 
@@ -615,6 +616,7 @@ class GUSChannels {
 
             // Output stereo sample if DAC enable on
             // if ((GUS_reset_reg & 0x02/*DAC enable*/) == 0x02) {
+                tmpsamp = scale_sample(tmpsamp, gus_volume, 0);
                 stream[0] += tmpsamp * VolLeft;
                 stream[1] += tmpsamp * VolRight;
                 WaveUpdate();
@@ -1887,4 +1889,5 @@ void GUS_Setup() {
         interp_set_config(interp0, 1, &cfg);
 #endif
         clamp_setup();
+        set_volume(CMD_GUSVOL);
 }

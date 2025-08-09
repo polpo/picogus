@@ -77,24 +77,108 @@ static const Settings defaultSettings = {
     .MMB = {
         // Mindscape Music Board defaults to off because its port is so common
         .basePort = 0xffff
+    },
+    .Volume = {
+        .mainVol = 100,
+        .oplVol = 100,
+        .sbVol = 90,
+        .cdVol = 100,
+        .gusVol = 100,
+        .psgVol = 80
     }
 };
 
 
 #define SETTINGS_SECTOR (PICO_FLASH_SIZE_BYTES - FLASH_SECTOR_SIZE)   //  last sector of a 2M flash (adjust for other flash sizes if needed)
-void loadSettings(Settings* settings)
+
+typedef struct {
+    size_t offset;  // Offset of field in Settings struct
+    size_t size;    // Size of field
+} FieldInfo;
+
+typedef struct {
+    const FieldInfo* fields;
+    size_t count;
+} VersionFields;
+
+#define FIELD(name) {offsetof(Settings, name), sizeof(((Settings*)0)->name)}
+
+// table of fields added in each version
+// when adding new fields, add them to the appropriate version entry
+// index corresponds to version number (index 0 = version 1, etc.)
+static const VersionFields versionFieldsTable[] = {
+    // version 1
+    {NULL, 0},
+
+    // version 2 - added NE2K and WiFi settings
+    {(const FieldInfo[]){
+        FIELD(NE2K),
+        FIELD(WiFi),
+    }, 2},
+
+    // version 3 - added CD and MMB settings
+    {(const FieldInfo[]){
+        FIELD(CD),
+        FIELD(MMB),
+    }, 2},
+
+    // version 4 - added Volume settings
+    {(const FieldInfo[]){
+        FIELD(Volume),
+    }, 1},
+};
+
+// Apply default values only to fields introduced after the given version
+static void migrateSettings(Settings* settings, uint8_t oldVersion) {
+    // Start with the current settings (preserves old values)
+    // Then selectively copy new fields from defaults
+
+    // Apply defaults for all versions newer than oldVersion
+    for (uint8_t v = oldVersion + 1; v <= SETTINGS_VERSION; v++) {
+        size_t versionIndex = v - 1;
+
+        if (versionIndex >= sizeof(versionFieldsTable) / sizeof(VersionFields)) {
+            break;
+        }
+
+        const VersionFields* vf = &versionFieldsTable[versionIndex];
+        if (vf->fields == NULL || vf->count == 0) {
+            continue;
+        }
+
+        // Copy each new field from defaults
+        for (size_t i = 0; i < vf->count; i++) {
+            memcpy((uint8_t*)settings + vf->fields[i].offset,
+                   (uint8_t*)&defaultSettings + vf->fields[i].offset,
+                   vf->fields[i].size);
+        }
+    }
+
+    // Update version to current
+    settings->version = SETTINGS_VERSION;
+}
+
+void loadSettings(Settings* settings, bool migrate)
 {
     printf("copying settings to %u from %u with size %u\n", settings, XIP_BASE + SETTINGS_SECTOR, sizeof(Settings));
     memcpy(settings, (void *)(XIP_BASE + SETTINGS_SECTOR), sizeof(Settings));
     /* stdio_flush(); */
 
-    if (settings->magic != SETTINGS_MAGIC || settings->version != SETTINGS_VERSION) {
-        // Initialize settings to default
-        puts("default settings");
+    if (settings->magic != SETTINGS_MAGIC || settings->version > SETTINGS_VERSION) {
+        // No valid settings found, use defaults
+        puts("No valid settings found, using defaults");
         stdio_flush();
         memcpy(settings, &defaultSettings, sizeof(Settings));
         return;
     }
+
+    if (migrate && settings->version < SETTINGS_VERSION) {
+        // Older version found - preserve existing fields, apply defaults to new ones
+        printf("Migrating settings from version %d to %d\n", settings->version, SETTINGS_VERSION);
+        stdio_flush();
+        migrateSettings(settings, settings->version);
+    }
+
     stdio_flush();
 }
 

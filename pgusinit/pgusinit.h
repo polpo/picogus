@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2022-2024  Ian Scott
+ *  Copyright (C) 2022-2025  Ian Scott
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -15,39 +15,28 @@
  *  with this program; if not, write to the Free Software Foundation, Inc.,
  *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
-
+#include <conio.h>
+#include <dos.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <stdint.h>
+#include <stdbool.h>
+#include <i86.h>
 
-#include "system/flash_settings.h"
-extern Settings settings;
+#include "../common/picogus.h"
 
-#include "system/pico_pic.h"
+enum CommandType
+{
+    ARG_NONE,
+    ARG_REQUIRE
+};
 
-#ifdef USB_STACK
-#include "tusb.h"
-#endif
+typedef struct {
+    char *name;
+    bool (*routine)(const char*, const int);
+    int cmd;
+    int type;
+    char *def;
+} ParseCommand;
 
-#include "mpu401/export.h"
-
-void play_mpu() {
-    puts("starting core 1 MPU");
-    // flash_safe_execute_core_init();
-
-#ifdef USB_STACK
-    // Init TinyUSB for joystick support
-    tuh_init(BOARD_TUH_RHPORT);
-#endif
-
-    // Init PIC on this core so it handles timers
-    PIC_Init();
-    puts("pic inited on core 1");
-    MPU401_Init(settings.MPU.delaySysex, settings.MPU.fakeAllNotesOff);
-
-    for (;;) {
-        send_midi_bytes(8);
-#ifdef USB_STACK
-        // Service TinyUSB events
-        tuh_task();
-#endif
-    }
-}

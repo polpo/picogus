@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2022-2024  Ian Scott
+ *  Copyright (C) 2025  Ian Scott
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -15,39 +15,21 @@
  *  with this program; if not, write to the Free Software Foundation, Inc.,
  *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
+#pragma once
 
-#include <stdio.h>
+#include <pico/audio_i2s.h>
 
-#include "system/flash_settings.h"
-extern Settings settings;
-
-#include "system/pico_pic.h"
-
-#ifdef USB_STACK
-#include "tusb.h"
+#ifdef __cplusplus
+extern "C" {
 #endif
 
-#include "mpu401/export.h"
+/*
+ * Alternative setup for pico_extras' audio_i2s library that does not set up DMA.
+ * This allows for a minimal set up audio to be sent to the PIO sample by sample,
+ * enabling a simpler interface with a sample clock IRQ, other buffering arrangement, etc.
+ */
+void audio_i2s_minimal_setup(const audio_i2s_config_t *config, uint32_t sample_rate);
 
-void play_mpu() {
-    puts("starting core 1 MPU");
-    // flash_safe_execute_core_init();
-
-#ifdef USB_STACK
-    // Init TinyUSB for joystick support
-    tuh_init(BOARD_TUH_RHPORT);
+#ifdef __cplusplus
+} // extern "C"
 #endif
-
-    // Init PIC on this core so it handles timers
-    PIC_Init();
-    puts("pic inited on core 1");
-    MPU401_Init(settings.MPU.delaySysex, settings.MPU.fakeAllNotesOff);
-
-    for (;;) {
-        send_midi_bytes(8);
-#ifdef USB_STACK
-        // Service TinyUSB events
-        tuh_task();
-#endif
-    }
-}

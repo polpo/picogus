@@ -37,9 +37,9 @@ extern "C" {
   #include "ne2000/ne2000.h"
 }
 
-#include "pico_pic.h"
+#include "system/pico_pic.h"
 
-#include "flash_settings.h"
+#include "system/flash_settings.h"
 extern Settings settings;
 
 extern uint LED_PIN;
