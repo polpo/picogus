@@ -80,7 +80,7 @@ static const Settings defaultSettings = {
     },
     .Volume = {
         .mainVol = 100,
-        .oplVol = 90,
+        .oplVol = 100,
         .sbVol = 100,
         .cdVol = 100,
         .gusVol = 100,

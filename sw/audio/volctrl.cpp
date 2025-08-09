@@ -36,13 +36,19 @@ int32_t set_volume_scale (uint8_t percent) {
         percent = 100;
 
     uint8_t delta = 100 - settings.Volume.mainVol;
+    int32_t adjusted = percent - delta;
 
-    int32_t volume = ((percent - delta) * 65536) / 100;
-    
-    if (percent < 1) 
-        volume = 0;
+    if (adjusted <= 0) 
+        return 0;
 
-    return volume;
+    if (adjusted > 100)
+        adjusted = 100;
+
+    // Apply audio taper curve: use cubic function
+    int32_t normalized = (adjusted * 256) / 100;  // Scale to 0-256 (using 8-bit precision)
+    int32_t squared = (normalized * normalized) >> 8;  // Square and scale back
+    int32_t cubed = (squared * normalized) >> 8;  // Cube and scale back
+    return cubed << 8;  // Final scale to 16.16 fixed point (65536 = 256 << 8)
 }
 
 

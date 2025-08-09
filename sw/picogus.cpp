@@ -429,7 +429,6 @@ __force_inline void write_picogus_high(uint8_t value) {
 
     case CMD_MAINVOL: // Set the volume for CD Audio
         settings.Volume.mainVol = value;
-
 #if SOUND_GUS || SOUND_SB || SOUND_OPL || CDROM || SOUND_TANDY || SOUND_CMS
         set_volume(CMD_MAINVOL);
 #endif

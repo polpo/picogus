@@ -25,7 +25,7 @@ extern "C" {
 #include <stdbool.h>
 
 #define SETTINGS_MAGIC 0x70677573  // "pgus" in ascii
-#define SETTINGS_VERSION 3
+#define SETTINGS_VERSION 4
 
 // Settings struct has generous padding for future settings by aligning to 4 bytes
 typedef struct Settings {
