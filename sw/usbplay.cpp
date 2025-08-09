@@ -110,12 +110,16 @@ void play_usb() {
             }
             give_audio_buffer(ap, buffer);
 #ifdef SOUND_MPU
-            send_midi_bytes(8);
-#endif
+            send_midi_bytes(32);
         } else {
-            send_midi_bytes(2);
+            send_midi_bytes(8);
+#endif // SOUND_MPU
         }
         cdrom_tasks(&cdrom);
+#else // CDROM
+#ifdef SOUND_MPU
+        send_midi_bytes(8);
+#endif // SOUND_MPU
 #endif // CDROM
         // tinyusb host task
         tuh_task();
