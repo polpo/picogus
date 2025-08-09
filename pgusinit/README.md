@@ -39,6 +39,7 @@ settings. Options may be given for other settings:
 * `/wtvol x` - sets wavetable header volume to x percent (PicoGUS 2.0 boards
   only).  Available in all modes in case you want to use the wavetable header
   as an aux input (for example for an internal CD-ROM drive).
+* `/mainvol x` - sets main volume level for all outputs.
 * `/mode x` - changes the card to mode specified by x. Options:
     - `gus`: Gravis Ultrasound
     - `sb`: Sound Blaster 2.0 & AdLib. Supports CD-rom emulation.
@@ -77,6 +78,7 @@ port specified in ULTRASND.
   voices. Using this option enables 44.1kHz output for all numbers of voices,
   similar to the Interwave. This will result in stuttering in most games that
   use streaming DMA for sound effects like Doom, hence it is EXPERIMENTAL.
+* `/gusvol x` - sets the volume of the GUS output to x percent.
 
 See the Compatibility List wiki for notes on programs that require special
 settings for the above options:
@@ -88,6 +90,7 @@ https://github.com/polpo/picogus/wiki/Compatibility-list
 * `/oplport x` - sets the base port of the OPL/AdLib. Defaults to 388.
 * `/oplwait` - wait on OPL2 data write. Can fix speed-sensitive early AdLib
   games on fast systems (example: 688 Attack Sub).
+* `/oplvol x` - sets the volume of the OPL2 output to x percent.
 
 ### MPU-401 options
 
@@ -99,10 +102,12 @@ https://github.com/polpo/picogus/wiki/Compatibility-list
 ### Tandy options
 
 * `/tandyport x` - sets the base port of the Tandy 3-voice. Defaults to 2c0.
+* `/psgvol x` - sets the volume of the PSG output to x percent.
 
 ### CMS options
 
 * `/cmsport x` - sets the base port of the CMS. Defaults to 220.
+* `/psgvol x` - sets the volume of the PSG output to x percent.
 
 ### Serial mouse settings
 
@@ -124,6 +129,7 @@ that do not require an IRQ: AdLib, CMS, Tandy, and USB.
 * `/cdload n` - load image n in the list given by /cdlist. 0 to unload image
 * `/cdloadname x` - load CD image by name. Names with spaces can be quoted
 * `/cdauto 1|0` - auto-advance loaded image when same USB drive is reinserted
+* `/cdvol x` - sets the volume of the CD audio output to x percent.
 
 ## Compiling
 
