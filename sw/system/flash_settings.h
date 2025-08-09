@@ -27,6 +27,13 @@ extern "C" {
 #define SETTINGS_MAGIC 0x70677573  // "pgus" in ascii
 #define SETTINGS_VERSION 4
 
+// When adding new fields to Settings struct:
+// 1. Increment SETTINGS_VERSION
+// 2. Add new fields to the struct (including in padding/holes if there's room)
+// 3. Update defaultSettings in flash_settings.c with default values
+// 4. Add FieldInfo entries in flash_settings.c for the new fields
+// This allows preserving existing settings during upgrades
+
 // Settings struct has generous padding for future settings by aligning to 4 bytes
 typedef struct Settings {
     uint32_t magic;  // should be "pgus" in ascii (0x70677573)
@@ -91,7 +98,7 @@ typedef struct Settings {
 } Settings;
 
 
-void loadSettings(Settings* settings);
+void loadSettings(Settings* settings, bool migrate);
 void saveSettings(const Settings* settings);
 void getDefaultSettings(Settings* settings);
 

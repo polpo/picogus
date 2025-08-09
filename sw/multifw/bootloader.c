@@ -14,7 +14,7 @@ static const uint32_t offset[NR_OF_FIRMWARES] = {FLASH_FIRMWARE1, FLASH_FIRMWARE
 uint8_t read_permMode(void)
 {
     Settings settings;
-    loadSettings(&settings);
+    loadSettings(&settings, false /* don't migrate - we just need the startupMode */);
     uint8_t pModeByte = settings.startupMode;
 
     if (pModeByte >= 1 && pModeByte <= NR_OF_FIRMWARES)

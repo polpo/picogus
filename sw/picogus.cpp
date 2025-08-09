@@ -1096,7 +1096,7 @@ int main()
     }
 
     // Load settings from flash
-    loadSettings(&settings);
+    loadSettings(&settings, true /* migrate */);
     hw_clear_bits(&xip_ctrl_hw->ctrl, XIP_CTRL_EN_BITS);
 
     // Determine board type. GPIO 29 is grounded on PicoGUS v2.0, and on a Pico, it's VSYS/3 (~1.666V)
