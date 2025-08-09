@@ -34,8 +34,8 @@ enum CommandType
 
 typedef struct {
     char *name;
-    bool (*routine)(const char* arg, const int mode);
-    int mode;
+    bool (*routine)(const char*, const int);
+    int cmd;
     int type;
     char *def;
 } ParseCommand;

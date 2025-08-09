@@ -29,17 +29,19 @@
 #include <string.h>
 #include "pgusinit.h"
 
-card_mode_t gMode;
-board_type_t board_type;
-char mode_name[8] = {0};
-bool wifichg = false;
-int fw_num = 8;
-bool permanent = false;
+static card_mode_t gMode;
+static card_mode_t newMode = 0;
+static board_type_t board_type;
+static bool wifichg = false;
+static bool permanent = false;
+static bool is_console;
+static uint8_t page_lines;
 
 #include "../common/picogus.h"
 
 
-const uint8_t get_screen_lines(void) {
+const uint8_t get_screen_lines(void)
+{
     uint16_t bios_screensize = *(uint16_t far *)MK_FP(0x40, 0x4c);
     uint8_t bios_screencols = *(uint8_t far *)MK_FP(0x40, 0x4a);
 
@@ -49,10 +51,8 @@ const uint8_t get_screen_lines(void) {
     return 25;
 }
 
-static bool is_console;
-static uint8_t page_lines;
-
-static void pageprintf(char *format, ...) {
+static void pageprintf(char *format, ...)
+{
     static uint8_t printed_lines = 0;
 
     va_list arglist;
@@ -63,17 +63,19 @@ static void pageprintf(char *format, ...) {
     if (is_console && (printed_lines >= page_lines)) {
         fprintf(stderr, "Press any key to continue...");
         getch();
-        putchar('\n');
+        putchar('\r');
         printed_lines = 0;
     }
 }
 
-static void banner(void) {
-    pageprintf("PicoGUSinit v3.6.0 (c) 2025 Ian Scott - licensed under the GNU GPL v2\n");
+static void banner(void)
+{
+    printf("PicoGUSinit v3.6.0 (c) 2025 Ian Scott - licensed under the GNU GPL v2\n");
 }
 
 
-static void usage(card_mode_t mode, bool print_all) {
+static void usage(card_mode_t mode, bool print_all)
+{
     // Max line length @ 80 chars:
     //         "...............................................................................\n"
     pageprintf("Usage:\n");
@@ -152,12 +154,14 @@ static void usage(card_mode_t mode, bool print_all) {
     }
 }
 
+
 static const char* mouse_protocol_str[] = {
     "Microsoft", "Logitech", "IntelliMouse", "Mouse Systems"
 };
 
 
-static void err_ultrasnd(void) {
+static void err_ultrasnd(void)
+{
     //              "................................................................................\n"
     fprintf(stderr, "ERROR: In GUS mode but no ULTRASND variable set or is malformed!\n");
     fprintf(stderr, "The ULTRASND environment variable must be set in the following format:\n");
@@ -167,7 +171,8 @@ static void err_ultrasnd(void) {
 }
 
 
-static void err_blaster(void) {
+static void err_blaster(void)
+{
     //              "................................................................................\n"
     fprintf(stderr, "ERROR: In SB mode but no BLASTER variable set or is malformed!\n");
     fprintf(stderr, "The BLASTER environment variable must be set in the following format:\n");
@@ -177,19 +182,22 @@ static void err_blaster(void) {
 }
 
 
-static void err_pigus(void) {
+static void err_pigus(void)
+{
     fprintf(stderr, "ERROR: no PicoGUS detected!\n");
 }
 
 
-static void err_protocol(uint8_t expected, uint8_t got) {
+static void err_protocol(uint8_t expected, uint8_t got)
+{
     fprintf(stderr, "ERROR: PicoGUS card using protocol %u, needs %u\n", got, expected);
     fprintf(stderr, "Please run the latest PicoGUS firmware and pgusinit.exe versions together!\n");
     fprintf(stderr, "To flash new firmware, run pgusinit /flash picogus.uf2\n");
 }
 
 
-static int init_gus(void) {
+static int init_gus(void)
+{
     char* ultrasnd = getenv("ULTRASND");
     if (ultrasnd == NULL) {
         err_ultrasnd();
@@ -237,7 +245,8 @@ static int init_gus(void) {
 }
 
 
-static int init_sb(void) {
+static int init_sb(void)
+{
     char* blaster = getenv("BLASTER");
     if (blaster == NULL) {
         err_blaster();
@@ -263,9 +272,10 @@ static int init_sb(void) {
 }
 
 
-static void print_string(uint8_t mode) {
+static void print_string(uint8_t cmd)
+{
     outp(CONTROL_PORT, 0xCC); // Knock on the door...
-    outp(CONTROL_PORT, mode); // Select mode register
+    outp(CONTROL_PORT, cmd);  // Select command register
 
     char str[256] = {0};
     for (uint8_t i = 0; i < 255; ++i) {
@@ -278,7 +288,8 @@ static void print_string(uint8_t mode) {
 }
 
 
-static bool wait_for_read(const uint8_t value) {
+static bool wait_for_read(const uint8_t value)
+{
     for (uint32_t i = 0; i < 6000000; ++i) {    // Up to 6000000, for bigger fws like pg-multi.uf2, waiting for flash erase. If not, timeout and error.
         if (inp(DATA_PORT_HIGH) == value) {
             return true;
@@ -288,7 +299,8 @@ static bool wait_for_read(const uint8_t value) {
 }
 
 
-static cdrom_image_status_t wait_for_cd_status(void) {
+static cdrom_image_status_t wait_for_cd_status(void)
+{
     outp(CONTROL_PORT, 0xCC); // Knock on the door...
     outp(CONTROL_PORT, CMD_CDSTATUS); // Select CD image status register
     cdrom_image_status_t cd_status;
@@ -303,21 +315,22 @@ static cdrom_image_status_t wait_for_cd_status(void) {
 }
 
 
-static bool print_cdimage_list(void) {
+static int print_cdimage_list(void)
+{
     outp(CONTROL_PORT, 0xCC); // Knock on the door...
     outp(CONTROL_PORT, CMD_CDLOAD); // Get currently loaded index
     uint8_t current_index = inp(DATA_PORT_HIGH);
-    printf("Listing CD images on USB drive:\n");
+    pageprintf("Listing CD images on USB drive:\n");
 
     outp(CONTROL_PORT, CMD_CDLIST); // Select CD image list register
     cdrom_image_status_t cd_status = wait_for_cd_status();
     if (cd_status == CD_STATUS_BUSY) {
         printf("Timeout getting CD image list\n");
-        return false;
+        return 99;
     } else if (cd_status == CD_STATUS_ERROR) {
         printf("Error getting CD image list: ");
         print_string(CMD_CDERROR);
-        return false;
+        return 99;
     }
 
     outp(CONTROL_PORT, CMD_CDLIST); // Select CD image list register
@@ -339,12 +352,12 @@ static bool print_cdimage_list(void) {
         printf("No image currently loaded.\n");
     }
     printf("Run \"pgusinit /cdload n\" to load the nth image in the above list, 0 to unload.\n");
-    return true;
+    return 0;
 }
 
 
-
-static int print_cdimage_current(void) {
+static int print_cdimage_current(void)
+{
     outp(CONTROL_PORT, CMD_CDLOAD); // Get currently loaded index
     uint8_t current_index = inp(DATA_PORT_HIGH);
     if (!current_index) {
@@ -357,7 +370,8 @@ static int print_cdimage_current(void) {
 }
 
 
-static int wait_for_cd_load(void) {
+static int wait_for_cd_load(void)
+{
     cdrom_image_status_t cd_status = wait_for_cd_status();
     if (cd_status == CD_STATUS_BUSY) {
         printf("Timeout loading CD image.\n");
@@ -371,7 +385,8 @@ static int wait_for_cd_load(void) {
 }
 
 
-static void print_cdemu_status(void) {
+static void print_cdemu_status(void)
+{
     outp(CONTROL_PORT, CMD_CDAUTOADV); // Select joystick enable register
     uint8_t tmp_uint8 = inp(DATA_PORT_HIGH);
     outp(CONTROL_PORT, CMD_CDPORT); // Select port register
@@ -382,15 +397,17 @@ static void print_cdemu_status(void) {
 }
 
 
-static void write_settings(void) {
+static void write_settings(void)
+{
     outp(CONTROL_PORT, CMD_SAVE); // Select save settings register
     outp(DATA_PORT_HIGH, 0xff);
     printf("Settings saved to flash.\n");
     delay(100);
 }
 
-// For multifw
-static int reboot_to_firmware(const uint8_t value, const bool permanent) {
+
+static int reboot_to_firmware(const uint8_t value, const bool permanent)
+{
     outp(CONTROL_PORT, 0xCC); // Knock on the door...
 
     outp(CONTROL_PORT, CMD_BOOTMODE); // Select firmware selection register
@@ -417,26 +434,48 @@ static int reboot_to_firmware(const uint8_t value, const bool permanent) {
     return 0;
 }
 
-void print_progress_bar(uint32_t current, uint32_t total) {
-    const int bar_width = 50;
-    static int last_filled = -1;
+void print_progress_bar(uint16_t current, uint16_t total)
+{
+    #define BAR_WIDTH 50
 
-    int filled = (current * bar_width) / total;
-    int percent = (current * 100) / total;
+    static uint16_t bar_step = 0; // init flag
+    static uint16_t pct_step;
+    static uint16_t next_bar, next_pct;
+    static uint8_t filled = 0, percent = 0;
+    static uint8_t last_filled = 255, last_percent = 255;
+
+    if (bar_step == 0) {
+        bar_step = (total + BAR_WIDTH - 1) / BAR_WIDTH; // ceiling division
+        pct_step = (total + 99) / 100;
+        next_bar = bar_step;
+        next_pct = pct_step;
+    }
+
+    while (current >= next_bar && filled < BAR_WIDTH) {
+        filled++;
+        next_bar += bar_step;
+    }
+
+    while (current >= next_pct && percent < 100) {
+        percent++;
+        next_pct += pct_step;
+    }
 
     if (filled != last_filled) {
+        // If the bar changed, redraw percentage and bar
         last_filled = filled;
+        last_percent = percent;
 
-        char bar[80];
-        int pos = 0;
-        pos += sprintf(bar, "\r[");
-        for (int i = 0; i < bar_width; i++) {
-            bar[pos++] = (i < filled) ? '=' : ' ';
-        }
-        pos += sprintf(bar + pos, "] %3d%%", percent);
-        bar[pos] = '\0';
-
-        fprintf(stderr, "%s", bar);
+        fprintf(stderr, "\r%3u%% [", percent);
+        for (uint8_t i = 0; i < BAR_WIDTH; i++)
+            fputc((i < filled) ? '=' : ' ', stderr);
+        fputc(']', stderr);
+        fflush(stderr);
+    }
+    else if (percent != last_percent) {
+        // If only the percent changed, redraw just the percent
+        last_percent = percent;
+        fprintf(stderr, "\r%3u%%", percent);
         fflush(stderr);
     }
 }
@@ -472,8 +511,8 @@ static int write_firmware(const char* fw_filename)
         printf("Older fw protocol version %d detected, upgrading firmware in compatibility mode\n", protocol);
     }
 
-    uint32_t numBlocks = 1;
-    for (uint32_t i = 0; i < numBlocks; ++i) {
+    uint16_t numBlocks = 1;
+    for (uint16_t i = 0; i < numBlocks; ++i) {
         if (fread(uf2_buf.buf, 1, 512, fp) != 512) {
             fprintf(stderr, "ERROR: file %s is not a valid UF2 file - too short\n", fw_filename);
             return 11;
@@ -548,10 +587,11 @@ static int write_firmware(const char* fw_filename)
     return 0;
 }
 
+
 static void wifi_printStatus(void)
 {
     outp(CONTROL_PORT, 0xCC); // Knock on the door...
-    outp(CONTROL_PORT, CMD_WIFISTAT); // Select WiFi status mode
+    outp(CONTROL_PORT, CMD_WIFISTAT); // Select WiFi status command
     outp(DATA_PORT_HIGH, 0); // Write to start getting the status
    
     printf("WiFi status: ");
@@ -571,10 +611,10 @@ static void wifi_printStatus(void)
     putchar('\n');
 }
 
-static void send_string(const uint8_t mode, const char* str, const int16_t max_len)
+static void send_string(const uint8_t cmd, const char* str, const int16_t max_len)
 {
     outp(CONTROL_PORT, 0xCC); // Knock on the door...
-    outp(CONTROL_PORT, mode);
+    outp(CONTROL_PORT, cmd);
     char chr;
     for (int16_t i = 0; i < max_len; ++i) {
         if (str[i] == 0) { // End of string
@@ -585,31 +625,15 @@ static void send_string(const uint8_t mode, const char* str, const int16_t max_l
     outp(DATA_PORT_HIGH, 0);
 }
 
-#define process_port_opt(option) \
-if (i + 1 >= argc) { \
-    usage(gMode, false); \
-    return 255; \
-} \
-e = sscanf(argv[++i], "%hx", &option); \
-if (e != 1 || option > 0x3ffu) { \
-    usage(gMode, false); \
-    return 4; \
-}
-
-static bool cmdDisplayUsage(const char* arg, const int mode)
+static bool cmdDisplayUsage(const char* arg, const int print_all)
 {
-    usage(gMode, mode);
+    usage(gMode, print_all);
     return true;
 }
 
-static bool cmdSendBool(const char* arg, const int mode)
+static bool cmdSendBool(const char* arg, const int cmd)
 {
     uint8_t value;
-
-    if (!arg) {
-        usage(gMode, false);
-        return false;
-    }
 
     if (!strcmp(arg, "1") || !stricmp(arg, "true") || !stricmp(arg, "on")) {
         value = 1;
@@ -620,126 +644,89 @@ static bool cmdSendBool(const char* arg, const int mode)
         return false;
     }
 
-    outp(CONTROL_PORT, mode);
+    outp(CONTROL_PORT, cmd);
     outp(DATA_PORT_HIGH, value);
     return true;
 }
 
-static bool cmdSetMode(const char* arg, const int mode)
+static bool cmdSetMode(const char* arg, const int cmd)
 {
-    if (!arg || strlen(arg) > 7) {
-        usage(gMode, false);
-        return false;
-    }
-
-    strncpy(mode_name, arg, 8); // 7 chars max + null terminator
-    mode_name[7] = '\0';        // Ensure null-termination
-
-    if (mode_name[0]) {
-        if (!stricmp(mode_name, "TANDY") || !stricmp(mode_name, "CMS")) {
-            // Backwards compatibility for old tandy and cms modes
-            strcpy(mode_name, "PSG");
-        } 
-        int j;
-        for (j = 1; j < 7; ++j) {
-            if (stricmp(modenames[j], mode_name) == 0) {
-                fw_num = j;
-                break;
-            }
+    if (!stricmp(arg, "TANDY") || !stricmp(arg, "CMS")) {
+        // Backwards compatibility for old tandy and cms modes
+        newMode = PSG_MODE;
+        return true;
+    } 
+    int j;
+    for (j = 1; j < 7; ++j) {
+        if (stricmp(modenames[j], arg) == 0) {
+            newMode = j;
+            return true;
         }
-        if (j == 7) {
-            usage(gMode, false);
-            return false;
-        }
-        reboot_to_firmware(fw_num, permanent);
-        gMode = j;
     }
-    return true;
+    fprintf(stderr, "Invalid mode %s. Valid modes: gus, sb, mpu, psg, adlib, usb\n");
+    return false;
 }
 
-static bool ctrlSendUint8(const char *arg, int mode, int min, int max)
+static bool ctrlSendUint8(const char *arg, int cmd, int min, int max)
 {
     char* endptr;
-    uint8_t val;
-
-    if (!arg) {
-        usage(gMode, false);
-        return false;
-    }
-
-    val = (uint8_t)strtol(arg, &endptr, 10);
+    uint8_t val = (uint8_t)strtol(arg, &endptr, 10);
 
     if (*endptr != '\0' || val < min || val > max) {
         usage(gMode, false);
         return false;
     }
 
-    outp(CONTROL_PORT, mode);
+    outp(CONTROL_PORT, cmd);
     outp(DATA_PORT_HIGH, (uint8_t)val);
     return true;
 }
 
-static bool cmdSendUint8(const char* arg, const int mode)
+static bool cmdSendUint8(const char* arg, const int cmd)
 {   
-    return ctrlSendUint8(arg, mode, 0, 255);
+    return ctrlSendUint8(arg, cmd, 0, 255);
 }
 
-static bool ctrlSendUint16(const char *arg, int mode, long min, long max)
+static bool ctrlSendUint16(const char *arg, int cmd, long min, long max)
 {
     char *endptr;
-    uint16_t val;
+    uint16_t val = (uint16_t)strtol(arg, &endptr, 10);
 
-    if (!arg)
-    {
+    if (*endptr != '\0' || val < min || val > max) {
         usage(gMode, false);
         return false;
     }
 
-    val = (uint16_t)strtol(arg, &endptr, 10);
-
-    if (*endptr != '\0' || val < min || val > max)
-    {
-        usage(gMode, false);
-        return false;
-    }
-
-    outp(CONTROL_PORT, mode);
+    outp(CONTROL_PORT, cmd);
     outpw(DATA_PORT_LOW, (uint16_t)val);
     return true;
 }
 
-static bool cmdSendUint16(const char* arg, const int mode)
+static bool cmdSendUint16(const char* arg, const int cmd)
 {
-    return ctrlSendUint16(arg, mode, 0, 65535);
+    return ctrlSendUint16(arg, cmd, 0, 65535);
 }
 
-static bool cmdSendPort(const char* arg, const int mode)
+static bool cmdSendPort(const char* arg, const int cmd)
 {
-    return ctrlSendUint16(arg, mode, 0, 0x3FF);
+    return ctrlSendUint16(arg, cmd, 0, 0x3FF);
 }
 
-static bool cmdSetVol(const char* arg, const int mode)
+static bool cmdSetVol(const char* arg, const int cmd)
 {
-    return ctrlSendUint8(arg, mode, 0, 100);
+    return ctrlSendUint8(arg, cmd, 0, 100);
 }
 
-static bool cmdSendMousePort(const char *arg, const int mode)
+static bool cmdSendMousePort(const char *arg, const int cmd)
 {
     char* endptr;
-    uint8_t val;
+    uint8_t val = (uint8_t)strtol(arg, &endptr, 10);
+    if (*endptr != '\0' || val > 4) {
+        usage(gMode, false);
+        return false;
+    }
+
     uint16_t port;
-
-    if (!arg) {
-        usage(gMode, false);
-        return false;
-    }
-
-    val = (uint8_t)strtol(arg, &endptr, 10);
-    if (*endptr != '\0' || val < 0 || val > 4) {
-        usage(gMode, false);
-        return false;
-    }
-
     switch (val) {
         case 0: port = 0x000; break;
         case 1: port = 0x3F8; break;
@@ -751,74 +738,71 @@ static bool cmdSendMousePort(const char *arg, const int mode)
             return false;
     }
 
-    outp(CONTROL_PORT, CMD_MOUSEPORT);
+    outp(CONTROL_PORT, cmd);
     outpw(DATA_PORT_LOW, port);
     return true;
 }
 
-static bool cmdSendMouseSen(const char* arg, const int mode)
+static bool cmdSendMouseSen(const char* arg, const int cmd)
 {
-    return ctrlSendUint16(arg, mode, 0, 1024);
+    return ctrlSendUint16(arg, cmd, 0, 1024);
 }
 
-static bool cmdSendMouseProto(const char* arg, const int mode)
+static bool cmdSendMouseProto(const char* arg, const int cmd)
 {
-    return ctrlSendUint8(arg, mode, 0, 3);
+    return ctrlSendUint8(arg, cmd, 0, 3);
 }
 
-static bool cmdSendMouseRate(const char* arg, const int mode)
+static bool cmdSendMouseRate(const char* arg, const int cmd)
 {
-    return ctrlSendUint8(arg, mode, 20, 200);
+    return ctrlSendUint8(arg, cmd, 20, 200);
 }
 
-static bool cmdWifiStatus(const char* arg, const int mode)
+static bool cmdWifiStatus(const char* arg, const int cmd)
 {
     wifi_printStatus();
     exit(0);
 }
 
-static bool cmdWifiSSID(const char* arg, const int mode)
+static bool cmdWifiSSID(const char* arg, const int cmd)
 {
     wifichg = true;
-    send_string(mode, arg, 32);
+    send_string(cmd, arg, 32);
     return true;
 }
 
-static bool cmdWifiPass(const char* arg, const int mode)
+static bool cmdWifiPass(const char* arg, const int cmd)
 {
     wifichg = true;
-    send_string(mode, arg, 63);
+    send_string(cmd, arg, 63);
     return true;
 }
 
-static bool cmdWifiNoPass(const char* arg, const int mode)
+static bool cmdWifiNoPass(const char* arg, const int cmd)
 {
     wifichg = true;
-    send_string(mode, "", 1);
+    send_string(cmd, "", 1);
     return true;
 }
 
-static bool cmdCDLoadName(const char* arg, const int mode)
+static bool cmdCDLoadName(const char* arg, const int cmd)
 {
-    send_string(mode, arg, 127);
-    wait_for_cd_load();
-    exit(0);
+    send_string(cmd, arg, 127);
+    exit(wait_for_cd_load());
 }
 
-static bool cmdCDList(const char* arg, const int mode)
+static bool cmdCDList(const char* arg, const int cmd)
 {
-    print_cdimage_list();
-    exit(0);
+    exit(print_cdimage_list());
 }
 
-static bool cmdCDLoad(const char* arg, const int mode)
+static bool cmdCDLoad(const char* arg, const int cmd)
 {
-    ctrlSendUint8(arg, mode, 0, 255);
-    wait_for_cd_load();
-    exit(0);
+    ctrlSendUint8(arg, cmd, 0, 255);
+    exit(wait_for_cd_load());
 }
 
-static bool cmdGUSBuffer(const char* arg, const int mode)
+static bool cmdGUSBuffer(const char* arg, const int cmd)
 {
     uint8_t tmp_uint8;
     uint8_t e = sscanf(arg, "%hhu", &tmp_uint8);
@@ -827,12 +811,12 @@ static bool cmdGUSBuffer(const char* arg, const int mode)
         usage(gMode, false);
         return false;
     }
-    outp(CONTROL_PORT, mode);
+    outp(CONTROL_PORT, cmd);
     outp(DATA_PORT_HIGH, (unsigned char)(tmp_uint8 - 1));
     return true;
 }
 
-static bool cmdFlashPico(const char* arg, const int mode)
+static bool cmdFlashPico(const char* arg, const int cmd)
 {
     if (strlen(arg) > 255)
     {
@@ -843,7 +827,7 @@ static bool cmdFlashPico(const char* arg, const int mode)
     return true;
 }
 
-static bool cmdSave(const char* arg, const int mode)
+static bool cmdSave(const char* arg, const int cmd)
 {
     permanent = true;
     return true;
@@ -903,54 +887,50 @@ ParseCommand parseCommands[] = {
     {0}
 };
  
-ParseCommand *matchCommand (char *str, ParseCommand commands[])
+ParseCommand *matchCommand(char *str, ParseCommand commands[])
 {
-    for(int i = 0; commands[i].name != NULL; i++ )
-    {
-	
-        if ( !stricmp ( commands[i].name, str ) )
-			return &commands[i];
-	}
-
-	return NULL;
+    for (int i = 0; commands[i].name != NULL; i++) {
+        if (!stricmp(commands[i].name, str)) {
+            return &commands[i];
+        }
+    }
+    return NULL;
 }
 
-int parseCommand (int argc, char* argv[], int* i, ParseCommand commands[])
+int parseCommand(int argc, char* argv[], int* i, ParseCommand commands[])
 {
     bool retVal = false;
     int idx = *i;
 
-    if ( !argv[idx] )
+    if (!argv[idx]) {
         return retVal;
+    }
 
     ParseCommand *command = matchCommand(argv[idx], commands);
 
-    if (command)
-    {
+    if (command) {
         char* arg = NULL;
         if (command->type == ARG_REQUIRE) {
             if (idx + 1 >= argc || argv[idx + 1][0] == '/') {
                 printf("Error: Command %s requires input argument. ", argv[idx]);
-
-                if (command->def)
+                if (command->def) {
                     printf("Example: %s %s\n", argv[idx], command->def);
-                else
+                } else {
                     printf("\n");
-
+                }
                 return retVal;  
             }
             arg = argv[++(*i)];
         }
 
-        if (!stricmp(argv[idx + 1], "default"))
-        {
-            if (command->def)
+        if (!stricmp(argv[idx + 1], "default")) {
+            if (command->def) {
                 argv[idx + 1] = command->def;
-            else
+            } else {
                 return retVal;
+            }
         }
-
-        return command->routine(arg, command->mode);
+        return command->routine(arg, command->cmd);
     } else {
         printf("Invalid command %s. Run pgusinit /? for usage help", argv[idx]);
     }
@@ -958,31 +938,16 @@ int parseCommand (int argc, char* argv[], int* i, ParseCommand commands[])
     return retVal;
 }
 
-static uint8_t ctrlGetUint8(int mode)
+static uint8_t ctrlGetUint8(int cmd)
 {
-    uint8_t tmp_uint8;
-    outp(CONTROL_PORT, mode);
-    tmp_uint8 = inp(DATA_PORT_HIGH);
-
-    return tmp_uint8;
+    outp(CONTROL_PORT, cmd);
+    return inp(DATA_PORT_HIGH);
 }
 
-static uint16_t ctrlGetUint16(int mode)
+static uint16_t ctrlGetUint16(int cmd)
 {
-    uint16_t tmp_uint16;
-    outp(CONTROL_PORT, mode);
-    tmp_uint16 = inp(DATA_PORT_HIGH);
-
-    return tmp_uint16;
-}
-
-static uint16_t ctrlGetPort(int mode)
-{
-    uint16_t tmp_uint16;
-    outp(CONTROL_PORT, mode);
-    tmp_uint16 = inpw(DATA_PORT_LOW);
-    
-    return tmp_uint16;
+    outp(CONTROL_PORT, cmd);
+    return inpw(DATA_PORT_LOW);
 }
 
 static void printPicoGus()
@@ -993,7 +958,7 @@ static void printPicoGus()
         printf("Wavetable volume set to %u\n", ctrlGetUint8(CMD_WTVOL));
     }
 
-    uint16_t mpuPort = ctrlGetPort(CMD_MPUPORT);
+    uint16_t mpuPort = ctrlGetUint16(CMD_MPUPORT);
     if (mpuPort) {
         printf("MPU-401: port %x; sysex delay: %s, ", mpuPort, ctrlGetUint8(CMD_MPUDELAY) ? "on" : "off");
         printf("fake all notes off: %s\n", ctrlGetUint8(CMD_MPUFAKE) ? "on" : "off");
@@ -1004,39 +969,32 @@ static void printPicoGus()
 
 static void printGUSMode()
 {
-    if (init_gus())
-    {
+    if (init_gus()) {
         return;
     }
     printf("GUS mode: ");
-    printf("Audio buffer: %u samples; ", ctrlGetUint16(CMD_GUSBUF) + 1);
+    printf("Audio buffer: %u samples; ", ctrlGetUint8(CMD_GUSBUF) + 1);
 
     uint8_t tmp_uint8 = ctrlGetUint8(CMD_GUSDMA);
-    if (tmp_uint8 == 0)
-    {
+    if (tmp_uint8 == 0) {
         printf("DMA interval: default; ");
-    }
-    else
-    {
+    } else {
         printf("DMA interval: %u us; ", tmp_uint8);
     }
 
     tmp_uint8 = ctrlGetUint8(CMD_GUS44K);
-    if (tmp_uint8)
-    {
+    if (tmp_uint8) {
         printf("Sample rate: fixed 44.1k\n");
-    }
-    else
-    {
+    } else {
         printf("Sample rate: variable\n");
     }
 
-    printf("Running in GUS mode on port %x\n", ctrlGetPort(CMD_GUSPORT));
+    printf("Running in GUS mode on port %x\n", ctrlGetUint16(CMD_GUSPORT));
 }
 
 static void printAdlibMode()
 {
-    printf("Running in AdLib/OPL2 mode on port %x", ctrlGetPort(CMD_OPLPORT));
+    printf("Running in AdLib/OPL2 mode on port %x", ctrlGetUint16(CMD_OPLPORT));
     printf("%s\n", ctrlGetUint8(CMD_OPLWAIT) ? ", wait on" : "");
 }
 
@@ -1048,26 +1006,21 @@ static void printUSBMode()
 
 static void printPSGMode()
 {
-    printf("Running in PSG mode (Tandy 3-voice on port %x, ", ctrlGetPort(CMD_TANDYPORT));
-    printf("CMS/Game Blaster on port %x)\n", ctrlGetPort(CMD_CMSPORT));
+    printf("Running in PSG mode (Tandy 3-voice on port %x, ", ctrlGetUint16(CMD_TANDYPORT));
+    printf("CMS/Game Blaster on port %x)\n", ctrlGetUint16(CMD_CMSPORT));
 }
 
 static void printSBMode()
 {
-    if (init_sb())
-    {
+    if (init_sb()) {
         return;
     }
-    printf("Running in Sound Blaster 2.0 mode on port %x ", ctrlGetPort(CMD_SBPORT));
-    outp(CONTROL_PORT, CMD_OPLPORT); // Select port register
-    uint16_t tmp_uint16 = ctrlGetPort(CMD_OPLPORT);
-    if (tmp_uint16)
-    {
+    printf("Running in Sound Blaster 2.0 mode on port %x ", ctrlGetUint16(CMD_SBPORT));
+    uint16_t tmp_uint16 = ctrlGetUint16(CMD_OPLPORT);
+    if (tmp_uint16) {
         printf("(AdLib port %x", tmp_uint16);
         printf("%s)\n", ctrlGetUint8(CMD_OPLWAIT) ? ", wait on" : "");
-    }
-    else
-    {
+    } else {
         printf("(AdLib port disabled)\n");
     }
     print_cdemu_status();
@@ -1075,7 +1028,7 @@ static void printSBMode()
 
 static void printNE2000Mode()
 {
-    printf("Running in NE2000 mode on port %x\n", ctrlGetPort(CMD_NE2KPORT));
+    printf("Running in NE2000 mode on port %x\n", ctrlGetUint16(CMD_NE2KPORT));
     wifi_printStatus();
 }
 
@@ -1083,7 +1036,7 @@ static void printMultiMode()
 {
     if (gMode == USB_MODE || gMode == PSG_MODE || gMode == ADLIB_MODE)
     {
-        uint16_t tmp_uint16 = ctrlGetPort(CMD_MOUSEPORT);
+        uint16_t tmp_uint16 = ctrlGetUint16(CMD_MOUSEPORT);
         printf("Serial Mouse ");
         switch (tmp_uint16)
         {
@@ -1105,8 +1058,7 @@ static void printMultiMode()
         default:
             printf("enabled on IO port %x\n", tmp_uint16);
         }
-        if (tmp_uint16 != 0)
-        {
+        if (tmp_uint16 != 0) {
             printf("Mouse report rate: %d Hz, ", ctrlGetUint8(CMD_MOUSERATE));
             printf("protocol: %s\n", mouse_protocol_str[ctrlGetUint8(CMD_MOUSEPROTO)]);
 
@@ -1121,21 +1073,21 @@ static void printVolume()
     printf("Volume: ");
     printf("Main: %u    ", ctrlGetUint8(CMD_MAINVOL));
     
-    if (gMode == GUS_MODE)
+    if (gMode == GUS_MODE) {
         printf("GUS: %u     ", ctrlGetUint8(CMD_GUSVOL));
-    
-    if (gMode == SB_MODE)
+    }
+    if (gMode == SB_MODE) {
         printf("SB: %u    ", ctrlGetUint8(CMD_SBVOL));
-    
-    if (gMode == SB_MODE || gMode == ADLIB_MODE)
+    } 
+    if (gMode == SB_MODE || gMode == ADLIB_MODE) {
         printf("OPL: %u    ", ctrlGetUint8(CMD_OPLVOL));
-    
-    if (gMode == SB_MODE || gMode == USB_MODE)
+    } 
+    if (gMode == SB_MODE || gMode == USB_MODE) {
         printf("CD: %u    ", ctrlGetUint8(CMD_CDVOL));
-    
-    if (gMode == PSG_MODE)
+    } 
+    if (gMode == PSG_MODE) {
         printf("PSG: %u     ", ctrlGetUint8(CMD_PSGVOL));
-
+    }
     printf("\n");
 }
 
@@ -1152,7 +1104,7 @@ static init_status initPicoGUS()
     outp(CONTROL_PORT, CMD_MAGIC); // Select magic string register
     if (inp(DATA_PORT_HIGH) != 0xDD) {
         err_pigus();
-        /* return INIT_NOT_DETECTED; */
+        return INIT_NOT_DETECTED;
     };
     printf("PicoGUS detected: Firmware version: ");
     print_string(CMD_FWSTRING);
@@ -1161,7 +1113,7 @@ static init_status initPicoGUS()
     uint8_t protocol_got = inp(DATA_PORT_HIGH);
     if (PICOGUS_PROTOCOL_VER != protocol_got) {
       err_protocol(PICOGUS_PROTOCOL_VER, protocol_got);
-      /* return INIT_FW_MISMATCH; */
+      return INIT_FW_MISMATCH;
     }
 
     outp(CONTROL_PORT, CMD_BOOTMODE); // Select mode register
@@ -1191,33 +1143,39 @@ int main(int argc, char* argv[]) {
     init_status status = initPicoGUS();
     if (status == INIT_FW_MISMATCH) {
         // Still allow firmware upgrade if firmware version mismatches
-        for(int i = 1; i < argc; ++i)
-        {
-            if (!parseCommand(argc, argv, &i, parseCommandsFlash))
+        for(int i = 1; i < argc; ++i) {
+            if (!parseCommand(argc, argv, &i, parseCommandsFlash)) {
                 return 1;
-            else
+            } else {
                 return 0;
+            }
         }
         return 1;
     } else if (status == INIT_NOT_DETECTED) {
         // Still allow /? and /?? commands if not detected
-        for(int i = 1; i < argc; ++i)
-        {
-            if (!parseCommand(argc, argv, &i, parseCommandsMinimal))
+        for(int i = 1; i < argc; ++i) {
+            if (!parseCommand(argc, argv, &i, parseCommandsMinimal)) {
                 return 1;
+            }
         }
         return 1;
     }
 
     int commands = 0;
-    for(int i = 1; i < argc; ++i)
-    {
-        if (!parseCommand(argc, argv, &i, parseCommands))
+    for(int i = 1; i < argc; ++i) {
+        if (!parseCommand(argc, argv, &i, parseCommands)) {
             return 1;
+        }
     }
 
-    if (wifichg)
+    // If mode was set in commands, apply it
+    if (newMode) {
+        return reboot_to_firmware(newMode, permanent);
+    }
+
+    if (wifichg) {
         ctrlSendUint8("0", CMD_WIFIAPPLY, 0, 255);
+    }
 
     printPicoGus();
     printVolume();
