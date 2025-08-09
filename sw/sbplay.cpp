@@ -101,7 +101,7 @@ static int16_t get_opl_sample()
 {
     int16_t opl_current_sample;
     OPL_Pico_simple(&opl_current_sample, 1);
-    opl_current_sample = scale_sample(opl_current_sample << 2, opl_volume, 0);
+    opl_current_sample = scale_sample(opl_current_sample << 1, opl_volume, 1);
     return opl_current_sample;
 }
 
@@ -127,8 +127,7 @@ void audio_sample_handler(void) {
     int32_t sample_l = 0, sample_r = 0;
 
 #ifdef SOUND_SB
-    uint32_t sb_sample = sbdsp_sample();
-    sample_l = sample_r = sb_sample;
+    sample_l = sample_r = sbdsp_sample();
 #endif
 
 #ifdef CDROM
