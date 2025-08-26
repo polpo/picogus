@@ -675,7 +675,7 @@ static bool cmdSetMode(const char* arg, const int cmd)
 static bool ctrlSendUint8(const char *arg, int cmd, int min, int max)
 {
     char* endptr;
-    uint8_t val = (uint8_t)strtol(arg, &endptr, 10);
+    uint8_t val = (uint8_t)strtoul(arg, &endptr, 10);
 
     if (*endptr != '\0' || val < min || val > max) {
         usage(gMode, false);
@@ -692,10 +692,10 @@ static bool cmdSendUint8(const char* arg, const int cmd)
     return ctrlSendUint8(arg, cmd, 0, 255);
 }
 
-static bool ctrlSendUint16(const char *arg, int cmd, long min, long max)
+static bool ctrlSendUint16(const char *arg, int cmd, long min, long max, int base)
 {
     char *endptr;
-    uint16_t val = (uint16_t)strtol(arg, &endptr, 10);
+    uint16_t val = (uint16_t)strtoul(arg, &endptr, base);
 
     if (*endptr != '\0' || val < min || val > max) {
         usage(gMode, false);
@@ -709,12 +709,12 @@ static bool ctrlSendUint16(const char *arg, int cmd, long min, long max)
 
 static bool cmdSendUint16(const char* arg, const int cmd)
 {
-    return ctrlSendUint16(arg, cmd, 0, 65535);
+    return ctrlSendUint16(arg, cmd, 0, 65535, 10);
 }
 
 static bool cmdSendPort(const char* arg, const int cmd)
 {
-    return ctrlSendUint16(arg, cmd, 0, 0x3FF);
+    return ctrlSendUint16(arg, cmd, 0, 0x3FF, 16);
 }
 
 static bool cmdSetVol(const char* arg, const int cmd)
@@ -725,7 +725,7 @@ static bool cmdSetVol(const char* arg, const int cmd)
 static bool cmdSendMousePort(const char *arg, const int cmd)
 {
     char* endptr;
-    uint8_t val = (uint8_t)strtol(arg, &endptr, 10);
+    uint8_t val = (uint8_t)strtoul(arg, &endptr, 10);
     if (*endptr != '\0' || val > 4) {
         usage(gMode, false);
         return false;
@@ -750,7 +750,7 @@ static bool cmdSendMousePort(const char *arg, const int cmd)
 
 static bool cmdSendMouseSen(const char* arg, const int cmd)
 {
-    return ctrlSendUint16(arg, cmd, 0, 1024);
+    return ctrlSendUint16(arg, cmd, 0, 1024, 10);
 }
 
 static bool cmdSendMouseProto(const char* arg, const int cmd)
