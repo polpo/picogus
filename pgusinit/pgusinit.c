@@ -717,6 +717,11 @@ static bool cmdSendPort(const char* arg, const int cmd)
     return ctrlSendUint16(arg, cmd, 0, 0x3FF, 16);
 }
 
+static bool cmdDefaults(const char* arg, const int cmd)
+{
+    return cmdSendUint8(CMD_DEFAULTS, 0xff);
+}
+
 static bool cmdSetVol(const char* arg, const int cmd)
 {
     return ctrlSendUint8(arg, cmd, 0, 100);
@@ -852,6 +857,7 @@ ParseCommand parseCommandsFlash[] = {
 ParseCommand parseCommands[] = {
     {"/flash", cmdFlashPico, 0, ARG_REQUIRE, "picogus.uf2"},
     {"/save", cmdSave, 0, ARG_NONE},
+    {"/defaults", cmdDefaults, 0, ARG_NONE},
     {"/?", cmdDisplayUsage, 0, ARG_NONE},
     {"/??", cmdDisplayUsage, 1, ARG_NONE},
     {"/joy", cmdSendBool, CMD_JOYEN, ARG_REQUIRE},
