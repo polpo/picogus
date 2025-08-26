@@ -880,7 +880,7 @@ ParseCommand parseCommands[] = {
     {"/mouseproto", cmdSendMouseProto, CMD_MOUSEPROTO, ARG_REQUIRE, "0"},
     {"/mouserate", cmdSendMouseRate, CMD_MOUSERATE, ARG_REQUIRE, "60"},
     {"/ne2kport", cmdSendPort, CMD_NE2KPORT, ARG_REQUIRE, "300"},
-    {"/wifistatus", cmdSendPort, 0, ARG_NONE},
+    {"/wifistatus", cmdWifiStatus, 0, ARG_NONE},
     {"/wifissid", cmdWifiSSID, CMD_WIFISSID, ARG_REQUIRE},
     {"/wifipass", cmdWifiPass, CMD_WIFIPASS, ARG_REQUIRE},
     {"/wifinopass", cmdWifiNoPass, CMD_WIFIPASS, ARG_NONE},
