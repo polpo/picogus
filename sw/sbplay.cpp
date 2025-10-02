@@ -171,6 +171,7 @@ void play_adlib() {
 
 #ifdef USB_STACK
     // Init TinyUSB for joystick support
+    puts("tinyusb init");
     tuh_init(BOARD_TUH_RHPORT);
 #endif
 
@@ -210,6 +211,7 @@ void play_adlib() {
     pwm_set_enabled(pwm_slice_num, true);
 #endif
 
+    puts("starting audio");
     for (;;) {
 #if CDROM
         cdrom_audio_callback(&cdrom, 1024);

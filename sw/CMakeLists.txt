@@ -218,7 +218,12 @@ add_subdirectory(resampler)
 # Build GUS firmware
 function(build_gus TARGET_NAME MULTIFW)
     set(USB_JOYSTICK TRUE)
-    set(SOUND_MPU TRUE)
+    if(PICO_PLATFORM STREQUAL "rp2350-arm-s" OR PICO_PLATFORM STREQUAL "rp2350")
+        # MPU is not working on rp2350 for some reason
+        set(SOUND_MPU FALSE)
+    else()
+        set(SOUND_MPU TRUE)
+    endif()
     config_target(${TARGET_NAME} ${MULTIFW})
     pico_set_program_name(${TARGET_NAME} "picogus-gus")
     target_sources(${TARGET_NAME} PRIVATE
@@ -228,18 +233,6 @@ function(build_gus TARGET_NAME MULTIFW)
     )
     target_compile_definitions(${TARGET_NAME} PRIVATE
         SOUND_GUS=1
-        PSRAM=1
-        TEST_PSRAM=1
-        PSRAM_ASYNC=1
-        #PSRAM_ASYNC_DMA_IRQ=1
-        PSRAM_SPINLOCK=1
-        # PSRAM_MUTEX=1
-        # PSRAM_WAITDMA=1
-        PSRAM_CORE0=1
-        PSRAM_PIN_CS=1
-        PSRAM_PIN_SCK=2
-        PSRAM_PIN_MOSI=3
-        PSRAM_PIN_MISO=0
         # POLLING_DMA=1
         INTERP_CLAMP=1
         # INTERP_LINEAR=1
@@ -492,10 +485,15 @@ elseif(PROJECT_TYPE STREQUAL "NE2K")
     build_ne2k(pg-ne2k FALSE)
 endif()
 
+if(PICO_PLATFORM STREQUAL "rp2350-arm-s" OR PICO_PLATFORM STREQUAL "rp2350")
+    set(PROGRAM_TARGET rp2350)
+else()
+    set(PROGRAM_TARGET rp2040)
+endif()
 ################################################################################
 # Optional target to program built firmware via openocd
 add_custom_target(
     program
     DEPENDS ${FW_TARGET}
-    COMMAND openocd -f interface/cmsis-dap.cfg -f target/rp2040.cfg -c "adapter speed 5000\; program ${FW_TARGET}.bin verify reset exit 0x10000000"
+    COMMAND openocd -f interface/cmsis-dap.cfg -f target/${PROGRAM_TARGET}.cfg -c "adapter speed 5000\; program ${FW_TARGET}.bin verify reset exit 0x10000000"
 )
