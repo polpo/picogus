@@ -65,9 +65,9 @@ static bool add_cd_image_sorted(CDImageNode **head, const char *filename) {
 
 static bool isCDImage(const char *filename) {
     int len = strlen(filename);
-    if (len < 4) return false;
-    // Filter out macOS extended attribute files
-    if (strncmp(filename, "._", 2) == 0) {
+    if (len <= 4) return false;
+    // Filter out hidden files (starting with '.')
+    if (filename[0] == '.') {
         return false;
     }
     return (strncasecmp(filename + (len - 4), ".iso", 4) == 0 ||
@@ -228,7 +228,8 @@ void cdman_load_image_index(cdrom_t *dev, int imageIndex) {
             // Wrap around index for autoadvance
             imageIndex = 1;
         }
-        strcpy(dev->image_path, images[imageIndex - 1]);
+        strncpy(dev->image_path, images[imageIndex - 1], sizeof(dev->image_path) - 1);
+        dev->image_path[sizeof(dev->image_path) - 1] = '\0';
         cdman_list_images_free(images, imageCount);
         dev->image_command = CD_COMMAND_IMAGE_LOAD;
     }
@@ -248,7 +249,8 @@ void cdman_set_image_index(cdrom_t *dev) {
         if (strncasecmp(dev->image_path, images[i], MAX_FILENAME_LEN) == 0) {
             current_index = last_loaded_index = i + 1;
             // Copy back the canonical name to image_path with proper case
-            strcpy(dev->image_path, images[i]);
+            strncpy(dev->image_path, images[i], sizeof(dev->image_path) - 1);
+            dev->image_path[sizeof(dev->image_path) - 1] = '\0';
             break;
         }
     }

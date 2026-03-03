@@ -227,7 +227,7 @@ __force_inline void select_picogus(uint8_t value) {
         break;
     case CMD_CDLIST:
 #ifdef CDROM
-        if (cdrom.image_status == CD_STATUS_IDLE) {
+        if (cdrom.image_status == CD_STATUS_IDLE || cdrom.image_status == CD_STATUS_ERROR) {
             cdrom.image_status = CD_STATUS_BUSY;
             cdrom.image_command = CD_COMMAND_IMAGE_LIST;
             // puts("cdimages start");
