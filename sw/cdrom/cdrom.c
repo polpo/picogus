@@ -518,6 +518,12 @@ uint8_t cdrom_audio_playmsf(cdrom_t *dev, int m,int s, int f, int M, int S, int 
 #if USE_CD_AUDIO_FIFO
     fifo_reset(&dev->audio_fifo);
 #endif
+    /* Memory barrier: ensure seek_pos, cd_end, and fifo_reset are all
+     * visible to core 1 before cd_status is set to PLAYING.  Without this,
+     * the Cortex-M0+ compiler or hardware could reorder the store to
+     * cd_status ahead of the others, causing core 1 to start consuming
+     * from a partially-updated state. */
+    __dmb();
     dev->cd_status = CD_STATUS_PLAYING;
     
     return 1;
