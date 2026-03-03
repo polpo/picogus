@@ -526,17 +526,38 @@ uint8_t cdrom_audio_playmsf(cdrom_t *dev, int m,int s, int f, int M, int S, int 
 void
 cdrom_audio_pause_resume(cdrom_t *dev, uint8_t resume)
 {
-    if ((dev->cd_status == CD_STATUS_PLAYING) || (dev->cd_status == CD_STATUS_PAUSED))
+    if ((dev->cd_status == CD_STATUS_PLAYING) || (dev->cd_status == CD_STATUS_PAUSED)) {
         dev->cd_status = (dev->cd_status & 0xfe) | (resume & 0x01);
 #if USE_CD_AUDIO_FIFO
-    fifo_reset(&dev->audio_fifo);
+        /* Only flush the FIFO on pause/stop — not on resume.
+         * Flushing on resume discards already-decoded audio and forces a
+         * re-fill from scratch, causing a brief gap at the start of resumed
+         * playback. */
+        if (!resume)
+            fifo_reset(&dev->audio_fifo);
 #endif
+    }
 }
 
 
 uint8_t cdrom_get_subq(cdrom_t *dev,uint8_t *b) {    
-    subchannel_t subc;    
+    subchannel_t subc;
+    /* seek_pos points to the next sector to be READ, not the one currently
+     * audible.  Subtract the number of sectors already buffered in the FIFO
+     * so the reported position matches what the listener actually hears.
+     * Each sector holds SAMPLES_PER_SECTOR stereo pairs = 2*SAMPLES_PER_SECTOR
+     * individual int16 values.  Guard against underflow when the FIFO is
+     * empty or seek_pos is at the start of the track. */
+#if USE_CD_AUDIO_FIFO
+    {
+        uint32_t buffered_sectors = dev->audio_fifo.samples_in_fifo / (SAMPLES_PER_SECTOR * 2);
+        uint32_t report_pos = (buffered_sectors < dev->seek_pos) ?
+                              (dev->seek_pos - buffered_sectors) : 0;
+        dev->ops->get_subchannel(dev, report_pos, &subc);
+    }
+#else
     dev->ops->get_subchannel(dev, dev->seek_pos, &subc);
+#endif
     b[0] = 0x80; //?
     b[1] = subc.attr;
     b[2] = subc.track;

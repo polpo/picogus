@@ -118,6 +118,12 @@ void play_psg() {
 #ifdef USB_STACK
     // Init TinyUSB for joystick support
     tuh_init(BOARD_TUH_RHPORT);
+    // Pump USB events for ~500 ms so any device already connected at boot
+    // is fully enumerated before the audio loop starts.
+    {
+        uint32_t deadline = time_us_32() + 500000u;
+        while (time_us_32() < deadline) tuh_task();
+    }
 #endif
 
 #ifdef SOUND_MPU
@@ -162,7 +168,15 @@ void play_psg() {
 #endif
 
         memset(buf, 0, sizeof(buf));
-        struct audio_buffer *buffer = take_audio_buffer(ap, true);
+        // Non-blocking poll: keep servicing USB while waiting for a free
+        // audio buffer so TinyUSB transactions don't time out.
+        struct audio_buffer *buffer;
+        while (!(buffer = take_audio_buffer(ap, false))) {
+#ifdef USB_STACK
+            tuh_task();
+            usb_hotplug_task();
+#endif
+        }
         int16_t *samples = (int16_t *) buffer->buffer->bytes;
       
 #if SOUND_TANDY

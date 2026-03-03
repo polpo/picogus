@@ -29,9 +29,11 @@
 // #include "pico/sem.h"
 
 // Configuration
-#define AUDIO_FIFO_SIZE 1024  // Must be power of 2
+#define AUDIO_FIFO_SIZE 4096  // Must be power of 2
+                              // Needs to be > 2*SAMPLES_PER_SECTOR (1176) to absorb
+                              // slow FAT/USB sector reads without underrun (~93ms at 44100Hz)
 #define AUDIO_FIFO_BITS (AUDIO_FIFO_SIZE - 1)
-#define AUDIO_FIFO_START_THRESHOLD (AUDIO_FIFO_SIZE >> 1)  // Start playback when half full
+#define AUDIO_FIFO_START_THRESHOLD 512  // Start playback after 512 samples (~11ms); lower = faster post-seek response
 
 #ifdef __cplusplus
 extern "C" {

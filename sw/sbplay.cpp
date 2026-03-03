@@ -131,24 +131,26 @@ void audio_sample_handler(void) {
 #endif
 
 #ifdef CDROM
-    static uint32_t cd_index = 0;
-    const uint32_t has_cd_samples = fifo_take_samples_inline(cd_fifo, 2);
-    if (has_cd_samples) {
-        sample_l += scale_sample(cd_fifo->buffer[cd_index++], cd_audio_volume, 0);
-        sample_r += scale_sample(cd_fifo->buffer[cd_index++], cd_audio_volume, 0);
-        // sample_l += cd_fifo->buffer[cd_index++];
-        // sample_r += cd_fifo->buffer[cd_index++];
-        cd_index &= AUDIO_FIFO_BITS;
+    // Read L+R sample pair directly from FIFO using read_idx before advancing.
+    // Must request exactly 2 (stereo pair) or skip — never read partial pairs.
+    if (cd_fifo->state != FIFO_STATE_STOPPED && cd_fifo->samples_in_fifo >= 2) {
+        uint32_t idx = cd_fifo->read_idx;
+        sample_l += scale_sample(cd_fifo->buffer[idx],                    cd_audio_volume, 0);
+        sample_r += scale_sample(cd_fifo->buffer[(idx + 1) & AUDIO_FIFO_BITS], cd_audio_volume, 0);
+        cd_fifo->read_idx = (idx + 2) & AUDIO_FIFO_BITS;
+        cd_fifo->samples_in_fifo -= 2;
+        if (cd_fifo->samples_in_fifo == 0) cd_fifo->state = FIFO_STATE_STOPPED;
     }
 #endif
 
-    static uint32_t opl_out_index = 0;
-    const uint32_t has_opl_samples = fifo_take_samples_inline(&opl_out_fifo, 1);
-    if (has_opl_samples) {
-        int16_t opl_sample = opl_out_fifo.buffer[opl_out_index++];
+    // Read OPL sample directly from read_idx before advancing, same pattern as CD audio above.
+    if (opl_out_fifo.state != FIFO_STATE_STOPPED && opl_out_fifo.samples_in_fifo >= 1) {
+        int16_t opl_sample = opl_out_fifo.buffer[opl_out_fifo.read_idx];
+        opl_out_fifo.read_idx = (opl_out_fifo.read_idx + 1) & AUDIO_FIFO_BITS;
+        opl_out_fifo.samples_in_fifo--;
+        if (opl_out_fifo.samples_in_fifo == 0) opl_out_fifo.state = FIFO_STATE_STOPPED;
         sample_l += opl_sample;
         sample_r += opl_sample;
-        opl_out_index &= AUDIO_FIFO_BITS;
     }
 
     const sample_pair clamped = {.data16 = {
@@ -212,7 +214,7 @@ void play_adlib() {
 
     for (;;) {
 #if CDROM
-        cdrom_audio_callback(&cdrom, 1024);
+        cdrom_audio_callback(&cdrom, AUDIO_FIFO_SIZE - SAMPLES_PER_SECTOR);
 #endif
 
 #if OPL_CMD_BUFFER
