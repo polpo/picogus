@@ -869,6 +869,7 @@ cdi_load_cue(cd_img_t *cdi, const char *cuefile)
     int      success;
     int      error;
     int      can_add_track = 0;
+    int      has_prestart = 0; /* true only when INDEX 00 was seen for current track */
     FIL      fp;
     char     buf[MAX_LINE_LENGTH];
     char     ansi[MAX_FILENAME_LENGTH];
@@ -932,7 +933,7 @@ cdi_load_cue(cd_img_t *cdi, const char *cuefile)
 
         if (!strcmp(command, "TRACK")) {            
             if (can_add_track) {                            
-                success = cdi_add_track(cdi, &trk, &shift, prestart, &total_pregap, cur_pregap);
+                success = cdi_add_track(cdi, &trk, &shift, has_prestart ? prestart : trk.start, &total_pregap, cur_pregap);
             }
             else {
                 success = 1;
@@ -945,6 +946,7 @@ cdi_load_cue(cd_img_t *cdi, const char *cuefile)
             trk.skip   = 0;
             cur_pregap = 0;
             prestart   = 0;
+            has_prestart = 0;
 
             trk.number       = cdi_cue_get_number(&line);
             trk.track_number = trk.number;
@@ -1021,6 +1023,7 @@ cdi_load_cue(cd_img_t *cdi, const char *cuefile)
             switch (index) {
                 case 0:
                     prestart = frame;
+                    has_prestart = 1;
                     break;
 
                 case 1:
@@ -1034,7 +1037,7 @@ cdi_load_cue(cd_img_t *cdi, const char *cuefile)
         } else if (!strcmp(command, "FILE")) {
             // putchar('1');
             if (can_add_track) {
-                success = cdi_add_track(cdi, &trk, &shift, prestart, &total_pregap, cur_pregap);
+                success = cdi_add_track(cdi, &trk, &shift, has_prestart ? prestart : trk.start, &total_pregap, cur_pregap);
             } else {
                 success = 1;
             }
@@ -1043,6 +1046,7 @@ cdi_load_cue(cd_img_t *cdi, const char *cuefile)
                 break;
             }
             can_add_track = 0;
+            has_prestart = 0;
 
             // putchar('2');
             memset(ansi, 0, MAX_FILENAME_LENGTH * sizeof(char));
@@ -1112,7 +1116,7 @@ cdi_load_cue(cd_img_t *cdi, const char *cuefile)
     }
 
     /* Add last track. */
-    if (!cdi_add_track(cdi, &trk, &shift, prestart, &total_pregap, cur_pregap))
+    if (!cdi_add_track(cdi, &trk, &shift, has_prestart ? prestart : trk.start, &total_pregap, cur_pregap))
         return 0;
 
     /* Add lead out track. */
