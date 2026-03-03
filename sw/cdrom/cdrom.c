@@ -450,8 +450,8 @@ void __inline cdrom_read_data(cdrom_t *dev) {
 }
 
 uint8_t cdrom_status(cdrom_t *dev) {
-    uint8_t status;    
-    status |= 2;//this bit seems to always be set?
+    uint8_t status = 0; /* initialise to avoid returning random stack garbage */
+    status |= 2; /* this bit seems to always be set? */
                 //bit 4 never set?
     if(dev->cd_status == CD_STATUS_PLAYING)  status |= STAT_PLAY;
     if(dev->cd_status == CD_STATUS_PAUSED)  status |= STAT_PLAY;    
@@ -613,7 +613,7 @@ uint8_t cdrom_disc_capacity(cdrom_t *dev, unsigned char *b) {
     dev->ops->get_track_info(dev, last_track+1, 0, &ti);            
     b[0]=ti.m;
     b[1]=ti.s;
-    b[2]=ti.f-1; //TODO THIS NEEDS TO HANDLE   FRAME 0,  JUST BEING LAZY 6AM
+    b[2]= ti.f > 0 ? ti.f - 1 : 0; /* guard against frame 0 underflowing to 255 */
     b[3]=0x08;
     b[4]=0x00;    
     return 1;    

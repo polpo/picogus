@@ -99,7 +99,14 @@ void MKE_COMMAND(uint8_t value) {
     if(mke.command_buffer[0] == CMD1_ABORT) {
         mke_log("CMD_ABORT\n");
         cdrom_fifo_clear(&cdrom.info_fifo);
+        /* Clear the full command buffer so no stale bytes remain after abort */
         mke.command_buffer[0]=0;
+        mke.command_buffer[1]=0;
+        mke.command_buffer[2]=0;
+        mke.command_buffer[3]=0;
+        mke.command_buffer[4]=0;
+        mke.command_buffer[5]=0;
+        mke.command_buffer[6]=0;
         mke.command_buffer_pending=7;
         cdrom_output_status(&cdrom);
     }
@@ -129,9 +136,9 @@ void MKE_COMMAND(uint8_t value) {
                 /* printf("r %u ", cdrom.req_total); */
                 cdrom_fifo_clear(&cdrom.info_fifo);                                                                                            
                 break;
-            case CMD1_READSUBQ:                
-                cdrom_get_subq(&cdrom,(uint8_t *)&x);    
-                cdrom_fifo_clear(&cdrom.info_fifo);                                                            
+            case CMD1_READSUBQ:
+                cdrom_fifo_clear(&cdrom.info_fifo);
+                cdrom_get_subq(&cdrom,(uint8_t *)&x);
                 cdrom_fifo_write_multiple(&cdrom.info_fifo, x, 11);
                 /*
                 for(i=0;i<11;i++) {                
@@ -149,10 +156,21 @@ void MKE_COMMAND(uint8_t value) {
                 mke_log("\n");                
                 cdrom_output_status(&cdrom);
                 break;
-            case CMD1_GETMODE://6
+            case CMD1_GETMODE:
                 mke_log("GET MODE\n");
-                uint8_t mode[5] = {[1] = 0x08};
-                cdrom_fifo_write_multiple(&cdrom.info_fifo, mode, 5);
+                /*
+                Byte 0: data mode (0x01 = Mode 1, standard ISO data)
+                Byte 1: 0x08 = stereo audio enabled
+                Byte 2: XA mode flag (0 = not XA)
+                Byte 3: audio channel routing (0 = default)
+                Byte 4: reserved
+                Returning zeros for the data mode byte can cause the driver
+                to misidentify the disc type.
+                */
+                {
+                    uint8_t mode[5] = {0x01, 0x08, 0x00, 0x00, 0x00};
+                    cdrom_fifo_write_multiple(&cdrom.info_fifo, mode, 5);
+                }
                 cdrom_output_status(&cdrom);
                 break;
             case CMD1_PAUSERESUME:                
@@ -180,15 +198,9 @@ void MKE_COMMAND(uint8_t value) {
                 break;
             case CMD1_READTOC:
                 cdrom_fifo_clear(&cdrom.info_fifo);
-                /*
-                mke_log("READ TOC:");  
-                for(i=0;i<6;i++) {
-                    mke_log("%02x ",mke.command_buffer[i+1]);
+                if(cdrom_read_toc(&cdrom,(uint8_t *)&x,mke.command_buffer[2])) {
+                    cdrom_fifo_write_multiple(&cdrom.info_fifo, x, 8);
                 }
-                mke_log(" | ");                                
-                */
-                cdrom_read_toc(&cdrom,(uint8_t *)&x,mke.command_buffer[2]);                
-                cdrom_fifo_write_multiple(&cdrom.info_fifo, x, 8);
                 /*
                 for(i=0;i<8;i++) {
                     mke_log("%02x ",x[i]);
@@ -247,12 +259,15 @@ void MKE_COMMAND(uint8_t value) {
                 break;        
             case CMD1_READ_VER:
                 /*
-                SB2CD Expects 12 bytes, but drive only returns 11.
+                SB2CD expects 12 bytes. Pad to 12 so the driver does not
+                read the trailing status byte as version data.
                 */
                 cdrom_fifo_clear(&cdrom.info_fifo);                
-                mke_log("CMD: READ VER\n");                                
-                uint8_t ver[10] = "CR-5630.75";
-                cdrom_fifo_write_multiple(&cdrom.info_fifo, ver, 10);
+                mke_log("CMD: READ VER\n");
+                {
+                    uint8_t ver[12] = {'C','R','-','5','6','3','0','.','7','5',0,0};
+                    cdrom_fifo_write_multiple(&cdrom.info_fifo, ver, 12);
+                }
                 cdrom_output_status(&cdrom);
                 break;
             case CMD1_STATUS:
