@@ -26,6 +26,7 @@
 #include <ctype.h>
 #include "tusb.h"
 /* #include "bsp/board_api.h" */
+#include "pico/stdlib.h"
 
 #include "ff.h"
 #include "diskio.h"
@@ -37,6 +38,7 @@
 //------------- Elm Chan FatFS -------------//
 static FATFS fatfs; // for simplicity only support 1 device
 static volatile bool _disk_busy;
+static volatile bool _disk_error;
 static uint8_t mounted_dev;
 
 // define the buffer to be place in USB/DMA memory with correct alignment/cache line size
@@ -48,6 +50,7 @@ CFG_TUH_MEM_SECTION static struct {
 bool msc_app_init(void)
 {
     _disk_busy = false;
+    _disk_error = false;
     return true;
 }
 
@@ -102,7 +105,12 @@ void tuh_msc_mount_cb(uint8_t dev_addr)
 
 void tuh_msc_umount_cb(uint8_t dev_addr)
 {
-    (void)dev_addr;
+    /* Only tear down the filesystem for the drive we actually mounted.
+     * A second MSC device (e.g. a USB hub with two drives) disconnecting
+     * must not unmount the still-active drive. */
+    if (dev_addr != mounted_dev)
+        return;
+
     // printf("A MassStorage device is unmounted\r\n");
     mounted_dev = 0;
 
@@ -117,16 +125,31 @@ void tuh_msc_umount_cb(uint8_t dev_addr)
 
 static void wait_for_disk_io(void)
 {
+    /* 2-second timeout — prevents a hung or disconnected USB drive from
+     * locking the firmware forever.  At 44100 Hz stereo, 2 s is far longer
+     * than any legitimate sector read should take over USB Full Speed. */
+    uint32_t deadline = time_us_32() + 2000000u;
     while (_disk_busy) {
         tuh_task();
+        if ((int32_t)(time_us_32() - deadline) >= 0) {
+            printf("disk_io: timeout waiting for USB transfer\n");
+            _disk_busy = false;
+            _disk_error = true;
+            return;
+        }
     }
 }
 
 static bool disk_io_complete(uint8_t dev_addr, tuh_msc_complete_data_t const * cb_data)
 {
-  (void) dev_addr; (void) cb_data;
-  _disk_busy = false;
-  return true;
+    (void) dev_addr;
+    /* Propagate SCSI command status — non-zero CSW status means the drive
+     * reported an error (e.g. medium error, illegal request). */
+    _disk_error = (cb_data->csw->status != 0);
+    if (_disk_error)
+        printf("disk_io: SCSI error status %u\n", cb_data->csw->status);
+    _disk_busy = false;
+    return true;
 }
 
 DSTATUS disk_status (
@@ -156,10 +179,11 @@ DRESULT disk_read (
     uint8_t const lun = 0;
 
     _disk_busy = true;
+    _disk_error = false;
     tuh_msc_read10(mounted_dev, lun, buff, sector, (uint16_t) count, disk_io_complete, 0);
     wait_for_disk_io();
 
-    return RES_OK;
+    return _disk_error ? RES_ERROR : RES_OK;
 }
 
 #if FF_FS_READONLY == 0
@@ -175,10 +199,11 @@ DRESULT disk_write (
     uint8_t const lun = 0;
 
     _disk_busy = true;
+    _disk_error = false;
     tuh_msc_write10(mounted_dev, lun, buff, sector, (uint16_t) count, disk_io_complete, 0);
     wait_for_disk_io();
 
-    return RES_OK;
+    return _disk_error ? RES_ERROR : RES_OK;
 }
 
 #endif
