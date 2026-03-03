@@ -112,6 +112,11 @@ static Resampler<get_opl_sample> resampler;
 static constexpr uint32_t clocks_per_sample_minus_one = (SYS_CLK_HZ / 44100) - 1;
 static constexpr uint pwm_slice_num = 4; // slices 0-3 are taken by USB joystick support
 
+// Max OPL samples to generate per main-loop iteration.
+// Keeps cdrom_tasks() running frequently so the USB drive is never starved.
+// 256 samples ~= 5.8 ms at 44100 Hz — matches one USB audio buffer period.
+static constexpr uint32_t OPL_FILL_PER_ITER = 256;
+
 typedef union {
     uint32_t data32;
     int16_t data16[2];
@@ -226,11 +231,16 @@ void play_adlib() {
         }
 #endif
 
-        // Generate OPL samples and add to output FIFO
-        while (fifo_free_space(&opl_out_fifo) > 0) {
-            // Interpolate at current position
+        // Generate OPL samples and add to output FIFO.
+        // Cap fill to OPL_FILL_PER_ITER samples per loop iteration so
+        // cdrom_tasks() gets a turn frequently enough to keep the USB
+        // drive busy.  The 4096-sample FIFO still provides underrun
+        // headroom — we just don't fill it all in one shot.
+        for (uint32_t opl_i = 0;
+             opl_i < OPL_FILL_PER_ITER && fifo_free_space(&opl_out_fifo) > 0;
+             opl_i++) {
             fifo_add_sample(&opl_out_fifo, resampler.get_sample());
-		}
+        }
 #ifdef USB_STACK
         // Service TinyUSB events
         tuh_task();
