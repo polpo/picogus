@@ -25,8 +25,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
-// #include "pico/mutex.h"
-// #include "pico/sem.h"
+#include "hardware/sync.h"
 
 // Configuration
 #define AUDIO_FIFO_SIZE 4096  // Must be power of 2
@@ -66,31 +65,36 @@ void fifo_reset(audio_fifo_t *fifo);
 bool fifo_add_samples(audio_fifo_t *fifo, const audio_sample_t *samples_buffer, uint32_t num_samples_to_add);
 
 // Inline functions for performance
-inline uint32_t fifo_level(audio_fifo_t *fifo) {
+static inline uint32_t fifo_level(audio_fifo_t *fifo) {
     return fifo->samples_in_fifo;
 }
 
-inline bool fifo_add_sample(audio_fifo_t *fifo, audio_sample_t sample) {
+static inline bool fifo_add_sample(audio_fifo_t *fifo, audio_sample_t sample) {
     if (fifo->samples_in_fifo == AUDIO_FIFO_SIZE) {
         return false;
     }
     fifo->buffer[fifo->write_idx] = sample;
     fifo->write_idx = (fifo->write_idx + 1) & AUDIO_FIFO_BITS;
+    // Disable interrupts around the counter increment: the PWM ISR (consumer)
+    // runs on the same core and its samples_in_fifo-- can preempt the
+    // load-add-store here, causing a lost decrement and an inflated count.
+    uint32_t irq_save = save_and_disable_interrupts();
     fifo->samples_in_fifo++;
     if (fifo->samples_in_fifo >= AUDIO_FIFO_START_THRESHOLD) {
         fifo->state = FIFO_STATE_RUNNING;
     }
+    restore_interrupts(irq_save);
     return true;
 }
 
 uint32_t fifo_take_samples(audio_fifo_t *fifo, uint32_t num_samples);
 
-inline uint32_t fifo_free_space(audio_fifo_t *fifo) {
+static inline uint32_t fifo_free_space(audio_fifo_t *fifo) {
    return AUDIO_FIFO_SIZE - fifo->samples_in_fifo;
 }
 
 // Inline version of fifo_take_samples for performance-critical code
-inline uint32_t fifo_take_samples_inline(audio_fifo_t *fifo, uint32_t num_samples) {
+static inline uint32_t fifo_take_samples_inline(audio_fifo_t *fifo, uint32_t num_samples) {
     if (fifo->state == FIFO_STATE_STOPPED) {
         return 0;
     }
