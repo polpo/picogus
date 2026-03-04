@@ -187,7 +187,7 @@ void OPL_writeReg(OPL *opl, uint32_t reg, uint8_t val);
  */
 int16_t OPL_calc(OPL *opl);
 
-void OPL_calc_buffer(OPL *opl, int16_t *buffer, uint32_t nsamples);
+void OPL_calc_buffer(OPL *opl, int32_t *buffer, uint32_t nsamples);
 // LE left/right channels int16:int16
 void OPL_calc_buffer_stereo(OPL *opl, int32_t *buffer, uint32_t nsamples);
 

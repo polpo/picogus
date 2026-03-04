@@ -45,7 +45,7 @@ extern "C" {
 int OPL_Pico_Init(unsigned int);
 unsigned int OPL_Pico_PortRead(opl_port_t);
 void OPL_Pico_WriteRegister(unsigned int, unsigned int);
-void OPL_Pico_simple(int16_t*, uint32_t);
+void OPL_Pico_simple(int32_t*, uint32_t);
 
 #ifdef __cplusplus
 } // extern "C"

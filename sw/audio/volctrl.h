@@ -37,7 +37,7 @@ extern int32_t psg_volume;
 extern int32_t set_volume_scale (uint8_t percent);
 
 static inline int32_t scale_sample (int32_t sample, const int32_t scale, const bool clamp) {
-    sample = (sample * scale) >> 16;
+    sample = (int32_t)(((int64_t)sample * scale) >> 16);
 
     if (clamp)
         sample = clamp16(sample);

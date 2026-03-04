@@ -99,10 +99,9 @@ static audio_fifo_t opl_out_fifo;
 
 static int16_t get_opl_sample()
 {
-    int16_t opl_current_sample;
+    int32_t opl_current_sample;
     OPL_Pico_simple(&opl_current_sample, 1);
-    opl_current_sample = scale_sample(opl_current_sample << 1, opl_volume, 1);
-    return opl_current_sample;
+    return scale_sample(opl_current_sample, opl_volume, 1);
 }
 
 static Resampler<get_opl_sample> resampler;

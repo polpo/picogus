@@ -1058,7 +1058,7 @@ static INLINE int16_t calc_slot_hat(OPL *opl) {
 }
 #endif
 
-#define _MO(x) (-(x) >> 1)
+#define _MO(x) (-(x))
 #define _RO(x) (x)
 
 static INLINE int16_t calc_fm(OPL *opl, int ch) {
@@ -1204,7 +1204,7 @@ INLINE static void mix_output(OPL *opl) {
 #endif
 }
 
-INLINE static int16_t mix_output_raw(OPL *opl) {
+INLINE static int32_t mix_output_raw(OPL *opl) {
     int32_t out = 0;
 
 #if !EMU8950_NO_PERCUSSION_MODE
@@ -1374,7 +1374,7 @@ int16_t OPL_calc(OPL *opl) {
     return opl->mix_out[0];
 }
 
-void OPL_calc_buffer(OPL *opl, int16_t *buffer, uint32_t nsamples) {
+void OPL_calc_buffer(OPL *opl, int32_t *buffer, uint32_t nsamples) {
     assert(opl->out_step == opl->inp_step);
     for (unsigned i = 0; i < nsamples; i++) {
         update_output(opl);

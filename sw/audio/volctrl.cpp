@@ -63,7 +63,7 @@ void set_volume(uint16_t mode) {
             set_volume(CMD_PSGVOL);
             break;
         case CMD_OPLVOL:
-            opl_volume = set_volume_scale(settings.Volume.oplVol);
+            opl_volume = set_volume_scale(settings.Volume.oplVol) * 6;
             break;
         case CMD_SBVOL:
             sb_volume = set_volume_scale(settings.Volume.sbVol);
