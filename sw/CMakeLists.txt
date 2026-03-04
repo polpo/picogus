@@ -166,17 +166,36 @@ function(config_target TARGET_NAME MULTIFW)
 
 
     if(SOUND_OPL)
-        target_compile_definitions(${TARGET_NAME} PRIVATE
-            SOUND_OPL=1
-            USE_EMU8950_OPL=1
-            EMU8950_ASM=1
-            EMU8950_TLL_FLASH=1 # pre-computed TLL table stored in flash via .flashdata section (not copied to RAM)
-            EMU8950_NO_FLOAT=1 # RP2040 has no FPU; float only used in TLL init anyway
-            EMU8950_NO_TIMER=1 # disable timer which isn't used
-            EMU8950_NO_TEST_FLAG=1 # disable test flags (which aren't used)
-            OPL_CMD_BUFFER=1 # queue OPL writes on core 0, drain on core 1 to eliminate cross-core struct race
-        )
-        target_link_libraries(${TARGET_NAME} opl)
+        if(USE_YMF3812)
+            # ymfm ym3812 (OPL2): 9 ch / 18 op / 1 output — ~3-4x faster than ymf262.
+            # USE_YMF3812=1 is propagated automatically via opl_ym3812's INTERFACE definitions.
+            target_compile_definitions(${TARGET_NAME} PRIVATE
+                SOUND_OPL=1
+                OPL_CMD_BUFFER=1
+            )
+            target_link_libraries(${TARGET_NAME} opl_ym3812)
+        elseif(USE_YMFM_OPL)
+            # ymfm ymf262 (OPL3): 18 ch / 36 op / 4 outputs — games detect OPL3.
+            target_compile_definitions(${TARGET_NAME} PRIVATE
+                SOUND_OPL=1
+                USE_YMFM_OPL=1
+                OPL_CMD_BUFFER=1
+            )
+            target_link_libraries(${TARGET_NAME} opl_ymfm)
+        else()
+            # Default: emu8950 (OPL2, assembly-optimized for RP2040)
+            target_compile_definitions(${TARGET_NAME} PRIVATE
+                SOUND_OPL=1
+                USE_EMU8950_OPL=1
+                EMU8950_ASM=1
+                EMU8950_TLL_FLASH=1 # pre-computed TLL table stored in flash via .flashdata section (not copied to RAM)
+                EMU8950_NO_FLOAT=1 # RP2040 has no FPU; float only used in TLL init anyway
+                EMU8950_NO_TIMER=1 # disable timer which isn't used
+                EMU8950_NO_TEST_FLAG=1 # disable test flags (which aren't used)
+                OPL_CMD_BUFFER=1 # queue OPL writes on core 0, drain on core 1 to eliminate cross-core struct race
+            )
+            target_link_libraries(${TARGET_NAME} opl)
+        endif()
     endif()
 
     target_link_libraries(
@@ -280,6 +299,35 @@ function(build_sb TARGET_NAME MULTIFW)
 endfunction()
 
 ################################################################################
+# Build SB firmware — ymf262 OPL3 variant
+function(build_sb_ymf262 TARGET_NAME MULTIFW)
+    set(USE_YMFM_OPL TRUE)
+    set(USB_JOYSTICK TRUE)
+    set(SOUND_MPU FALSE)
+    set(SOUND_OPL TRUE)
+    set(CDROM TRUE)
+    config_target(${TARGET_NAME} ${MULTIFW})
+    pico_set_program_name(${TARGET_NAME} "picogus-sb-ymf262")
+    target_sources(${TARGET_NAME} PRIVATE
+        audio/volctrl.cpp
+        sbdsp/sbdsp.cpp
+        sbplay.cpp
+        isa/isa_dma.c
+        audio/audio_fifo.c
+        audio/audio_i2s_minimal.c
+    )
+    target_compile_definitions(${TARGET_NAME} PRIVATE
+        SOUND_SB=1
+        SOUND_DSP=1
+        SB_BUFFERLESS=1
+        SB_BUFFERLESS_NG=1
+        USE_CD_AUDIO_FIFO=1
+    )
+    target_link_libraries(${TARGET_NAME} resampler)
+    pico_generate_pio_header(${TARGET_NAME} ${CMAKE_CURRENT_LIST_DIR}/isa/isa_dma.pio)
+endfunction()
+
+################################################################################
 # Build AdLib firmware
 function(build_adlib TARGET_NAME MULTIFW)
     set(USB_JOYSTICK TRUE)
@@ -294,6 +342,71 @@ function(build_adlib TARGET_NAME MULTIFW)
         audio/audio_i2s_minimal.c
     )  
     target_link_libraries(${TARGET_NAME} resampler)
+endfunction()
+
+################################################################################
+# Build AdLib firmware — ymf262 OPL3 variant
+function(build_adlib_ymf262 TARGET_NAME MULTIFW)
+    set(USE_YMFM_OPL TRUE)
+    set(USB_JOYSTICK TRUE)
+    set(USB_MOUSE TRUE)
+    set(SOUND_MPU TRUE)
+    set(SOUND_OPL TRUE)
+    config_target(${TARGET_NAME} ${MULTIFW})
+    pico_set_program_name(${TARGET_NAME} "picogus-adlib-ymf262")
+    target_sources(${TARGET_NAME} PRIVATE
+        audio/volctrl.cpp
+        sbplay.cpp
+        audio/audio_i2s_minimal.c
+    )
+    target_link_libraries(${TARGET_NAME} resampler)
+endfunction()
+
+################################################################################
+# Build AdLib firmware — ymfm OPL2 (ym3812) variant
+function(build_adlib_ym3812 TARGET_NAME MULTIFW)
+    set(USE_YMF3812 TRUE)
+    set(USB_JOYSTICK TRUE)
+    set(USB_MOUSE TRUE)
+    set(SOUND_MPU TRUE)
+    set(SOUND_OPL TRUE)
+    config_target(${TARGET_NAME} ${MULTIFW})
+    pico_set_program_name(${TARGET_NAME} "picogus-adlib-ym3812")
+    target_sources(${TARGET_NAME} PRIVATE
+        audio/volctrl.cpp
+        sbplay.cpp
+        audio/audio_i2s_minimal.c
+    )
+    target_link_libraries(${TARGET_NAME} resampler)
+endfunction()
+
+################################################################################
+# Build SB firmware — ymfm OPL2 (ym3812) variant
+function(build_sb_ym3812 TARGET_NAME MULTIFW)
+    set(USE_YMF3812 TRUE)
+    set(USB_JOYSTICK TRUE)
+    set(SOUND_MPU TRUE)
+    set(SOUND_OPL TRUE)
+    set(CDROM TRUE)
+    config_target(${TARGET_NAME} ${MULTIFW})
+    pico_set_program_name(${TARGET_NAME} "picogus-sb-ym3812")
+    target_sources(${TARGET_NAME} PRIVATE
+        audio/volctrl.cpp
+        sbdsp/sbdsp.cpp
+        sbplay.cpp
+        isa/isa_dma.c
+        audio/audio_fifo.c
+        audio/audio_i2s_minimal.c
+    )
+    target_compile_definitions(${TARGET_NAME} PRIVATE
+        SOUND_SB=1
+        SOUND_DSP=1
+        SB_BUFFERLESS=1
+        SB_BUFFERLESS_NG=1
+        USE_CD_AUDIO_FIFO=1
+    )
+    target_link_libraries(${TARGET_NAME} resampler)
+    pico_generate_pio_header(${TARGET_NAME} ${CMAKE_CURRENT_LIST_DIR}/isa/isa_dma.pio)
 endfunction()
 
 ################################################################################
@@ -373,11 +486,32 @@ endfunction()
 # Build "multifw" - all firmwares in one UF2
 if(PROJECT_TYPE STREQUAL "MULTIFW")
     set(FW_TARGET picogus)
+
+    # ---------------------------------------------------------------------------
+    # OPL variant for the adlib slot in the multifw bundle.
+    # Uncomment exactly one of the three lines below:
+    # set(MULTIFW_OPL_VARIANT "emu8950")   # original emu8950 — OPL2, assembly-optimized
+    # set(MULTIFW_OPL_VARIANT "ym3812") # ymfm ym3812   — OPL2, ymfm quality
+    set(MULTIFW_OPL_VARIANT "ymf262") # ymfm ymf262   — OPL3, true stereo
+    # ---------------------------------------------------------------------------
+
+    if(MULTIFW_OPL_VARIANT STREQUAL "ymf262")
+        set(ADLIB_TARGET_NAME "pg-adlib-ymf262")
+        set(ADLIB_BUILD_FN build_adlib_ymf262)
+    elseif(MULTIFW_OPL_VARIANT STREQUAL "ym3812")
+        set(ADLIB_TARGET_NAME "pg-adlib-ym3812")
+        set(ADLIB_BUILD_FN build_adlib_ym3812)
+    else()
+        set(ADLIB_TARGET_NAME "pg-adlib")
+        set(ADLIB_BUILD_FN build_adlib)
+    endif()
+    message("Multifw OPL variant: ${MULTIFW_OPL_VARIANT} → ${ADLIB_TARGET_NAME}")
+
     add_custom_command(
         OUTPUT
             "${CMAKE_BINARY_DIR}/generated/multifw/flash_firmware.h"
             "${CMAKE_BINARY_DIR}/pg-gus-multifw.ld"
-            "${CMAKE_BINARY_DIR}/pg-adlib-multifw.ld"
+            "${CMAKE_BINARY_DIR}/${ADLIB_TARGET_NAME}-multifw.ld"
             "${CMAKE_BINARY_DIR}/pg-mpu-multifw.ld"
             "${CMAKE_BINARY_DIR}/pg-psg-multifw.ld"
             "${CMAKE_BINARY_DIR}/pg-sb-multifw.ld"
@@ -389,8 +523,8 @@ if(PROJECT_TYPE STREQUAL "MULTIFW")
             -DFW_LD_IN="${CMAKE_SOURCE_DIR}/multifw/firmware.ld.in"
             -DFW_1_BIN="${CMAKE_BINARY_DIR}/pg-gus.bin"
             -DFW_1_LD="${CMAKE_BINARY_DIR}/pg-gus-multifw.ld"
-            -DFW_2_BIN="${CMAKE_BINARY_DIR}/pg-adlib.bin"
-            -DFW_2_LD="${CMAKE_BINARY_DIR}/pg-adlib-multifw.ld"
+            -DFW_2_BIN="${CMAKE_BINARY_DIR}/${ADLIB_TARGET_NAME}.bin"
+            -DFW_2_LD="${CMAKE_BINARY_DIR}/${ADLIB_TARGET_NAME}-multifw.ld"
             -DFW_3_BIN="${CMAKE_BINARY_DIR}/pg-mpu.bin"
             -DFW_3_LD="${CMAKE_BINARY_DIR}/pg-mpu-multifw.ld"
             -DFW_4_BIN="${CMAKE_BINARY_DIR}/pg-psg.bin"
@@ -403,7 +537,7 @@ if(PROJECT_TYPE STREQUAL "MULTIFW")
         DEPENDS
             "${CMAKE_SOURCE_DIR}/multifw/firmware.ld.in"
             pg-gus
-            pg-adlib
+            ${ADLIB_TARGET_NAME}
             pg-mpu
             pg-psg
             pg-sb
@@ -412,7 +546,7 @@ if(PROJECT_TYPE STREQUAL "MULTIFW")
     add_custom_target(generate_flash_firmware_h DEPENDS
         "${CMAKE_BINARY_DIR}/generated/multifw/flash_firmware.h"
         "${CMAKE_BINARY_DIR}/pg-gus-multifw.ld"
-        "${CMAKE_BINARY_DIR}/pg-adlib-multifw.ld"
+        "${CMAKE_BINARY_DIR}/${ADLIB_TARGET_NAME}-multifw.ld"
         "${CMAKE_BINARY_DIR}/pg-mpu-multifw.ld"
         "${CMAKE_BINARY_DIR}/pg-psg-multifw.ld"
         "${CMAKE_BINARY_DIR}/pg-sb-multifw.ld"
@@ -422,9 +556,9 @@ if(PROJECT_TYPE STREQUAL "MULTIFW")
     build_gus(pg-gus FALSE)
     build_gus(pg-gus-multifw TRUE)
     add_dependencies(pg-gus-multifw pg-gus generate_flash_firmware_h)
-    build_adlib(pg-adlib FALSE)
-    build_adlib(pg-adlib-multifw TRUE)
-    add_dependencies(pg-adlib-multifw pg-adlib generate_flash_firmware_h)
+    cmake_language(CALL ${ADLIB_BUILD_FN} ${ADLIB_TARGET_NAME} FALSE)
+    cmake_language(CALL ${ADLIB_BUILD_FN} ${ADLIB_TARGET_NAME}-multifw TRUE)
+    add_dependencies(${ADLIB_TARGET_NAME}-multifw ${ADLIB_TARGET_NAME} generate_flash_firmware_h)
     build_mpu(pg-mpu FALSE)
     build_mpu(pg-mpu-multifw TRUE)
     add_dependencies(pg-mpu-multifw pg-mpu generate_flash_firmware_h)
@@ -434,6 +568,16 @@ if(PROJECT_TYPE STREQUAL "MULTIFW")
     build_sb(pg-sb FALSE)
     build_sb(pg-sb-multifw TRUE)
     add_dependencies(pg-sb-multifw pg-sb generate_flash_firmware_h)
+    # Standalone ymf262/ym3812 targets — always built, not in combined picogus.uf2
+    # (skipped if already built above as the selected MULTIFW_OPL_VARIANT)
+    if(NOT MULTIFW_OPL_VARIANT STREQUAL "ymf262")
+        build_sb_ymf262(pg-sb-ymf262 FALSE)
+        build_adlib_ymf262(pg-adlib-ymf262 FALSE)
+    endif()
+    if(NOT MULTIFW_OPL_VARIANT STREQUAL "ym3812")
+        build_sb_ym3812(pg-sb-ym3812 FALSE)
+        build_adlib_ym3812(pg-adlib-ym3812 FALSE)
+    endif()
     build_usb(pg-usb FALSE)
     build_usb(pg-usb-multifw TRUE)
     add_dependencies(pg-usb-multifw pg-usb generate_flash_firmware_h)
@@ -461,8 +605,8 @@ if(PROJECT_TYPE STREQUAL "MULTIFW")
     endif()
     add_custom_command(
         OUTPUT picogus.uf2
-        DEPENDS bootloader UF2CREATE pg-gus-multifw pg-adlib-multifw pg-mpu-multifw pg-psg-multifw pg-sb-multifw pg-usb-multifw
-        COMMAND UF2CREATE bootloader.bin pg-gus-multifw.bin pg-adlib-multifw.bin pg-mpu-multifw.bin pg-psg-multifw.bin pg-sb-multifw.bin pg-usb-multifw.bin picogus.uf2
+        DEPENDS bootloader UF2CREATE pg-gus-multifw ${ADLIB_TARGET_NAME}-multifw pg-mpu-multifw pg-psg-multifw pg-sb-multifw pg-usb-multifw
+        COMMAND UF2CREATE bootloader.bin pg-gus-multifw.bin ${ADLIB_TARGET_NAME}-multifw.bin pg-mpu-multifw.bin pg-psg-multifw.bin pg-sb-multifw.bin pg-usb-multifw.bin picogus.uf2
     )
     add_custom_target(picogus ALL DEPENDS picogus.uf2)
 
@@ -474,9 +618,27 @@ elseif(PROJECT_TYPE STREQUAL "GUS")
 elseif(PROJECT_TYPE STREQUAL "SB")
     set(FW_TARGET pg-sb)
     build_sb(pg-sb FALSE)
+elseif(PROJECT_TYPE STREQUAL "SB_YMFM")
+    set(FW_TARGET pg-sb-ymf262)
+    build_sb_ymf262(pg-sb-ymf262 FALSE)
+elseif(PROJECT_TYPE STREQUAL "SB_YMF262")
+    set(FW_TARGET pg-sb-ymf262)
+    build_sb_ymf262(pg-sb-ymf262 FALSE)
+elseif(PROJECT_TYPE STREQUAL "SB_YM3812")
+    set(FW_TARGET pg-sb-ym3812)
+    build_sb_ym3812(pg-sb-ym3812 FALSE)
 elseif(PROJECT_TYPE STREQUAL "ADLIB")
     set(FW_TARGET pg-adlib)
     build_adlib(pg-adlib FALSE)
+elseif(PROJECT_TYPE STREQUAL "ADLIB_YMFM")
+    set(FW_TARGET pg-adlib-ymf262)
+    build_adlib_ymf262(pg-adlib-ymf262 FALSE)
+elseif(PROJECT_TYPE STREQUAL "ADLIB_YMF262")
+    set(FW_TARGET pg-adlib-ymf262)
+    build_adlib_ymf262(pg-adlib-ymf262 FALSE)
+elseif(PROJECT_TYPE STREQUAL "ADLIB_YM3812")
+    set(FW_TARGET pg-adlib-ym3812)
+    build_adlib_ym3812(pg-adlib-ym3812 FALSE)
 elseif(PROJECT_TYPE STREQUAL "MPU")
     set(FW_TARGET pg-mpu)
     build_mpu(pg-mpu FALSE)

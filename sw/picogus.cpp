@@ -72,7 +72,7 @@ void play_adlib(void);
 cms_buffer_t opl_cmd_buffer = { {0}, 0, 0 };
 #else
 extern "C" void OPL_Pico_WriteRegister(unsigned int reg_num, unsigned int value);
-static uint8_t opl_addr;
+static uint16_t opl_addr;
 #endif // OPL_CMD_BUFFER
 #if AUDIO_CALLBACK_CORE0
 extern void audio_sample_handler(void);
@@ -732,7 +732,6 @@ __force_inline void handle_iow(void) {
         case 0x8:
             // Fast write
             pio_sm_put(pio0, IOW_PIO_SM, IO_END);
-            // pio_sm_put(pio0, IOW_PIO_SM, IO_WAIT);
 #if OPL_CMD_BUFFER
             opl_cmd_buffer.cmds[opl_cmd_buffer.head].addr = (uint16_t)(iow_read & 0xFF);
 #else
@@ -759,6 +758,32 @@ __force_inline void handle_iow(void) {
             OPL_Pico_WriteRegister(opl_addr, iow_read & 0xff);
 #endif
             break;
+        case 0xA: // OPL3 bank 2 address
+            // Fast write
+            pio_sm_put(pio0, IOW_PIO_SM, IO_END);
+#if OPL_CMD_BUFFER
+            opl_cmd_buffer.cmds[opl_cmd_buffer.head].addr = (uint16_t)(0x100 | (iow_read & 0xFF));
+#else
+            opl_addr = 0x100 | (iow_read & 0xff);
+#endif
+            return;
+        case 0xB: // OPL3 bank 2 data
+            pio_sm_put(pio0, IOW_PIO_SM, IO_WAIT);
+#if OPL_CMD_BUFFER
+            {
+                uint8_t opl_data = iow_read & 0xFF;
+                uint16_t opl_addr_full = opl_cmd_buffer.cmds[opl_cmd_buffer.head].addr;
+                uint8_t opl_addr_low = (uint8_t)(opl_addr_full & 0xFF);
+                if (opl_addr_low <= OPL_REG_TIMER_CTRL && !(opl_addr_full & 0x100)) {
+                    OPL_Pico_WriteRegister(opl_addr_low, opl_data);
+                } else {
+                    opl_cmd_buffer.cmds[opl_cmd_buffer.head++].data = opl_data;
+                }
+            }
+#else
+            OPL_Pico_WriteRegister(opl_addr, iow_read & 0xff);
+#endif
+            break;
         // DSP ports
         default:
             pio_sm_put(pio0, IOW_PIO_SM, IO_WAIT);                        
@@ -777,8 +802,10 @@ __force_inline void handle_iow(void) {
     } else // if follows down below
 #endif
 #if defined(SOUND_OPL)
-    if ((port & 0x3fe) == settings.SB.oplBasePort) {
-        if ((port & 1) == 0) {
+    if ((port & 0x3fc) == settings.SB.oplBasePort) {
+        // port & 3: 0=bank1-addr, 1=bank1-data, 2=bank2-addr, 3=bank2-data
+        switch (port & 3) {
+        case 0: // bank 1 address
             // Fast write
             pio_sm_put(pio0, IOW_PIO_SM, IO_END);
 #if OPL_CMD_BUFFER
@@ -786,9 +813,18 @@ __force_inline void handle_iow(void) {
 #else
             opl_addr = (iow_read & 0xff);
 #endif
-            // Fast write - return early as we've already written 0x0u to the PIO
             return;
-        } else {
+        case 2: // bank 2 address (OPL3 only)
+            // Fast write — store with 0x100 bank flag so write_address_hi is used
+            pio_sm_put(pio0, IOW_PIO_SM, IO_END);
+#if OPL_CMD_BUFFER
+            opl_cmd_buffer.cmds[opl_cmd_buffer.head].addr = (uint16_t)(0x100 | (iow_read & 0xFF));
+#else
+            opl_addr = 0x100 | (iow_read & 0xff);
+#endif
+            return;
+        case 1: // bank 1 data
+        case 3: // bank 2 data
             pio_sm_put(pio0, IOW_PIO_SM, IO_WAIT);
             if (settings.SB.oplSpeedSensitive) {
                 busy_wait_us(1); // busy wait for speed sensitive games
@@ -796,11 +832,11 @@ __force_inline void handle_iow(void) {
 #if OPL_CMD_BUFFER
             {
                 uint8_t opl_data = iow_read & 0xFF;
-                uint8_t opl_addr = (uint8_t)opl_cmd_buffer.cmds[opl_cmd_buffer.head].addr;
-                if (opl_addr <= OPL_REG_TIMER_CTRL) {
-                    // Timer registers: handle immediately on core 0 so OPL_Pico_PortRead
-                    // always sees current timer state without a cross-core race.
-                    OPL_Pico_WriteRegister(opl_addr, opl_data);
+                uint16_t opl_addr_full = opl_cmd_buffer.cmds[opl_cmd_buffer.head].addr;
+                uint8_t opl_addr_low = (uint8_t)(opl_addr_full & 0xFF);
+                if (opl_addr_low <= OPL_REG_TIMER_CTRL && !(opl_addr_full & 0x100)) {
+                    // Timer registers (bank 1 only): handle immediately on core 0
+                    OPL_Pico_WriteRegister(opl_addr_low, opl_data);
                 } else {
                     opl_cmd_buffer.cmds[opl_cmd_buffer.head++].data = opl_data;
                 }
@@ -808,6 +844,7 @@ __force_inline void handle_iow(void) {
 #else
             OPL_Pico_WriteRegister(opl_addr, iow_read & 0xff);
 #endif
+            break;
         }
     } else // if follows down below
 #endif // SOUND_OPL
@@ -945,12 +982,8 @@ __force_inline void handle_ior(void) {
         pio_sm_put(pio0, IOR_PIO_SM, IO_WAIT);
         switch (port - settings.SB.basePort) {
         case 0x8:
-#if OPL_CMD_BUFFER
-            // wait for OPL buffer to process
-            while (opl_cmd_buffer.tail != opl_cmd_buffer.head) {
-                tight_loop_contents();
-            }
-#endif
+            // Timer state is maintained on Core 0 (carve-out handles timer regs immediately),
+            // so OPL_Pico_PortRead never needs to wait for the cmd buffer to drain.
             pio_sm_put(pio0, IOR_PIO_SM, IOR_SET_VALUE | OPL_Pico_PortRead(OPL_REGISTER_PORT));
             break;
         default:
@@ -973,13 +1006,13 @@ __force_inline void handle_ior(void) {
     if (port == settings.SB.oplBasePort) {
         // Tell PIO to wait for data
         pio_sm_put(pio0, IOR_PIO_SM, IO_WAIT);
-#if OPL_CMD_BUFFER
-        // wait for OPL buffer to process
-        while (opl_cmd_buffer.tail != opl_cmd_buffer.head) {
-            tight_loop_contents();
-        }
-#endif
+        // Timer state is maintained on Core 0 (carve-out handles timer regs immediately),
+        // so OPL_Pico_PortRead never needs to wait for the cmd buffer to drain.
         pio_sm_put(pio0, IOR_PIO_SM, IOR_SET_VALUE | OPL_Pico_PortRead(OPL_REGISTER_PORT));
+    } else if (port == settings.SB.oplBasePort + 2) {
+        // OPL3 bank 2 status port — returns same status as bank 1 (OPL3 detection)
+        pio_sm_put(pio0, IOR_PIO_SM, IO_WAIT);
+        pio_sm_put(pio0, IOR_PIO_SM, IOR_SET_VALUE | OPL_Pico_PortRead(OPL_REGISTER_PORT_OPL3));
     } else // if follows down below
 #endif
 #if defined(SOUND_MPU)

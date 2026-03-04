@@ -30,7 +30,6 @@
 
 #include "pico/stdlib.h"
 #include "audio/audio_i2s_minimal.h"
-#include <resampler.hpp>
 #include "audio/volctrl.h"
 
 #include "opl.h"
@@ -97,14 +96,32 @@ static constexpr uint32_t fixed_ratio(uint16_t a, uint16_t b) {
 static constexpr uint32_t opl_ratio = fixed_ratio(49716, 44100);
 static audio_fifo_t opl_out_fifo;
 
-static int16_t get_opl_sample()
-{
-    int32_t opl_current_sample;
-    OPL_Pico_simple(&opl_current_sample, 1);
-    return scale_sample(opl_current_sample, opl_volume, 1);
-}
+// Stereo OPL resampler state.
+// For ymfm backends (USE_YMFM_OPL / USE_YMF3812), OPL_Pico_stereo provides
+// true stereo (or symmetric mono for ym3812) from a single generate() call.
+// For emu8950 (pg-adlib), OPL_Pico_stereo doesn't exist — fall back to
+// OPL_Pico_simple and duplicate to both channels.
+static int32_t opl_resamp_l = 0, opl_resamp_r = 0;
+static uint32_t opl_resamp_phase = 0; // Q16.16 phase accumulator
 
-static Resampler<get_opl_sample> resampler;
+static void opl_resample_tick()
+{
+    opl_resamp_phase += opl_ratio;
+    while (opl_resamp_phase >= (1u << 16))
+    {
+#if defined(USE_YMFM_OPL) || defined(USE_YMF3812)
+        int32_t l, r;
+        OPL_Pico_stereo(&l, &r, 1);
+        opl_resamp_l = scale_sample(l, opl_volume, 1);
+        opl_resamp_r = scale_sample(r, opl_volume, 1);
+#else
+        int32_t mono;
+        OPL_Pico_simple(&mono, 1);
+        opl_resamp_l = opl_resamp_r = scale_sample(mono, opl_volume, 1);
+#endif
+        opl_resamp_phase -= (1u << 16);
+    }
+}
 
 // Setup values for audio sample clock
 // 8390 clock cycles per sample (370MHz / 8390 ~= 44100Hz)
@@ -147,14 +164,14 @@ void audio_sample_handler(void) {
     }
 #endif
 
-    // Read OPL sample directly from read_idx before advancing, same pattern as CD audio above.
-    if (opl_out_fifo.state != FIFO_STATE_STOPPED && opl_out_fifo.samples_in_fifo >= 1) {
-        int16_t opl_sample = opl_out_fifo.buffer[opl_out_fifo.read_idx];
-        opl_out_fifo.read_idx = (opl_out_fifo.read_idx + 1) & AUDIO_FIFO_BITS;
-        opl_out_fifo.samples_in_fifo--;
+    // Read OPL stereo pair from FIFO — always consume 2 samples (L then R).
+    if (opl_out_fifo.state != FIFO_STATE_STOPPED && opl_out_fifo.samples_in_fifo >= 2) {
+        uint32_t idx = opl_out_fifo.read_idx;
+        sample_l += opl_out_fifo.buffer[idx];
+        sample_r += opl_out_fifo.buffer[(idx + 1) & AUDIO_FIFO_BITS];
+        opl_out_fifo.read_idx = (idx + 2) & AUDIO_FIFO_BITS;
+        opl_out_fifo.samples_in_fifo -= 2;
         if (opl_out_fifo.samples_in_fifo == 0) opl_out_fifo.state = FIFO_STATE_STOPPED;
-        sample_l += opl_sample;
-        sample_r += opl_sample;
     }
 
     const sample_pair clamped = {.data16 = {
@@ -191,14 +208,13 @@ void play_adlib() {
 #endif
     init_audio();
 
-	resampler.set_ratio(49716,44100);
+	// opl_resamp_phase starts at 0; no explicit init needed.
 
 #ifdef SOUND_SB
     set_volume(CMD_SBVOL);
 #endif
 
-    printf("opl_ratio: %x ", opl_ratio);
-    uint32_t opl_pos = 0;
+    printf("OPL stereo pipeline started\n");
 
 #ifdef CDROM
     cd_fifo = cdrom_audio_fifo_peek(&cdrom);
@@ -230,15 +246,14 @@ void play_adlib() {
         }
 #endif
 
-        // Generate OPL samples and add to output FIFO.
-        // Cap fill to OPL_FILL_PER_ITER samples per loop iteration so
-        // cdrom_tasks() gets a turn frequently enough to keep the USB
-        // drive busy.  The 4096-sample FIFO still provides underrun
-        // headroom — we just don't fill it all in one shot.
+        // Generate OPL stereo pairs and add to output FIFO (interleaved L, R).
+        // Need 2 free slots per output sample.
         for (uint32_t opl_i = 0;
-             opl_i < OPL_FILL_PER_ITER && fifo_free_space(&opl_out_fifo) > 0;
+             opl_i < OPL_FILL_PER_ITER && fifo_free_space(&opl_out_fifo) >= 2;
              opl_i++) {
-            fifo_add_sample(&opl_out_fifo, resampler.get_sample());
+            opl_resample_tick();
+            fifo_add_sample(&opl_out_fifo, (int16_t)opl_resamp_l);
+            fifo_add_sample(&opl_out_fifo, (int16_t)opl_resamp_r);
         }
 #ifdef USB_STACK
         // Service TinyUSB events

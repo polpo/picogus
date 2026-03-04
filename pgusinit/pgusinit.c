@@ -176,8 +176,8 @@ static void err_blaster(void)
     //              "................................................................................\n"
     fprintf(stderr, "ERROR: In SB mode but no BLASTER variable set or is malformed!\n");
     fprintf(stderr, "The BLASTER environment variable must be set in the following format:\n");
-    fprintf(stderr, "\tset BLASTER=Axxx Iy Dz T3\n");
-    fprintf(stderr, "Where xxx = port, y = IRQ, z = DMA. T3 indicates an SB 2.0 compatible card.\n");
+    fprintf(stderr, "\tset BLASTER=Axxx Iy Dz Tt\n");
+    fprintf(stderr, "Where xxx = port, y = IRQ, z = DMA, t = type (3=SB Pro, 4=SB16, 6=SB16 OPL3).\n");
     fprintf(stderr, "Port is set via /sbport xxx option; DMA and IRQ configued via jumper.\n");
 }
 
@@ -253,11 +253,38 @@ static int init_sb(void)
         return 1;
     }
 
-    // Parse BLASTER
-    uint16_t port;
-    int e;
-    e = sscanf(blaster, "A%hx I%*hhu D%*hhu T3", &port);
-    if (e != 1) {
+    // Parse BLASTER — scan for A (port) and T (type) independently so that
+    // extra fields like H (high DMA) or unusual ordering don't break parsing.
+    // Accepted types: T3 (SB Pro 2), T4 (SB16), T5 (SB AWE32), T6 (SB16 OPL3)
+    uint16_t port = 0;
+    int htype = 0;
+    int got_port = 0, got_type = 0;
+
+    char* p = blaster;
+    while (*p) {
+        if ((*p == 'A' || *p == 'a') && got_port == 0) {
+            char* endptr;
+            unsigned long val = strtoul(p + 1, &endptr, 16);
+            if (endptr != p + 1) {
+                port = (uint16_t)val;
+                got_port = 1;
+                p = endptr;
+                continue;
+            }
+        } else if ((*p == 'T' || *p == 't') && got_type == 0) {
+            char* endptr;
+            long val = strtol(p + 1, &endptr, 10);
+            if (endptr != p + 1) {
+                htype = (int)val;
+                got_type = 1;
+                p = endptr;
+                continue;
+            }
+        }
+        p++;
+    }
+
+    if (!got_port || !got_type || htype < 3 || htype > 6) {
         err_blaster();
         return 2;
     }
@@ -381,7 +408,6 @@ static int wait_for_cd_load(void)
         print_string(CMD_CDERROR);
         return 98;
     }
-    return print_cdimage_current();
 }
 
 
