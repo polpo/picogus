@@ -200,7 +200,11 @@ static int16_t kl_tablex16[16] = {dB2x16(0.000), dB2x16(9.000), dB2x16(12.000), 
 #endif
 
 #if !EMU8950_NO_TLL
+#ifdef EMU8950_TLL_FLASH
+extern const uint32_t tll_table[8 * 16][1 << TL_BITS][4];
+#else
 static uint32_t tll_table[8 * 16][1 << TL_BITS][4];
+#endif
 #endif
 static int32_t rks_table[2][32][2];
 
@@ -368,7 +372,7 @@ static void makeSinTable(void) {
 }
 
 static void makeTllTable(void) {
-#if !EMU8950_NO_TLL
+#if !EMU8950_NO_TLL && !defined(EMU8950_TLL_FLASH)
     int32_t tmp;
     int32_t fnum, block, TL, KL, kx;
 

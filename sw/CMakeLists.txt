@@ -170,8 +170,8 @@ function(config_target TARGET_NAME MULTIFW)
             SOUND_OPL=1
             USE_EMU8950_OPL=1        
             EMU8950_ASM=1
-            EMU8950_NO_TLL=1 # don't use lookup table for total level
-            EMU8950_NO_FLOAT=1 # double check there is no float
+            EMU8950_TLL_FLASH=1 # pre-computed TLL table stored in flash via .flashdata section (not copied to RAM)
+            EMU8950_NO_FLOAT=1 # RP2040 has no FPU; float only used in TLL init anyway
             EMU8950_NO_TIMER=1 # disable timer which isn't used
             EMU8950_NO_TEST_FLAG=1 # disable test flags (which aren't used)
         )
