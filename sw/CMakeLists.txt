@@ -168,12 +168,13 @@ function(config_target TARGET_NAME MULTIFW)
     if(SOUND_OPL)
         target_compile_definitions(${TARGET_NAME} PRIVATE
             SOUND_OPL=1
-            USE_EMU8950_OPL=1        
+            USE_EMU8950_OPL=1
             EMU8950_ASM=1
             EMU8950_TLL_FLASH=1 # pre-computed TLL table stored in flash via .flashdata section (not copied to RAM)
             EMU8950_NO_FLOAT=1 # RP2040 has no FPU; float only used in TLL init anyway
             EMU8950_NO_TIMER=1 # disable timer which isn't used
             EMU8950_NO_TEST_FLAG=1 # disable test flags (which aren't used)
+            OPL_CMD_BUFFER=1 # queue OPL writes on core 0, drain on core 1 to eliminate cross-core struct race
         )
         target_link_libraries(${TARGET_NAME} opl)
     endif()

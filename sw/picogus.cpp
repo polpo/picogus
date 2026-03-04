@@ -744,7 +744,17 @@ __force_inline void handle_iow(void) {
         case 0x9:
             pio_sm_put(pio0, IOW_PIO_SM, IO_WAIT);
 #if OPL_CMD_BUFFER
-            opl_cmd_buffer.cmds[opl_cmd_buffer.head++].data = (uint8_t)(iow_read & 0xFF);
+            {
+                uint8_t opl_data = iow_read & 0xFF;
+                uint8_t opl_addr = (uint8_t)opl_cmd_buffer.cmds[opl_cmd_buffer.head].addr;
+                if (opl_addr <= OPL_REG_TIMER_CTRL) {
+                    // Timer registers: handle immediately on core 0 so OPL_Pico_PortRead
+                    // always sees current timer state without a cross-core race.
+                    OPL_Pico_WriteRegister(opl_addr, opl_data);
+                } else {
+                    opl_cmd_buffer.cmds[opl_cmd_buffer.head++].data = opl_data;
+                }
+            }
 #else
             OPL_Pico_WriteRegister(opl_addr, iow_read & 0xff);
 #endif
@@ -784,7 +794,17 @@ __force_inline void handle_iow(void) {
                 busy_wait_us(1); // busy wait for speed sensitive games
             }
 #if OPL_CMD_BUFFER
-            opl_cmd_buffer.cmds[opl_cmd_buffer.head++].data = (uint8_t)(iow_read & 0xFF);
+            {
+                uint8_t opl_data = iow_read & 0xFF;
+                uint8_t opl_addr = (uint8_t)opl_cmd_buffer.cmds[opl_cmd_buffer.head].addr;
+                if (opl_addr <= OPL_REG_TIMER_CTRL) {
+                    // Timer registers: handle immediately on core 0 so OPL_Pico_PortRead
+                    // always sees current timer state without a cross-core race.
+                    OPL_Pico_WriteRegister(opl_addr, opl_data);
+                } else {
+                    opl_cmd_buffer.cmds[opl_cmd_buffer.head++].data = opl_data;
+                }
+            }
 #else
             OPL_Pico_WriteRegister(opl_addr, iow_read & 0xff);
 #endif
