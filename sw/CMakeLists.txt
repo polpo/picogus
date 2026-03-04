@@ -174,8 +174,6 @@ function(config_target TARGET_NAME MULTIFW)
             EMU8950_NO_FLOAT=1 # double check there is no float
             EMU8950_NO_TIMER=1 # disable timer which isn't used
             EMU8950_NO_TEST_FLAG=1 # disable test flags (which aren't used)
-            EMU8950_SIMPLER_NOISE=1 # only generate noise bit when needed
-            EMU8950_SHORT_NOISE_UPDATE_CHECK=1 # only update short noise if it is used
         )
         target_link_libraries(${TARGET_NAME} opl)
     endif()
