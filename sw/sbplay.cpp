@@ -102,6 +102,7 @@ static audio_fifo_t opl_out_fifo;
 // For emu8950 (pg-adlib), OPL_Pico_stereo doesn't exist — fall back to
 // OPL_Pico_simple and duplicate to both channels.
 static int32_t opl_resamp_l = 0, opl_resamp_r = 0;
+static int32_t opl_resamp_buf_l[2] = {0}, opl_resamp_buf_r[2] = {0};
 static uint32_t opl_resamp_phase = 0; // Q16.16 phase accumulator
 
 static void opl_resample_tick()
@@ -109,18 +110,27 @@ static void opl_resample_tick()
     opl_resamp_phase += opl_ratio;
     while (opl_resamp_phase >= (1u << 16))
     {
+        opl_resamp_buf_l[1] = opl_resamp_buf_l[0];
+        opl_resamp_buf_r[1] = opl_resamp_buf_r[0];
 #if defined(USE_YMFM_OPL) || defined(USE_YMF3812)
         int32_t l, r;
         OPL_Pico_stereo(&l, &r, 1);
-        opl_resamp_l = scale_sample(l, opl_volume, 1);
-        opl_resamp_r = scale_sample(r, opl_volume, 1);
+        opl_resamp_buf_l[0] = scale_sample(l, opl_volume, 1);
+        opl_resamp_buf_r[0] = scale_sample(r, opl_volume, 1);
 #else
         int32_t mono;
         OPL_Pico_simple(&mono, 1);
-        opl_resamp_l = opl_resamp_r = scale_sample(mono, opl_volume, 1);
+        opl_resamp_buf_l[0] = opl_resamp_buf_r[0] = scale_sample(mono, opl_volume, 1);
 #endif
         opl_resamp_phase -= (1u << 16);
     }
+    {
+        // linear resampler - TODO adapt polyphase code from resampler/resampler.hpp
+        int32_t phase_frac = opl_resamp_phase & ((1u << 16) - 1);
+        opl_resamp_l = ((opl_resamp_buf_l[0] * phase_frac) + (opl_resamp_buf_l[1] * ((1 << 16) - phase_frac))) >> 16;
+        opl_resamp_r = ((opl_resamp_buf_r[0] * phase_frac) + (opl_resamp_buf_r[1] * ((1 << 16) - phase_frac))) >> 16;
+    }
+    
 }
 
 // Setup values for audio sample clock
@@ -237,6 +247,7 @@ void play_adlib() {
         cdrom_audio_callback(&cdrom, AUDIO_FIFO_SIZE - SAMPLES_PER_SECTOR);
 #endif
 
+#if 0
 #if OPL_CMD_BUFFER
         // Process any pending OPL commands
         while (opl_cmd_buffer.tail != opl_cmd_buffer.head) {
@@ -244,6 +255,7 @@ void play_adlib() {
             OPL_Pico_WriteRegister(cmd.addr, cmd.data);
             ++opl_cmd_buffer.tail;
         }
+#endif
 #endif
 
         // Generate OPL stereo pairs and add to output FIFO (interleaved L, R).

@@ -25,6 +25,11 @@
 
 #include "ymfm/src/ymfm_opl.h"
 
+#if OPL_CMD_BUFFER
+#include "include/cmd_buffers.h"
+extern cms_buffer_t opl_cmd_buffer;
+#endif
+
 // ---------------------------------------------------------------------------
 // Chip selection
 // ---------------------------------------------------------------------------
@@ -74,24 +79,35 @@ static void OPLTimer_CalculateEndTime(opl_timer_t *timer)
 // Stereo L/R buffers used by both OPL_Pico_simple and OPL_Pico_stereo.
 // ---------------------------------------------------------------------------
 static constexpr uint32_t PREBUF_SIZE = 128;
-static opl_chip_t::output_data s_gen_buf[PREBUF_SIZE];
+static opl_chip_t::output_data s_gen_buf;
 static int32_t s_prebuf_l[PREBUF_SIZE];
 static int32_t s_prebuf_r[PREBUF_SIZE];
 static uint32_t s_prebuf_head = PREBUF_SIZE; // starts empty → triggers fill on first call
 
 static void refill_prebuf()
 {
-    s_chip.generate(s_gen_buf, PREBUF_SIZE);
     for (uint32_t j = 0; j < PREBUF_SIZE; j++)
     {
+#if OPL_CMD_BUFFER
+        // Process any pending OPL commands
+        while (opl_cmd_buffer.tail != opl_cmd_buffer.head) {
+            auto cmd = opl_cmd_buffer.cmds[opl_cmd_buffer.tail];
+            OPL_Pico_WriteRegister(cmd.addr, cmd.data);
+            ++opl_cmd_buffer.tail;
+            if ((cmd.addr < 0x20) || ((cmd.addr & 0xF0) == 0xB0)) break; // break on key on/off retrigs and misc registers
+            break;
+        }
+#endif
+
+        s_chip.generate(&s_gen_buf, 1);
 #ifdef USE_YMF3812
         // ym3812 is mono — duplicate to both channels
-        s_prebuf_l[j] = s_prebuf_r[j] = s_gen_buf[j].data[0];
+        s_prebuf_l[j] = s_prebuf_r[j] = s_gen_buf.data[0];
 #else
         // ymf262: use L1 (data[0]) and R1 (data[1]) — the standard stereo pair.
         // data[2]/data[3] are the rarely-used L2/R2 extended outputs, ignored.
-        s_prebuf_l[j] = s_gen_buf[j].data[0];
-        s_prebuf_r[j] = s_gen_buf[j].data[1];
+        s_prebuf_l[j] = s_gen_buf.data[0];
+        s_prebuf_r[j] = s_gen_buf.data[1];
 #endif
     }
     s_prebuf_head = 0;
