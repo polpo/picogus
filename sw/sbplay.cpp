@@ -112,7 +112,7 @@ static void opl_resample_tick()
     {
         opl_resamp_buf_l[1] = opl_resamp_buf_l[0];
         opl_resamp_buf_r[1] = opl_resamp_buf_r[0];
-#if defined(USE_YMFM_OPL) || defined(USE_YMF3812)
+#if defined(USE_YMFM_OPL) || defined(USE_DBOPL_OPL) || defined(USE_YMF3812)
         int32_t l, r;
         OPL_Pico_stereo(&l, &r, 1);
         opl_resamp_buf_l[0] = scale_sample(l, opl_volume, 1);
