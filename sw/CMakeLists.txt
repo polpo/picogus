@@ -182,6 +182,14 @@ function(config_target TARGET_NAME MULTIFW)
                 OPL_CMD_BUFFER=1
             )
             target_link_libraries(${TARGET_NAME} opl_ymfm)
+        elseif(USE_DBOPL_OPL)
+            # DOSBox OPL emulation
+            target_compile_definitions(${TARGET_NAME} PRIVATE
+                SOUND_OPL=1
+                USE_DBOPL_OPL=1
+                OPL_CMD_BUFFER=1
+            )
+            target_link_libraries(${TARGET_NAME} opl_dbopl)
         else()
             # Default: emu8950 (OPL2, assembly-optimized for RP2040)
             target_compile_definitions(${TARGET_NAME} PRIVATE
@@ -328,6 +336,35 @@ function(build_sb_ymf262 TARGET_NAME MULTIFW)
 endfunction()
 
 ################################################################################
+# Build SB firmware — DOSBox OPL3 core
+function(build_sb_dbopl3 TARGET_NAME MULTIFW)
+    set(USE_DBOPL_OPL TRUE)
+    set(USB_JOYSTICK TRUE)
+    set(SOUND_MPU FALSE)
+    set(SOUND_OPL TRUE)
+    set(CDROM TRUE)
+    config_target(${TARGET_NAME} ${MULTIFW})
+    pico_set_program_name(${TARGET_NAME} "picogus-sb-dbopl3")
+    target_sources(${TARGET_NAME} PRIVATE
+        audio/volctrl.cpp
+        sbdsp/sbdsp.cpp
+        sbplay.cpp
+        isa/isa_dma.c
+        audio/audio_fifo.c
+        audio/audio_i2s_minimal.c
+    )
+    target_compile_definitions(${TARGET_NAME} PRIVATE
+        SOUND_SB=1
+        SOUND_DSP=1
+        SB_BUFFERLESS=1
+        SB_BUFFERLESS_NG=1
+        USE_CD_AUDIO_FIFO=1
+    )
+    target_link_libraries(${TARGET_NAME} resampler)
+    pico_generate_pio_header(${TARGET_NAME} ${CMAKE_CURRENT_LIST_DIR}/isa/isa_dma.pio)
+endfunction()
+
+################################################################################
 # Build AdLib firmware
 function(build_adlib TARGET_NAME MULTIFW)
     set(USB_JOYSTICK TRUE)
@@ -354,6 +391,24 @@ function(build_adlib_ymf262 TARGET_NAME MULTIFW)
     set(SOUND_OPL TRUE)
     config_target(${TARGET_NAME} ${MULTIFW})
     pico_set_program_name(${TARGET_NAME} "picogus-adlib-ymf262")
+    target_sources(${TARGET_NAME} PRIVATE
+        audio/volctrl.cpp
+        sbplay.cpp
+        audio/audio_i2s_minimal.c
+    )
+    target_link_libraries(${TARGET_NAME} resampler)
+endfunction()
+
+################################################################################
+# Build AdLib firmware — DOSBox OPL3 core
+function(build_adlib_dbopl3 TARGET_NAME MULTIFW)
+    set(USE_DBOPL3_OPL TRUE)
+    set(USB_JOYSTICK TRUE)
+    set(USB_MOUSE TRUE)
+    set(SOUND_MPU TRUE)
+    set(SOUND_OPL TRUE)
+    config_target(${TARGET_NAME} ${MULTIFW})
+    pico_set_program_name(${TARGET_NAME} "picogus-adlib-dbopl3")
     target_sources(${TARGET_NAME} PRIVATE
         audio/volctrl.cpp
         sbplay.cpp
@@ -493,6 +548,7 @@ if(PROJECT_TYPE STREQUAL "MULTIFW")
     # set(MULTIFW_OPL_VARIANT "emu8950")   # original emu8950 — OPL2, assembly-optimized
     # set(MULTIFW_OPL_VARIANT "ym3812") # ymfm ym3812   — OPL2, ymfm quality
     set(MULTIFW_OPL_VARIANT "ymf262") # ymfm ymf262   — OPL3, true stereo
+    #set(MULTIFW_OPL_VARIANT "dbopl") # DOSBox OPL  — OPL3, true stereo
     # ---------------------------------------------------------------------------
 
     if(MULTIFW_OPL_VARIANT STREQUAL "ymf262")
@@ -627,6 +683,9 @@ elseif(PROJECT_TYPE STREQUAL "SB_YMF262")
 elseif(PROJECT_TYPE STREQUAL "SB_YM3812")
     set(FW_TARGET pg-sb-ym3812)
     build_sb_ym3812(pg-sb-ym3812 FALSE)
+elseif(PROJECT_TYPE STREQUAL "SB_DBOPL3")
+    set(FW_TARGET pg-sb-dbopl3)
+    build_sb_dbopl3(pg-sb-dbopl3 FALSE)
 elseif(PROJECT_TYPE STREQUAL "ADLIB")
     set(FW_TARGET pg-adlib)
     build_adlib(pg-adlib FALSE)
@@ -639,6 +698,9 @@ elseif(PROJECT_TYPE STREQUAL "ADLIB_YMF262")
 elseif(PROJECT_TYPE STREQUAL "ADLIB_YM3812")
     set(FW_TARGET pg-adlib-ym3812)
     build_adlib_ym3812(pg-adlib-ym3812 FALSE)
+elseif(PROJECT_TYPE STREQUAL "ADLIB_DBOPL3")
+    set(FW_TARGET pg-adlib-dbopl3)
+    build_adlib_dbopl3(pg-adlib-dbopl3 FALSE)
 elseif(PROJECT_TYPE STREQUAL "MPU")
     set(FW_TARGET pg-mpu)
     build_mpu(pg-mpu FALSE)

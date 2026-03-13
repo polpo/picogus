@@ -49,3 +49,16 @@ target_include_directories(opl_ym3812 INTERFACE
 target_compile_definitions(opl_ym3812 INTERFACE USE_YMF3812=1)
 target_compile_options(opl_ym3812 INTERFACE -O3 -Wno-stringop-overflow)
 target_link_libraries(opl_ym3812 INTERFACE pico_audio_i2s hardware_gpio hardware_timer)
+
+# DOSBox OPL3 backend
+add_library(opl_dbopl INTERFACE)
+target_sources(opl_dbopl INTERFACE
+    ${CMAKE_CURRENT_LIST_DIR}/opl_dbopl.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/dbopl/dbopl.cpp
+)
+target_include_directories(opl_dbopl INTERFACE
+    ${CMAKE_CURRENT_LIST_DIR}
+    ${CMAKE_CURRENT_LIST_DIR}/dbopl
+)
+target_compile_options(opl_dbopl INTERFACE -O3 -Wno-stringop-overflow)
+target_link_libraries(opl_dbopl INTERFACE pico_audio_i2s hardware_gpio hardware_timer)
