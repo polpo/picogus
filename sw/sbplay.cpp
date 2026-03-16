@@ -37,7 +37,11 @@
 
 #include "audio/audio_fifo.h"
 #if SOUND_SB
+#ifdef SOUND_WSS
+#include "ad1848/ad1848.h"
+#else
 #include "sbdsp/sbdsp.h"
+#endif
 #endif // SOUND_SB
 #if defined(SOUND_SB) || defined(USB_MOUSE) || defined(SOUND_MPU)
 #include "system/pico_pic.h"
@@ -127,7 +131,15 @@ void audio_sample_handler(void) {
     int32_t sample_l = 0, sample_r = 0;
 
 #ifdef SOUND_SB
-    sample_l = sample_r = sbdsp_sample();
+    {
+#ifdef SOUND_WSS
+        uint32_t card_stereo = ad1848_sample_stereo();
+#else
+        uint32_t card_stereo = sbdsp_sample_stereo();
+#endif
+        sample_l = (int16_t)(card_stereo & 0xFFFF);
+        sample_r = (int16_t)(card_stereo >> 16);
+    }
 #endif
 
 #ifdef CDROM
@@ -181,7 +193,11 @@ void play_adlib() {
 #endif
 
 #if SOUND_SB
+#ifdef SOUND_WSS
+    ad1848_init();
+#else
     sbdsp_init();
+#endif
 #endif
     init_audio();
 

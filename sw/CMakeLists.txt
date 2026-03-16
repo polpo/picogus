@@ -252,21 +252,28 @@ endfunction()
 
 ################################################################################
 # Build SB firmware
+option(SOUND_WSS "Build SB firmware with WSS (AD1848) support instead of SB16 DSP" OFF)
+
 function(build_sb TARGET_NAME MULTIFW)
     set(USB_JOYSTICK TRUE)
-    set(SOUND_MPU TRUE)
+    set(SOUND_MPU FALSE)
     set(SOUND_OPL TRUE)
     set(CDROM TRUE)
     config_target(${TARGET_NAME} ${MULTIFW})
     pico_set_program_name(${TARGET_NAME} "picogus-sb")
     target_sources(${TARGET_NAME} PRIVATE
         audio/volctrl.cpp
-        sbdsp/sbdsp.cpp
         sbplay.cpp
         isa/isa_dma.c
         audio/audio_fifo.c
         audio/audio_i2s_minimal.c
     )
+    if(SOUND_WSS)
+        target_sources(${TARGET_NAME} PRIVATE ad1848/ad1848.cpp)
+        target_compile_definitions(${TARGET_NAME} PRIVATE SOUND_WSS=1)
+    else()
+        target_sources(${TARGET_NAME} PRIVATE sbdsp/sbdsp.cpp)
+    endif()
     target_compile_definitions(${TARGET_NAME} PRIVATE
         SOUND_SB=1
         SOUND_DSP=1

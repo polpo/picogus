@@ -61,7 +61,13 @@ M62429* m62429;
 
 
 #ifdef SOUND_SB
+#ifdef SOUND_WSS
+#include "ad1848/ad1848.h"
+static constexpr uint16_t wss_port_test = 0x13;
+static uint8_t wss_config = 0b00001010; // DMA 1 and IRQ 7
+#else
 #include "sbdsp/sbdsp.h"
+#endif
 static uint16_t sb_port_test;
 #endif
 #ifdef SOUND_OPL
@@ -726,6 +732,20 @@ __force_inline void handle_iow(void) {
     } else // if follows down below
 #endif // SOUND_GUS
 #ifdef SOUND_SB
+#ifdef SOUND_WSS
+    if ((port >> 4) == wss_port_test) {
+        pio_sm_put(pio0, IOW_PIO_SM, IO_WAIT);
+        switch (port & 0xf) {
+        // WSS config ports
+        case 0 ... 3:
+            break;
+        // AD1848 ports
+        default:
+            ad1848_write(port & 0x3, iow_read & 0xFF);
+            break;
+        }
+    } else // if follows down below
+#else
     if ((port >> 4) == sb_port_test) {
         switch (port - settings.SB.basePort) {
         // OPL ports
@@ -751,13 +771,14 @@ __force_inline void handle_iow(void) {
             break;
         // DSP ports
         default:
-            pio_sm_put(pio0, IOW_PIO_SM, IO_WAIT);                        
+            pio_sm_put(pio0, IOW_PIO_SM, IO_WAIT);
             sbdsp_process();
-            sbdsp_write(port & 0xF,iow_read & 0xFF);       
-            sbdsp_process();                                         
+            sbdsp_write(port & 0xF, iow_read & 0xFF);
+            sbdsp_process();
             break;
-        } 
+        }
     } else // if follows down below
+#endif // SOUND_WSS
 #endif // SOUND_SB
 #ifdef CDROM
     if ((port >> 4) == cdrom_port_test) {      
@@ -921,6 +942,25 @@ __force_inline void handle_ior(void) {
     } else // if follows down below
 #endif
 #if defined(SOUND_SB)
+#ifdef SOUND_WSS
+    if ((port >> 4) == wss_port_test) {
+        pio_sm_put(pio0, IOR_PIO_SM, IO_WAIT);
+        switch (port & 0xf) {
+        case 0: // interface register
+            pio_sm_put(pio0, IOR_PIO_SM, IOR_SET_VALUE | wss_config);
+            break;
+        case 1 ... 2:
+            pio_sm_put(pio0, IOR_PIO_SM, IOR_SET_VALUE | 0xff);
+            break;
+        case 3: // chip ID register
+            pio_sm_put(pio0, IOR_PIO_SM, IOR_SET_VALUE | 0x04);
+            break;
+        default:
+            pio_sm_put(pio0, IOR_PIO_SM, IOR_SET_VALUE | ad1848_read(port & 0x3));
+            break;
+        }
+    } else // if follows down below
+#else
     if ((port >> 4) == sb_port_test) {
         pio_sm_put(pio0, IOR_PIO_SM, IO_WAIT);
         switch (port - settings.SB.basePort) {
@@ -935,11 +975,12 @@ __force_inline void handle_ior(void) {
             break;
         default:
             sbdsp_process();
-            pio_sm_put(pio0, IOR_PIO_SM, IOR_SET_VALUE | sbdsp_read(port & 0xF));        
+            pio_sm_put(pio0, IOR_PIO_SM, IOR_SET_VALUE | sbdsp_read(port & 0xF));
             sbdsp_process();
             break;
         }
     } else // if follows down below
+#endif // SOUND_WSS
 #endif
 #if defined(CDROM)
     if ((port >> 4) == cdrom_port_test) {
@@ -1199,8 +1240,12 @@ int main()
 
 
 #ifdef SOUND_SB
+#ifdef SOUND_WSS
+    puts("Initializing WSS AD1848");
+#else
     puts("Initializing SoundBlaster DSP");
-    // sbdsp_init();
+#endif
+    // init actually happens on core 1 in play_adlib()
 #endif // SOUND_SB
 #ifdef SOUND_OPL
     puts("Creating OPL");

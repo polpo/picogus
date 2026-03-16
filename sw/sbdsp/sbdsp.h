@@ -41,7 +41,9 @@ typedef struct sbdsp_t {
     uint8_t current_command;
     uint8_t current_command_index;
 
-    uint16_t dma_interval;     
+    uint8_t mixer_command;
+
+    uint16_t dma_interval;
     int16_t dma_interval_trim;
     audio_fifo_t audio_fifo;
 
@@ -49,26 +51,38 @@ typedef struct sbdsp_t {
     uint8_t dac_pause_duration_low;
 
     uint16_t dma_block_size;
-    uint32_t dma_sample_count;
+    uint32_t dma_bytes_per_frame;
+    uint16_t dma_sample_count;
+    uint32_t dma_xfer_count;
+    uint32_t dma_xfer_count_left;
     uint32_t dma_sample_count_rx;
 
     uint8_t time_constant;
     uint16_t sample_rate;
-                
-    bool autoinit;    
+
+    bool autoinit;
     bool dma_enabled;
+    bool dma_16bit;
+    bool dma_stereo;
+    bool dma_signed;
+    volatile bool dma_done;
 
     bool speaker_on;
-        
+
     volatile bool dav_pc;
     volatile bool dav_dsp;
     volatile bool dsp_busy;
     bool dac_resume_pending;
+    volatile bool irq_8_pending;
+    volatile bool irq_16_pending;
 
-    uint8_t reset_state;  
-   
+    uint8_t interrupt;
+    uint8_t dma;
+
+    uint8_t reset_state;
+
 #ifdef SB_BUFFERLESS
-    volatile int16_t cur_sample;
+    volatile uint32_t cur_sample;  // packed stereo pair: L in low 16, R in high 16
 #endif
 } sbdsp_t;
 
@@ -80,7 +94,7 @@ uint16_t sbdsp_sample_rate();
 int16_t sbdsp_muted();
 
 #ifdef SB_BUFFERLESS
-static inline int16_t sbdsp_sample() {
+static inline uint32_t sbdsp_sample_stereo() {
     extern sbdsp_t sbdsp;
     return (sbdsp.speaker_on & ~sbdsp.dac_resume_pending) ? sbdsp.cur_sample : 0;
 }
