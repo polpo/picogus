@@ -137,8 +137,8 @@ void audio_sample_handler(void) {
 #else
         uint32_t card_stereo = sbdsp_sample_stereo();
 #endif
-        sample_l = (int16_t)(card_stereo & 0xFFFF);
-        sample_r = (int16_t)(card_stereo >> 16);
+        sample_l = scale_sample((int16_t)(card_stereo & 0xFFFF), sb_volume, 0);
+        sample_r = scale_sample((int16_t)(card_stereo >> 16), sb_volume, 0);
     }
 #endif
 

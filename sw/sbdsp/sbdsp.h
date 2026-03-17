@@ -83,6 +83,15 @@ typedef struct sbdsp_t {
 
 #ifdef SB_BUFFERLESS
     volatile uint32_t cur_sample;  // packed stereo pair: L in low 16, R in high 16
+    struct {
+        uint32_t old_sample;
+        uint32_t new_sample;
+        volatile uint32_t dma_sample;
+        volatile bool dma_sample_ready;
+        bool dma_pending;        // a DMA transfer is in flight
+        int32_t samplecnt;
+    } rsm;                       // resampling state, memset to zero on start/stop
+    int32_t rateratio;
 #endif
 } sbdsp_t;
 
@@ -94,9 +103,12 @@ uint16_t sbdsp_sample_rate();
 int16_t sbdsp_muted();
 
 #ifdef SB_BUFFERLESS
+uint32_t sbdsp_generate_sample();
 static inline uint32_t sbdsp_sample_stereo() {
     extern sbdsp_t sbdsp;
-    return (sbdsp.speaker_on & ~sbdsp.dac_resume_pending) ? sbdsp.cur_sample : 0;
+    if (!(sbdsp.speaker_on & ~sbdsp.dac_resume_pending)) return 0;
+    if (sbdsp.dma_enabled) return sbdsp_generate_sample();
+    return sbdsp.cur_sample;  // direct DAC fallback
 }
 #endif
 

@@ -43,6 +43,8 @@ extern uint LED_PIN;
 #define MAX(x, y) (((x) > (y)) ? (x) : (y))
 #endif
 
+#define SB_RSM_FRAC 10
+
 static irq_handler_t SBDSP_DMA_isr_pt;
 static dma_inst_t dma_config;
 #define DMA_PIO_SM 2
@@ -165,9 +167,11 @@ static PIC_TimerEvent DSP_DMA_Event = {
 
 static __force_inline void sbdsp_dma_disable(bool pause) {
     sbdsp.dma_enabled = false;
-    PIC_RemoveEvent(&DSP_DMA_Event);
 #ifdef SB_BUFFERLESS
-    sbdsp.cur_sample = 0;  // zero current sample
+    memset(&sbdsp.rsm, 0, sizeof(sbdsp.rsm));
+    sbdsp.cur_sample = 0;
+#else
+    PIC_RemoveEvent(&DSP_DMA_Event);
 #endif
     if (!pause) {
         sbdsp.dma_16bit = false;
@@ -176,16 +180,70 @@ static __force_inline void sbdsp_dma_disable(bool pause) {
     }
 }
 
-static dma_dither_t dither;
+#ifdef SB_BUFFERLESS
+uint32_t sbdsp_generate_sample() {
+    // Consume ready DMA samples when the fractional accumulator says we need them
+    while (sbdsp.rsm.samplecnt >= sbdsp.rateratio) {
+        if (!sbdsp.rsm.dma_sample_ready) break;  // DMA not ready yet
+
+        sbdsp.rsm.old_sample = sbdsp.rsm.new_sample;
+        sbdsp.rsm.new_sample = sbdsp.rsm.dma_sample;
+        sbdsp.rsm.dma_sample_ready = false;
+        sbdsp.rsm.samplecnt -= sbdsp.rateratio;
+
+        // Track transfer count
+        sbdsp.dma_xfer_count_left--;
+        if (!sbdsp.dma_xfer_count_left) {
+            sbdsp.dma_done = true;
+            if (sbdsp.dma_16bit) {
+                sbdsp.irq_16_pending = true;
+            } else {
+                sbdsp.irq_8_pending = true;
+            }
+            PIC_ActivateIRQ();
+            if (sbdsp.autoinit) {
+                sbdsp.dma_xfer_count_left = sbdsp.dma_xfer_count;
+            } else {
+                sbdsp_dma_disable(false);
+                break;
+            }
+        }
+
+        // Pipeline: kick off next DMA transfer
+        if (sbdsp.dma_enabled && !sbdsp.rsm.dma_pending) {
+            sbdsp.rsm.dma_pending = true;
+            DMA_Multi_Start_Write(&dma_config, sbdsp.dma_bytes_per_frame);
+        }
+    }
+
+    // Linear interpolation between old_sample and new_sample
+    int16_t old_l = (int16_t)(sbdsp.rsm.old_sample & 0xFFFF);
+    int16_t old_r = (int16_t)(sbdsp.rsm.old_sample >> 16);
+    int16_t new_l = (int16_t)(sbdsp.rsm.new_sample & 0xFFFF);
+    int16_t new_r = (int16_t)(sbdsp.rsm.new_sample >> 16);
+
+    int16_t out_l = (int16_t)((old_l * (sbdsp.rateratio - sbdsp.rsm.samplecnt)
+                     + new_l * sbdsp.rsm.samplecnt) / sbdsp.rateratio);
+    int16_t out_r = (int16_t)((old_r * (sbdsp.rateratio - sbdsp.rsm.samplecnt)
+                     + new_r * sbdsp.rsm.samplecnt) / sbdsp.rateratio);
+
+    sbdsp.rsm.samplecnt += 1 << SB_RSM_FRAC;
+
+    return (uint32_t)(uint16_t)out_l | ((uint32_t)(uint16_t)out_r << 16);
+}
+#endif
 
 static __force_inline void sbdsp_set_dma_interval() {
     if (sbdsp.sample_rate) {
-        uint32_t target_ns = 1000000000ul / sbdsp.sample_rate;
-        sbdsp.dma_interval = target_ns / 1000;
-        DMA_Dither_Init(&dither, target_ns, sbdsp.dma_interval);
+        sbdsp.dma_interval = 1000000000ul / sbdsp.sample_rate / 1000;
+#ifdef SB_BUFFERLESS
+        sbdsp.rateratio = (44100 << SB_RSM_FRAC) / sbdsp.sample_rate;
+#endif
     } else {
         sbdsp.dma_interval = 256 - sbdsp.time_constant;
-        DMA_Dither_Init(&dither, sbdsp.dma_interval * 1000, sbdsp.dma_interval);
+#ifdef SB_BUFFERLESS
+        sbdsp.rateratio = (44100 << SB_RSM_FRAC) / (1000000ul / sbdsp.dma_interval);
+#endif
     }
     // No halving for stereo/16-bit: dma_write_multi transfers a complete
     // frame per event, so the interval is always one sample period.
@@ -197,21 +255,26 @@ static __force_inline void sbdsp_dma_enable() {
         // Set autopush bits to number of bits per audio frame.
         // 32 will get masked to 0 by this operation which is correct behavior.
         DMA_Multi_Set_Push_Threshold(&dma_config, sbdsp.dma_bytes_per_frame << 3);
+#ifdef SB_BUFFERLESS
+        memset(&sbdsp.rsm, 0, sizeof(sbdsp.rsm));
+        sbdsp.rsm.dma_pending = true;
+        DMA_Multi_Start_Write(&dma_config, sbdsp.dma_bytes_per_frame);
+#else
         PIC_AddEvent(&DSP_DMA_Event, sbdsp.dma_interval, 0);
+#endif
     }
 }
 
 static uint32_t DSP_DMA_EventHandler(Bitu val) {
+#ifdef SB_BUFFERLESS
+    return 0;  // pull model: audio callback drives DMA, not timer
+#else
     DMA_Multi_Start_Write(&dma_config, sbdsp.dma_bytes_per_frame);
     uint32_t current_interval;
 
     sbdsp.dma_xfer_count_left--;
 
-#ifdef SB_BUFFERLESS
-    current_interval = DMA_Dither_Step(&dither, sbdsp.dma_interval);
-#else
     current_interval = dma_interval_calc();
-#endif
 
     if (sbdsp.dma_xfer_count_left) {
         return current_interval;
@@ -231,6 +294,7 @@ static uint32_t DSP_DMA_EventHandler(Bitu val) {
         }
     }
     return 0;
+#endif
 }
 
 static void sbdsp_dma_isr(void) {
@@ -238,42 +302,27 @@ static void sbdsp_dma_isr(void) {
     // Complete frame arrives as one push thanks to autopush threshold.
     const uint32_t dma_data = DMA_Complete_Write(&dma_config);
 #ifdef SB_BUFFERLESS
-    int16_t l, r;
+    uint32_t sample;
     if (sbdsp.dma_stereo) {
         if (sbdsp.dma_16bit) {
-            // 16-bit stereo (4 bytes): right-shift packs as little-endian stereo pair
-            uint32_t s = sbdsp.dma_signed ? dma_data : dma_data ^ 0x80008000;
-            l = scale_sample((int16_t)(s & 0xFFFF), sb_volume, 0);
-            r = scale_sample((int16_t)(s >> 16), sb_volume, 0);
+            sample = dma_data;
         } else {
-            // 8-bit stereo (2 bytes): L in bits [23:16], R in bits [15:8] via right-shift
-            l = (int16_t)(dma_data >> 8) & 0xFF00;
-            r = (int16_t)(dma_data >> 16) & 0xFF00;
-            if (!sbdsp.dma_signed) {
-                l ^= (int16_t)0x8000;
-                r ^= (int16_t)0x8000;
-            }
-            l = scale_sample(l, sb_volume, 0);
-            r = scale_sample(r, sb_volume, 0);
+            // 8-bit stereo: L at [23:16], R at [31:24] to MSB of each 16-bit half
+            sample = (dma_data & 0xFF000000) | ((dma_data >> 8) & 0x0000FF00);
         }
     } else {
         if (sbdsp.dma_16bit) {
-            // 16-bit mono (2 bytes): right-shift packs as int16 in upper bits
-            l = (int16_t)(dma_data >> 16);
-            if (!sbdsp.dma_signed) {
-                l ^= (int16_t)0x8000;
-            }
+            // 16-bit mono: duplicate upper 16 to both halves
+            sample = (dma_data & 0xFFFF0000) | (dma_data >> 16);
         } else {
-            // 8-bit mono (1 byte): byte in bits [31:24] via right-shift
-            l = (int16_t)(dma_data >> 16) & 0xFF00;
-            if (!sbdsp.dma_signed) {
-                l ^= (int16_t)0x8000;
-            }
+            // 8-bit mono: byte at [31:24], duplicate to MSB of each half
+            sample = (dma_data & 0xFF000000) | ((dma_data >> 16) & 0x0000FF00);
         }
-        l = scale_sample(l, sb_volume, 0);
-        r = l;
     }
-    sbdsp.cur_sample = (uint32_t)(uint16_t)l | ((uint32_t)(uint16_t)r << 16);
+    if (!sbdsp.dma_signed) sample ^= 0x80008000;
+    sbdsp.rsm.dma_sample = sample;
+    sbdsp.rsm.dma_sample_ready = true;
+    sbdsp.rsm.dma_pending = false;
 #else
     sbdsp_fifo_rx(dma_data & 0xFF);
 #endif
@@ -518,7 +567,7 @@ void sbdsp_process(void) {
             if (sbdsp.dav_dsp) {
                 if (sbdsp.current_command_index == 1) {
 #ifdef SB_BUFFERLESS
-                    int16_t s = scale_sample(((int16_t)(int8_t)(sbdsp.inbox ^ 0x80)) << 8, sb_volume, 0);
+                    int16_t s = ((int16_t)(int8_t)(sbdsp.inbox ^ 0x80)) << 8;
                     sbdsp.cur_sample = (uint32_t)(uint16_t)s | ((uint32_t)(uint16_t)s << 16);
 #endif
                     sbdsp.dav_dsp = 0;
@@ -595,9 +644,9 @@ void sbdsp_process(void) {
                     sbdsp.dav_dsp = 0;
                 } else if (sbdsp.current_command_index == 2) { // wLength.HighByte
                     sbdsp.dma_sample_count |= (sbdsp.inbox << 8);
-                    // SB16: sample_count is per-channel samples minus 1.
-                    // With dma_write_multi, each event transfers one complete frame,
-                    // so xfer_count counts frames (= sample_count + 1).
+                    // SB16: sample_count counts individual DMA transfers minus 1.
+                    // Each DMA event transfers one complete frame, so for stereo
+                    // we halve the count (2 DMA words per stereo frame).
                     sbdsp.dma_bytes_per_frame = 1;
                     if (sbdsp.dma_16bit) {
                         sbdsp.dma_bytes_per_frame <<= 1;
@@ -605,7 +654,9 @@ void sbdsp_process(void) {
                     if (sbdsp.dma_stereo) {
                         sbdsp.dma_bytes_per_frame <<= 1;
                     }
-                    sbdsp.dma_xfer_count = sbdsp.dma_sample_count + 1;
+                    sbdsp.dma_xfer_count = sbdsp.dma_stereo
+                        ? (sbdsp.dma_sample_count + 1) >> 1
+                        : sbdsp.dma_sample_count + 1;
                     sbdsp.dma_xfer_count_left = sbdsp.dma_xfer_count;
                     sbdsp.dav_dsp = 0;
                     sbdsp.current_command = 0;
@@ -631,12 +682,19 @@ void sbdsp_process(void) {
             }
             break;
         case DSP_ASP_GET_REGISTER:
-            // 1 data byte. No ASP present: 0x83 returns 0xFF, others 0x00.
+            // 1 data byte. Returns chip identification values for specific registers.
             if (sbdsp.dav_dsp) {
                 if (sbdsp.current_command_index == 1) {
                     sbdsp.dav_dsp = 0;
                     sbdsp.current_command = 0;
-                    sbdsp_output(sbdsp.inbox == 0x83 ? 0xFF : 0x00);
+                    uint8_t val;
+                    switch (sbdsp.inbox) {
+                        case 0x05: val = 0x01; break;
+                        case 0x09: val = 0xF8; break;
+                        case 0x83: val = 0xFF; break;
+                        default:   val = 0x00; break;
+                    }
+                    sbdsp_output(val);
                 }
                 sbdsp.current_command_index++;
             }
@@ -705,8 +763,12 @@ static __force_inline uint8_t sbmixer_read(void) {
         case MIXER_DMA:
             return sbdsp.dma;
         case MIXER_IRQ_STATUS:
-            // Bits 0-1: 8/16-bit IRQ pending. Bit 5: SB16 type identifier.
-            return (sbdsp.irq_8_pending ? 0x01 : 0) | (sbdsp.irq_16_pending ? 0x02 : 0) | 0x20;
+            // Bits 0-2: IRQ pending flags. Upper bits: ViBRA type identifier.
+            return (sbdsp.irq_8_pending ? 0x01 : 0) | (sbdsp.irq_16_pending ? 0x02 : 0) | 0x70;
+        case 0x8E:
+            return mixer_state[0x8E] | 0xC0;
+        case 0xFF:
+            return 0xFF;
         default:
             return mixer_state[sbdsp.mixer_command];
     }
@@ -722,6 +784,8 @@ static __force_inline void sbmixer_write(uint8_t value) {
             break;
         case MIXER_DMA:
             // sbdsp.dma = value;
+            break;
+        case 0xFF:
             break;
         case MIXER_STEREO:
             sbdsp.dma_stereo = value & 2;
