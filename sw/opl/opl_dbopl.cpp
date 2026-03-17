@@ -64,7 +64,7 @@ static void refill_prebuf()
         auto cmd = opl_cmd_buffer.cmds[opl_cmd_buffer.tail];
         OPL_Pico_WriteRegister(cmd.addr, cmd.data);
         ++opl_cmd_buffer.tail;
-        if ((cmd.addr < 0x20) || ((cmd.addr & 0xF0) == 0xB0)) {
+        if (((cmd.addr & 0xFF) < 0x20) || ((cmd.addr & 0xF0) == 0xB0)) {
             // step 1 OPL clock, then continue draining OPL register queue
             dbopl3.GenerateBlock3(1, pb);
             pb += 2 * 1;
