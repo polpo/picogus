@@ -277,8 +277,6 @@ function(build_sb TARGET_NAME MULTIFW)
     target_compile_definitions(${TARGET_NAME} PRIVATE
         SOUND_SB=1
         SOUND_DSP=1
-        SB_BUFFERLESS=1
-        SB_BUFFERLESS_NG=1
         USE_CD_AUDIO_FIFO=1
         # USE_IRQ=1
         # AUDIO_CALLBACK_CORE0=1

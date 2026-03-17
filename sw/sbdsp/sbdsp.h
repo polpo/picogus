@@ -32,7 +32,6 @@ SPDX-License-Identifier: MIT
 
 #include <inttypes.h>
 #include <stdbool.h>
-#include "audio/audio_fifo.h"
 
 typedef struct sbdsp_t {
     uint8_t inbox;
@@ -44,8 +43,6 @@ typedef struct sbdsp_t {
     uint8_t mixer_command;
 
     uint16_t dma_interval;
-    int16_t dma_interval_trim;
-    audio_fifo_t audio_fifo;
 
     uint16_t dac_pause_duration;
     uint8_t dac_pause_duration_low;
@@ -55,7 +52,6 @@ typedef struct sbdsp_t {
     uint16_t dma_sample_count;
     uint32_t dma_xfer_count;
     uint32_t dma_xfer_count_left;
-    uint32_t dma_sample_count_rx;
 
     uint8_t time_constant;
     uint16_t sample_rate;
@@ -81,7 +77,6 @@ typedef struct sbdsp_t {
 
     uint8_t reset_state;
 
-#ifdef SB_BUFFERLESS
     volatile uint32_t cur_sample;  // packed stereo pair: L in low 16, R in high 16
     struct {
         uint32_t old_sample;
@@ -92,7 +87,6 @@ typedef struct sbdsp_t {
         int32_t samplecnt;
     } rsm;                       // resampling state, memset to zero on start/stop
     int32_t rateratio;
-#endif
 } sbdsp_t;
 
 void sbdsp_init();
@@ -102,7 +96,6 @@ uint8_t sbdsp_read(uint8_t address);
 uint16_t sbdsp_sample_rate();
 int16_t sbdsp_muted();
 
-#ifdef SB_BUFFERLESS
 uint32_t sbdsp_generate_sample();
 static inline uint32_t sbdsp_sample_stereo() {
     extern sbdsp_t sbdsp;
@@ -110,9 +103,5 @@ static inline uint32_t sbdsp_sample_stereo() {
     if (sbdsp.dma_enabled) return sbdsp_generate_sample();
     return sbdsp.cur_sample;  // direct DAC fallback
 }
-#endif
-
-void sbdsp_fifo_rx(uint8_t byte);
-void sbdsp_fifo_clear();
 
 #endif // SBDSP_H

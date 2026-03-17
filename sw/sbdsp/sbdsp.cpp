@@ -116,8 +116,6 @@ static dma_inst_t dma_config;
 #define MIXER_IRQ_STATUS        0x82
 #define MIXER_STEREO            0xE
 
-#include "audio/audio_fifo.h"
-
 #define DSP_UNUSED_STATUS_BITS_PULLED_HIGH 0x7F
 
 static char const copyright_string[] = "COPYRIGHT (C) CREATIVE TECHNOLOGY LTD, 1992.";
@@ -133,46 +131,10 @@ sbdsp_t sbdsp;
 static uint8_t mixer_state[256] = { 0 };
 static uint8_t sb_8051_ram[256] = { 0 };
 
-#ifndef SB_BUFFERLESS
-
-constexpr uint32_t AUDIO_FIFO_SIZE_HALF = AUDIO_FIFO_SIZE >> 1;
-
-static int16_t __force_inline dma_interval_calc() {
-    uint32_t level = fifo_level(&sbdsp.audio_fifo);
-    if (level < AUDIO_FIFO_SIZE_HALF) {
-        return sbdsp.dma_interval - 5;
-    } else {
-        return sbdsp.dma_interval + 5;
-    }
-}
-
-void __force_inline sbdsp_fifo_rx(uint8_t byte) {
-    if (!fifo_add_sample(&sbdsp.audio_fifo, (int16_t)(byte ^ 0x80) << 8)) {
-        putchar('O');
-    }
-}
-void __force_inline sbdsp_fifo_clear() {
-    fifo_reset(&sbdsp.audio_fifo);
-}
-audio_fifo_t* sbdsp_fifo_peek() {
-    return &sbdsp.audio_fifo;
-}
-
-#endif
-
-static uint32_t DSP_DMA_EventHandler(Bitu val);
-static PIC_TimerEvent DSP_DMA_Event = {
-    .handler = DSP_DMA_EventHandler,
-};
-
 static __force_inline void sbdsp_dma_disable(bool pause) {
     sbdsp.dma_enabled = false;
-#ifdef SB_BUFFERLESS
     memset(&sbdsp.rsm, 0, sizeof(sbdsp.rsm));
     sbdsp.cur_sample = 0;
-#else
-    PIC_RemoveEvent(&DSP_DMA_Event);
-#endif
     if (!pause) {
         sbdsp.dma_16bit = false;
         sbdsp.dma_signed = false;
@@ -180,7 +142,6 @@ static __force_inline void sbdsp_dma_disable(bool pause) {
     }
 }
 
-#ifdef SB_BUFFERLESS
 uint32_t sbdsp_generate_sample() {
     // Consume ready DMA samples when the fractional accumulator says we need them
     while (sbdsp.rsm.samplecnt >= sbdsp.rateratio) {
@@ -231,19 +192,14 @@ uint32_t sbdsp_generate_sample() {
 
     return (uint32_t)(uint16_t)out_l | ((uint32_t)(uint16_t)out_r << 16);
 }
-#endif
 
 static __force_inline void sbdsp_set_dma_interval() {
     if (sbdsp.sample_rate) {
         sbdsp.dma_interval = 1000000000ul / sbdsp.sample_rate / 1000;
-#ifdef SB_BUFFERLESS
         sbdsp.rateratio = (44100 << SB_RSM_FRAC) / sbdsp.sample_rate;
-#endif
     } else {
         sbdsp.dma_interval = 256 - sbdsp.time_constant;
-#ifdef SB_BUFFERLESS
         sbdsp.rateratio = (44100 << SB_RSM_FRAC) / (1000000ul / sbdsp.dma_interval);
-#endif
     }
     // No halving for stereo/16-bit: dma_write_multi transfers a complete
     // frame per event, so the interval is always one sample period.
@@ -255,53 +211,16 @@ static __force_inline void sbdsp_dma_enable() {
         // Set autopush bits to number of bits per audio frame.
         // 32 will get masked to 0 by this operation which is correct behavior.
         DMA_Multi_Set_Push_Threshold(&dma_config, sbdsp.dma_bytes_per_frame << 3);
-#ifdef SB_BUFFERLESS
         memset(&sbdsp.rsm, 0, sizeof(sbdsp.rsm));
         sbdsp.rsm.dma_pending = true;
         DMA_Multi_Start_Write(&dma_config, sbdsp.dma_bytes_per_frame);
-#else
-        PIC_AddEvent(&DSP_DMA_Event, sbdsp.dma_interval, 0);
-#endif
     }
-}
-
-static uint32_t DSP_DMA_EventHandler(Bitu val) {
-#ifdef SB_BUFFERLESS
-    return 0;  // pull model: audio callback drives DMA, not timer
-#else
-    DMA_Multi_Start_Write(&dma_config, sbdsp.dma_bytes_per_frame);
-    uint32_t current_interval;
-
-    sbdsp.dma_xfer_count_left--;
-
-    current_interval = dma_interval_calc();
-
-    if (sbdsp.dma_xfer_count_left) {
-        return current_interval;
-    } else {
-        sbdsp.dma_done = true;
-        if (sbdsp.dma_16bit) {
-            sbdsp.irq_16_pending = true;
-        } else {
-            sbdsp.irq_8_pending = true;
-        }
-        PIC_ActivateIRQ();
-        if (sbdsp.autoinit) {
-            sbdsp.dma_xfer_count_left = sbdsp.dma_xfer_count;
-            return current_interval;
-        } else {
-            sbdsp_dma_disable(false);
-        }
-    }
-    return 0;
-#endif
 }
 
 static void sbdsp_dma_isr(void) {
     // dma_write_multi uses right-shift: bytes fill from MSB down.
     // Complete frame arrives as one push thanks to autopush threshold.
     const uint32_t dma_data = DMA_Complete_Write(&dma_config);
-#ifdef SB_BUFFERLESS
     uint32_t sample;
     if (sbdsp.dma_stereo) {
         if (sbdsp.dma_16bit) {
@@ -323,9 +242,6 @@ static void sbdsp_dma_isr(void) {
     sbdsp.rsm.dma_sample = sample;
     sbdsp.rsm.dma_sample_ready = true;
     sbdsp.rsm.dma_pending = false;
-#else
-    sbdsp_fifo_rx(dma_data & 0xFF);
-#endif
 }
 
 static uint32_t DSP_DAC_Resume_eventHandler(Bitu val) {
@@ -364,10 +280,6 @@ void sbdsp_init() {
     sb_8051_ram[0x0e] = 0xff;
     sb_8051_ram[0x0f] = 0x07;
     sb_8051_ram[0x37] = 0x38;
-
-#ifndef SB_BUFFERLESS
-    fifo_init(&sbdsp.audio_fifo);
-#endif
 }
 
 
@@ -566,10 +478,8 @@ void sbdsp_process(void) {
         case DSP_DIRECT_DAC:
             if (sbdsp.dav_dsp) {
                 if (sbdsp.current_command_index == 1) {
-#ifdef SB_BUFFERLESS
                     int16_t s = ((int16_t)(int8_t)(sbdsp.inbox ^ 0x80)) << 8;
                     sbdsp.cur_sample = (uint32_t)(uint16_t)s | ((uint32_t)(uint16_t)s << 16);
-#endif
                     sbdsp.dav_dsp = 0;
                     sbdsp.current_command = 0;
                 }
@@ -738,9 +648,6 @@ static __force_inline void sbdsp_reset(uint8_t value) {
             PIC_RemoveEvent(&DSP_Reset_Event);
             sbdsp.autoinit = 0;
             sbdsp_dma_disable(false);
-#ifndef SB_BUFFERLESS
-            sbdsp_fifo_clear();
-#endif
             sbdsp.reset_state = 1;
             break;
         case 0:
