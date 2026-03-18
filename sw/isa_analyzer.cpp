@@ -378,113 +378,123 @@ int main() {
             puts("");
         }
     }
-    puts("Ready! Waiting for ISA bus activity (press BOOTSEL to stop capture)...");
-    stdio_flush();
 
-    // ---- Capture loop ----
-    for (;;) {
-        if (iow_has_data()) {
-            uint32_t raw = pio_sm_get(pio0, IOW_SM);
-            uint16_t addr = (raw >> 22) & 0x3FF;
-            uint8_t data = (raw >> 14) & 0xFF;
-            bool is_dma = (raw >> 13) & 1;
-
-            //printf("w %x ", addr);
-
-            if (!is_dma && !port_match(addr))
-                goto check_ior;
-
-            // Stored event format:
-            //   Bit 31:    Direction (0=IOW, 1=IOR)
-            //   Bit 30:    DMA flag
-            //   Bits 17-8: 10-bit I/O address
-            //   Bits 7-0:  8-bit data
-            uint32_t event = (addr << 8) | data;
-            if (is_dma) event |= (1u << 30);
-            record_event(event);
-        }
-check_ior:
-        if (ior_has_data()) {
-            uint32_t raw = pio_sm_get(pio0, IOR_SM);
-            uint16_t addr = (raw >> 22) & 0x3FF;
-            uint8_t data = (raw >> 14) & 0xFF;
-            bool is_dma = (raw >> 13) & 1;
-
-            if (!is_dma && !port_match(addr))
-                goto check_bootsel;
-
-            uint32_t event = (1u << 31) | (addr << 8) | data;
-            if (is_dma) event |= (1u << 30);
-            record_event(event);
-        }
-check_bootsel:
-        if (!(sio_hw->gpio_hi_in & SIO_GPIO_HI_IN_QSPI_CSN_BITS))
-            break;
-    }
-
-    // ---- Dump captured data ----
-
-    flush_rle();
-
-    // Calculate valid data range
-    size_t entries_captured;
-    size_t start_idx;
-
-    if (buffer_wrapped) {
-        entries_captured = buffer_size;
-        start_idx = write_idx % buffer_size;
-
-        // Skip orphaned RLE trailers at the start
-        while (entries_captured > 0 && (data_buffer[start_idx] & 0xFF000000) == RLE_MAGIC) {
-            start_idx = (start_idx + 1) % buffer_size;
-            entries_captured--;
-        }
-    } else {
-        entries_captured = write_idx;
-        start_idx = 0;
-    }
-
-    printf("\nCapture complete. %u buffer entries.\n", entries_captured);
-    stdio_flush();
-
-    // Write binary markers and data
-    uint32_t start_marker[2] = {BINARY_MARKER_MAGIC, BINARY_MARKER_START};
-    stdio_put_string((char*)start_marker, sizeof(start_marker), false, false);
-    stdio_flush();
-
-    if (buffer_wrapped) {
-        size_t first_chunk = buffer_size - start_idx;
-        stdio_put_string((char*)&data_buffer[start_idx],
-                         first_chunk * sizeof(uint32_t), false, false);
+    while (true) {
+        puts("Ready! Waiting for ISA bus activity (press BOOTSEL to stop capture)...");
         stdio_flush();
-        if (start_idx > 0) {
-            stdio_put_string((char*)data_buffer,
-                             start_idx * sizeof(uint32_t), false, false);
+
+        // ---- Capture loop ----
+        for (;;) {
+            if (iow_has_data()) {
+                uint32_t raw = pio_sm_get(pio0, IOW_SM);
+                uint16_t addr = (raw >> 22) & 0x3FF;
+                uint8_t data = (raw >> 14) & 0xFF;
+                bool is_dma = (raw >> 13) & 1;
+
+                //printf("w %x ", addr);
+
+                if (!is_dma && !port_match(addr))
+                    goto check_ior;
+
+                // Stored event format:
+                //   Bit 31:    Direction (0=IOW, 1=IOR)
+                //   Bit 30:    DMA flag
+                //   Bits 17-8: 10-bit I/O address
+                //   Bits 7-0:  8-bit data
+                uint32_t event = (addr << 8) | data;
+                if (is_dma) event |= (1u << 30);
+                record_event(event);
+            }
+check_ior:
+            if (ior_has_data()) {
+                uint32_t raw = pio_sm_get(pio0, IOR_SM);
+                uint16_t addr = (raw >> 22) & 0x3FF;
+                uint8_t data = (raw >> 14) & 0xFF;
+                bool is_dma = (raw >> 13) & 1;
+
+                if (!is_dma && !port_match(addr))
+                    goto check_bootsel;
+
+                uint32_t event = (1u << 31) | (addr << 8) | data;
+                if (is_dma) event |= (1u << 30);
+                record_event(event);
+            }
+check_bootsel:
+            if (!(sio_hw->gpio_hi_in & SIO_GPIO_HI_IN_QSPI_CSN_BITS))
+                break;
+        }
+
+        // ---- Dump captured data ----
+
+        flush_rle();
+
+        // Calculate valid data range
+        size_t entries_captured;
+        size_t start_idx;
+
+        if (buffer_wrapped) {
+            entries_captured = buffer_size;
+            start_idx = write_idx % buffer_size;
+
+            // Skip orphaned RLE trailers at the start
+            while (entries_captured > 0 && (data_buffer[start_idx] & 0xFF000000) == RLE_MAGIC) {
+                start_idx = (start_idx + 1) % buffer_size;
+                entries_captured--;
+            }
+        } else {
+            entries_captured = write_idx;
+            start_idx = 0;
+        }
+
+        printf("\nCapture complete. %u buffer entries.\n", entries_captured);
+        stdio_flush();
+
+        // Write binary markers and data
+        uint32_t start_marker[2] = {BINARY_MARKER_MAGIC, BINARY_MARKER_START};
+        stdio_put_string((char*)start_marker, sizeof(start_marker), false, false);
+        stdio_flush();
+
+        if (buffer_wrapped) {
+            size_t first_chunk = buffer_size - start_idx;
+            stdio_put_string((char*)&data_buffer[start_idx],
+                            first_chunk * sizeof(uint32_t), false, false);
+            stdio_flush();
+            if (start_idx > 0) {
+                stdio_put_string((char*)data_buffer,
+                                start_idx * sizeof(uint32_t), false, false);
+                stdio_flush();
+            }
+        } else {
+            stdio_put_string((char*)data_buffer, write_idx * sizeof(uint32_t), false, false);
             stdio_flush();
         }
-    } else {
-        stdio_put_string((char*)data_buffer, write_idx * sizeof(uint32_t), false, false);
+
+        uint32_t end_marker[2] = {BINARY_MARKER_MAGIC, BINARY_MARKER_END};
+        stdio_put_string((char*)end_marker, sizeof(end_marker), false, false);
         stdio_flush();
-    }
 
-    uint32_t end_marker[2] = {BINARY_MARKER_MAGIC, BINARY_MARKER_END};
-    stdio_put_string((char*)end_marker, sizeof(end_marker), false, false);
-    stdio_flush();
-
-    // Count events for statistics
-    size_t total_events = 0;
-    for (size_t j = 0; j < entries_captured; ++j) {
-        size_t i = buffer_wrapped ? ((start_idx + j) % buffer_size) : j;
-        uint32_t word = data_buffer[i];
-        if ((word & 0xFF000000) == RLE_MAGIC) {
-            total_events += (word & RLE_COUNT_MASK);
-        } else {
-            total_events++;
+        // Count events for statistics
+        size_t total_events = 0;
+        for (size_t j = 0; j < entries_captured; ++j) {
+            size_t i = buffer_wrapped ? ((start_idx + j) % buffer_size) : j;
+            uint32_t word = data_buffer[i];
+            if ((word & 0xFF000000) == RLE_MAGIC) {
+                total_events += (word & RLE_COUNT_MASK);
+            } else {
+                total_events++;
+            }
         }
-    }
 
-    printf("\n--- END --- (%u events from %u buffer entries, %.1f%% compression)\n",
-           total_events, entries_captured,
-           100.0 * (1.0 - (float)entries_captured / (float)total_events));
-    stdio_flush();
+        printf("\n--- END --- (%u events from %u buffer entries, %.1f%% compression)\n",
+            total_events, entries_captured,
+            100.0 * (1.0 - (float)entries_captured / (float)total_events));
+        stdio_flush();
+
+        // Clear events buffer
+        write_idx = 0;
+
+        // Wait until BOOTSEL is released (+ additional debounce delay)
+        while (!(sio_hw->gpio_hi_in & SIO_GPIO_HI_IN_QSPI_CSN_BITS)) {};
+        delay_ms(50);
+    }
 }
