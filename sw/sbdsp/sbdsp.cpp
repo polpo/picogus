@@ -195,13 +195,14 @@ uint32_t sbdsp_generate_sample() {
 
 static __force_inline void sbdsp_set_dma_interval() {
     if (sbdsp.sample_rate) {
-        sbdsp.dma_interval = 1000000000ul / sbdsp.sample_rate / 1000;
-        sbdsp.rateratio = (44100 << SB_RSM_FRAC) / sbdsp.sample_rate;
+        uint32_t actual_sr = (sbdsp.sample_rate >> (sbdsp.dma_stereo_sbpro ? 1 : 0));
+        sbdsp.dma_interval = 1000000000ul / actual_sr / 1000;
+        sbdsp.rateratio = (44100 << SB_RSM_FRAC) / actual_sr;
     } else {
-        sbdsp.dma_interval = 256 - sbdsp.time_constant;
+        sbdsp.dma_interval = (256 - sbdsp.time_constant) << (sbdsp.dma_stereo_sbpro ? 1 : 0);
         sbdsp.rateratio = (44100 << SB_RSM_FRAC) / (1000000ul / sbdsp.dma_interval);
     }
-    // No halving for stereo/16-bit: dma_write_multi transfers a complete
+    // No halving for stereo/16-bit (unless SBPro stereo): dma_write_multi transfers a complete
     // frame per event, so the interval is always one sample period.
 }
 
@@ -288,6 +289,29 @@ static __force_inline void sbdsp_output(uint8_t value) {
     sbdsp.dav_pc = 1;
 }
 
+// start pre-SB16 PCM DMA transfer
+// TODO: Creative ADPCM?
+static void sbdsp_start_pcm_dma(int autoinit, uint16_t xfer_size) {
+    sbdsp.autoinit = autoinit;
+
+    bool dma_stereo = (mixer_state[0x0E] & 2);
+    if (dma_stereo && ((xfer_size + 1) == 1)) {
+        // HACK: many SBPro programs follow Creative's documentation and perform 1 byte single-cycle
+        // DMA transfer to seemingly reset the mixer stereo state, then waiting for IRQ to come.
+        // since the sbdsp.dma_xfer_count calculation divides by 2 for stereo case, it results in
+        // xfer_count==0, so the transfer never actually occurs.
+        // for those transfers, force mono mode.
+        dma_stereo = false;
+    }
+    sbdsp.dma_stereo = dma_stereo;
+    sbdsp.dma_stereo_sbpro = dma_stereo;
+    sbdsp.dma_bytes_per_frame = sbdsp.dma_stereo ? 2 : 1;
+    sbdsp.dma_xfer_count = (xfer_size + 1) / sbdsp.dma_bytes_per_frame;
+    sbdsp.dma_xfer_count_left = sbdsp.dma_xfer_count;
+    sbdsp_set_dma_interval();
+    sbdsp.dma_done = false;
+    sbdsp_dma_enable();
+}
 
 void sbdsp_process(void) {
     if (sbdsp.reset_state) return;
@@ -323,25 +347,14 @@ void sbdsp_process(void) {
             sbdsp.current_command = 0;
             break;
         case DSP_DMA_AUTO:
-            sbdsp.autoinit = 1;
-            sbdsp.dma_bytes_per_frame = sbdsp.dma_stereo ? 2 : 1;
-            sbdsp.dma_xfer_count = (sbdsp.dma_block_size + 1) / sbdsp.dma_bytes_per_frame;
-            sbdsp.dma_xfer_count_left = sbdsp.dma_xfer_count;
-            sbdsp_set_dma_interval();
-            sbdsp.dma_done = false;
-            sbdsp_dma_enable();
-            sbdsp.current_command = 0;
+            sbdsp.dav_dsp = 0;
+            sbdsp.current_command = 0;    
+            sbdsp_start_pcm_dma(1, sbdsp.dma_block_size);
             break;
         case DSP_DMA_HS_AUTO:
             sbdsp.dav_dsp = 0;
-            sbdsp.autoinit = 1;
-            sbdsp.dma_bytes_per_frame = sbdsp.dma_stereo ? 2 : 1;
-            sbdsp.dma_xfer_count = (sbdsp.dma_block_size + 1) / sbdsp.dma_bytes_per_frame;
-            sbdsp.dma_xfer_count_left = sbdsp.dma_xfer_count;
-            sbdsp_set_dma_interval();
-            sbdsp.dma_done = false;
-            sbdsp_dma_enable();
             sbdsp.current_command = 0;
+            sbdsp_start_pcm_dma(1, sbdsp.dma_block_size);
             break;
 
         case DSP_SET_TIME_CONSTANT:
@@ -349,6 +362,7 @@ void sbdsp_process(void) {
                 if (sbdsp.current_command_index == 1) {
                     sbdsp.time_constant = sbdsp.inbox;
                     sbdsp.sample_rate = 0; // Rate of 0 indicates time constant drives DMA timing
+                    sbdsp_set_dma_interval();
                     sbdsp.dav_dsp = 0;
                     sbdsp.current_command = 0;
                 }
@@ -363,6 +377,7 @@ void sbdsp_process(void) {
                 } else if (sbdsp.current_command_index == 2) { // wSamplingRate.LowByte
                     sbdsp.sample_rate |= sbdsp.inbox;
                     sbdsp.time_constant = 0;
+                    sbdsp_set_dma_interval();
                     sbdsp.dav_dsp = 0;
                     sbdsp.current_command = 0;
                 }
@@ -386,13 +401,7 @@ void sbdsp_process(void) {
         case DSP_DMA_HS_SINGLE:
             sbdsp.dav_dsp = 0;
             sbdsp.current_command = 0;
-            sbdsp.autoinit = 0;
-            sbdsp.dma_bytes_per_frame = sbdsp.dma_stereo ? 2 : 1;
-            sbdsp.dma_xfer_count = (sbdsp.dma_block_size + 1) / sbdsp.dma_bytes_per_frame;
-            sbdsp.dma_xfer_count_left = sbdsp.dma_xfer_count;
-            sbdsp_set_dma_interval();
-            sbdsp.dma_done = false;
-            sbdsp_dma_enable();
+            sbdsp_start_pcm_dma(0, sbdsp.dma_block_size);
             break;
         case DSP_DMA_SINGLE:
             if (sbdsp.dav_dsp) {
@@ -403,13 +412,7 @@ void sbdsp_process(void) {
                     sbdsp.dma_sample_count += (sbdsp.inbox << 8);
                     sbdsp.dav_dsp = 0;
                     sbdsp.current_command = 0;
-                    sbdsp.autoinit = 0;
-                    sbdsp.dma_bytes_per_frame = sbdsp.dma_stereo ? 2 : 1;
-                    sbdsp.dma_xfer_count = (sbdsp.dma_sample_count + 1) / sbdsp.dma_bytes_per_frame;
-                    sbdsp.dma_xfer_count_left = sbdsp.dma_xfer_count;
-                    sbdsp_set_dma_interval();
-                    sbdsp.dma_done = false;
-                    sbdsp_dma_enable();
+                    sbdsp_start_pcm_dma(0, sbdsp.dma_sample_count);
                 }
                 sbdsp.current_command_index++;
             }
@@ -542,12 +545,14 @@ void sbdsp_process(void) {
             }
             break;
         case DSP_DMA_IO_START ... DSP_DMA_IO_END:
+            // SB16 DMA transfer
             if (sbdsp.dav_dsp) {
                 if (sbdsp.current_command_index == 0) { // bCommand + bMode
                     sbdsp.dma_16bit = (sbdsp.current_command & 0xf0) == 0xb0;
                     sbdsp.autoinit = sbdsp.current_command & 0x4;
                     sbdsp.dma_signed = sbdsp.inbox & 0x10;
                     sbdsp.dma_stereo = sbdsp.inbox & 0x20;
+                    sbdsp.dma_stereo_sbpro = 0;
                     sbdsp.dav_dsp = 0;
                 } else if (sbdsp.current_command_index == 1) { // wLength.LowByte
                     sbdsp.dma_sample_count = sbdsp.inbox;
@@ -695,7 +700,7 @@ static __force_inline void sbmixer_write(uint8_t value) {
         case 0xFF:
             break;
         case MIXER_STEREO:
-            sbdsp.dma_stereo = value & 2;
+            //sbdsp.dma_stereo = value & 2;
             // no break
         default:
             mixer_state[sbdsp.mixer_command] = value;

@@ -60,6 +60,7 @@ typedef struct sbdsp_t {
     bool dma_enabled;
     bool dma_16bit;
     bool dma_stereo;
+    bool dma_stereo_sbpro;
     bool dma_signed;
     volatile bool dma_done;
 
