@@ -134,7 +134,7 @@ static uint8_t sb_8051_ram[256] = { 0 };
 static __force_inline void sbdsp_dma_disable(bool pause) {
     sbdsp.dma_enabled = false;
     memset(&sbdsp.rsm, 0, sizeof(sbdsp.rsm));
-    sbdsp.cur_sample = 0;
+    // sbdsp.cur_sample = 0; // hold last sample to prevent pops!
     if (!pause) {
         sbdsp.dma_16bit = false;
         sbdsp.dma_signed = false;
@@ -166,7 +166,7 @@ uint32_t sbdsp_generate_sample() {
                 sbdsp.dma_xfer_count_left = sbdsp.dma_xfer_count;
             } else {
                 sbdsp_dma_disable(false);
-                break;
+                return sbdsp.cur_sample;    // return last sample rendered
             }
         }
 
@@ -303,6 +303,8 @@ static void sbdsp_start_pcm_dma(int autoinit, uint16_t xfer_size) {
         // for those transfers, force mono mode.
         dma_stereo = false;
     }
+    sbdsp.dma_16bit  = false;       // always 8 bit
+    sbdsp.dma_signed = false;       // always unsigned
     sbdsp.dma_stereo = dma_stereo;
     sbdsp.dma_stereo_sbpro = dma_stereo;
     sbdsp.dma_bytes_per_frame = sbdsp.dma_stereo ? 2 : 1;
