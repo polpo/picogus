@@ -43,7 +43,7 @@ extern uint LED_PIN;
 #define MAX(x, y) (((x) > (y)) ? (x) : (y))
 #endif
 
-#define SB_RSM_FRAC 10
+#define SB_RSM_FRAC 12
 
 static irq_handler_t SBDSP_DMA_isr_pt;
 static dma_inst_t dma_config;
@@ -143,6 +143,7 @@ static __force_inline void sbdsp_dma_disable(bool pause) {
 }
 
 uint32_t sbdsp_generate_sample() {
+#if 0
     // Consume ready DMA samples when the fractional accumulator says we need them
     while (sbdsp.rsm.samplecnt >= sbdsp.rateratio) {
         if (!sbdsp.rsm.dma_sample_ready) break;  // DMA not ready yet
@@ -189,18 +190,72 @@ uint32_t sbdsp_generate_sample() {
                      + new_r * sbdsp.rsm.samplecnt) / sbdsp.rateratio);
 
     sbdsp.rsm.samplecnt += 1 << SB_RSM_FRAC;
+#else 
+    sbdsp.rs.phase_acc += sbdsp.rateratio;
+    while (sbdsp.rs.phase_acc >= (1 << SB_RSM_FRAC)) {
+        sbdsp.rs.phase_acc -= (1 << SB_RSM_FRAC);
 
-    return (uint32_t)(uint16_t)out_l | ((uint32_t)(uint16_t)out_r << 16);
+        // advance interpolation buffer state
+        sbdsp.rs.buf[1] = sbdsp.rs.buf[0];
+
+        if (sbdsp.rsm.dma_sample_ready) {
+            // sample ready, advance DMA state
+            sbdsp.rs.buf[0] = sbdsp.rsm.dma_sample;
+            sbdsp.rsm.dma_sample_ready = false;
+
+            // is this last sample?
+            sbdsp.dma_xfer_count_left--;
+            if (!sbdsp.dma_xfer_count_left) {
+                // terminal count, current block is finished
+                sbdsp.dma_done = true;
+                if (sbdsp.dma_16bit) {
+                    sbdsp.irq_16_pending = true;
+                } else {
+                    sbdsp.irq_8_pending = true;
+                }
+                PIC_ActivateIRQ();
+                if (sbdsp.autoinit) {
+                    // reload with transfer count
+                    sbdsp.dma_xfer_count_left = sbdsp.dma_xfer_count;
+                } else {
+                    // stop DMA
+                    sbdsp_dma_disable(false);
+                }
+            }
+            
+            if (sbdsp.dma_enabled && !sbdsp.rsm.dma_pending) {
+                // request DMA to transfer next sample
+                // TODO: handle rates above 44 KHz (may reqest 2 sample frames per single 44KHz sample)
+                // TODO: handle Creative ADPCM as well
+                sbdsp.rsm.dma_pending = true;
+                DMA_Multi_Start_Write(&dma_config, sbdsp.dma_bytes_per_frame);
+            }
+        }
+    }
+
+    // interpolate sample
+    int32_t l0 = (int16_t)(sbdsp.rs.buf[0] & 0xFFFF);
+    int32_t r0 = (int16_t)(sbdsp.rs.buf[0] >> 16);
+    int32_t l1 = (int16_t)(sbdsp.rs.buf[1] & 0xFFFF);
+    int32_t r1 = (int16_t)(sbdsp.rs.buf[1] >> 16);
+
+    int32_t phase_frac = sbdsp.rs.phase_acc & ((1 << SB_RSM_FRAC) - 1);
+    int32_t out_l = ((l0 * phase_frac) + (l1 * ((1 << SB_RSM_FRAC) - phase_frac))) >> SB_RSM_FRAC;
+    int32_t out_r = ((r0 * phase_frac) + (r1 * ((1 << SB_RSM_FRAC) - phase_frac))) >> SB_RSM_FRAC;
+
+#endif
+    
+    return (uint32_t)((out_l & 0xFFFF) | (out_r << 16));
 }
 
 static __force_inline void sbdsp_set_dma_interval() {
     if (sbdsp.sample_rate) {
         uint32_t actual_sr = (sbdsp.sample_rate >> (sbdsp.dma_stereo_sbpro ? 1 : 0));
         sbdsp.dma_interval = 1000000000ul / actual_sr / 1000;
-        sbdsp.rateratio = (44100 << SB_RSM_FRAC) / actual_sr;
+        sbdsp.rateratio = (actual_sr << SB_RSM_FRAC) / 44100;
     } else {
         sbdsp.dma_interval = (256 - sbdsp.time_constant) << (sbdsp.dma_stereo_sbpro ? 1 : 0);
-        sbdsp.rateratio = (44100 << SB_RSM_FRAC) / (1000000ul / sbdsp.dma_interval);
+        sbdsp.rateratio = ((1000000ul / sbdsp.dma_interval) << SB_RSM_FRAC) / 44100;
     }
     // No halving for stereo/16-bit (unless SBPro stereo): dma_write_multi transfers a complete
     // frame per event, so the interval is always one sample period.

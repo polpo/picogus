@@ -79,6 +79,7 @@ typedef struct sbdsp_t {
     uint8_t reset_state;
 
     volatile uint32_t cur_sample;  // packed stereo pair: L in low 16, R in high 16
+#if 0
     struct {
         uint32_t old_sample;
         uint32_t new_sample;
@@ -87,6 +88,22 @@ typedef struct sbdsp_t {
         bool dma_pending;        // a DMA transfer is in flight
         int32_t samplecnt;
     } rsm;                       // resampling state, memset to zero on start/stop
+#else
+    struct {
+        int32_t  phase_acc;
+        uint32_t buf[2];        // sample buffer, used for linear interpolation
+
+        // DMA stuff
+        // TODO: make it a very short (max. 8 samples) ring buffer for Creative ADPCM
+        // and rates slightly higher than 44100Hz (SB16 cap is 45454Hz)
+    } rs;
+    struct {
+        volatile uint32_t dma_sample;
+        volatile bool dma_sample_ready;
+        bool dma_pending;        // a DMA transfer is in flight
+    } rsm;
+#endif
+
     int32_t rateratio;
 } sbdsp_t;
 
@@ -101,7 +118,7 @@ uint32_t sbdsp_generate_sample();
 static inline uint32_t sbdsp_sample_stereo() {
     extern sbdsp_t sbdsp;
     if (!(sbdsp.speaker_on & ~sbdsp.dac_resume_pending)) return 0;
-    if (sbdsp.dma_enabled) return (sbdsp.cur_sample = sbdsp_generate_sample());
+    if (sbdsp.dma_enabled) sbdsp.cur_sample = sbdsp_generate_sample();
     return sbdsp.cur_sample;  // direct DAC fallback
 }
 
