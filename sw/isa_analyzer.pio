@@ -1,0 +1,155 @@
+/*
+ *  Copyright (C) 2025 Ian Scott
+ *
+ *  This program is free software; you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation; either version 2 of the License, or
+ *  (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
+ */
+
+; ISA Bus Analyzer PIO programs
+; Passive IOW/IOR capture for the PicoGUS hardware on RP2350.
+;
+; Both programs use pio0 and share the ADS sideset pin (GPIO 27).
+; Uses optional sideset (side_set 1 opt) so idle wait instructions
+; don't fight the other SM for ADS control.
+
+.define public AD0_PIN 6
+.define public IOW_PIN 4
+.define public IOR_PIN 5
+.define public IOCHRDY_PIN 26
+.define public ADS_PIN 27
+.define public DACK_PIN 19
+.define public TC_PIN 20
+
+; IOW capture - captures I/O writes and DMA write data
+;
+; Output word (shift-left, autopush at 32):
+;   [31:22] 10-bit I/O address (0 for DMA)
+;   [21:14] 8-bit data
+;   [13]    DMA flag (1=DMA cycle)
+;   [12:0]  reserved (0)
+;
+.program iow_capture
+.side_set 1 opt                          ; ADS pin, optional (avoids fighting IOR SM)
+
+top:
+.wrap_target
+    wait 1 gpio IOW_PIN                  ; idle wait - no sideset (don't fight IOR SM)
+    wait 0 gpio IOW_PIN                  ; IOW falling edge - no sideset
+    jmp pin dma_capture                  ; DACK HIGH = DMA active -> branch
+    ; --- Normal I/O write ---
+    in pins, 10 [3]          side 1      ; read addr & start mux switch (yolo)
+    nop [3]                  side 1      ; mux settle (~24ns total at 370MHz)
+    in pins, 8               side 1      ; read 8-bit data
+    in null, 14              side 0      ; pad to 32 (flags=0), autopush; ADS->addr
+.wrap
+
+dma_capture:
+    in null, 10              side 1      ; addr=0, switch mux to data
+    nop [7]                  side 1      ; mux settle
+    in pins, 8               side 1      ; read data
+    nop                      side 0      ; ADS->addr
+    in x, 1                              ; DMA flag = 1 (X pre-set to 1 in init)
+    in null, 13              side 0      ; pad, autopush
+    jmp top                              ; back to idle (no sideset)
+
+% c-sdk {
+static inline void iow_capture_program_init(PIO pio, uint sm, uint offset) {
+    pio_sm_config c = iow_capture_program_get_default_config(offset);
+
+    sm_config_set_in_pins(&c, AD0_PIN);
+    sm_config_set_in_shift(&c, false, true, 32);   // shift left, autopush at 32
+    sm_config_set_sideset_pins(&c, ADS_PIN);
+    sm_config_set_jmp_pin(&c, DACK_PIN);
+    sm_config_set_clkdiv(&c, 1.0f);
+
+    // AD0-AD9 as inputs
+    pio_sm_set_consecutive_pindirs(pio, sm, AD0_PIN, 10, false);
+    // IOW as input
+    pio_sm_set_consecutive_pindirs(pio, sm, IOW_PIN, 1, false);
+    // DACK as input
+    pio_sm_set_consecutive_pindirs(pio, sm, DACK_PIN, 1, false);
+    // ADS as output (sideset pin)
+    pio_gpio_init(pio, ADS_PIN);
+    pio_sm_set_consecutive_pindirs(pio, sm, ADS_PIN, 1, true);
+
+    pio_sm_init(pio, sm, offset, &c);
+
+    // Pre-set X to 1 (used as DMA flag in 'in x, 1')
+    pio_sm_exec(pio, sm, pio_encode_set(pio_x, 1));
+
+    pio_sm_set_enabled(pio, sm, true);
+}
+%}
+
+
+; IOR capture - captures I/O reads and DMA read data
+; Same output word format as IOW capture.
+;
+; For IOR, the responding card drives data onto the bus. Data is valid
+; at the IOR rising edge (end of cycle), so we wait for the rising edge
+; before reading
+;
+.program ior_capture
+.side_set 1 opt
+
+top:
+.wrap_target
+    wait 1 gpio IOR_PIN                  ; idle - no sideset
+    wait 0 gpio IOR_PIN                  ; IOR falling edge - no sideset
+    jmp pin dma_capture                  ; DACK HIGH = DMA
+; Normal I/O read
+    in pins, 10 [3]          side 1      ; read addr & start mux switch (yolo)
+    nop [3]                  side 1      ; mux settle
+    wait 1 gpio IOR_PIN      side 1      ; wait for IOR rising edge (data valid)
+    in pins, 8               side 1      ; read data
+    in null, 14              side 0      ; pad, autopush; ADS->addr
+.wrap
+
+dma_capture:
+    in null, 10              side 1      ; addr=0, mux to data
+    wait 1 gpio IOR_PIN      side 1      ; wait for IOR rising edge
+    in pins, 8               side 1      ; read data
+    nop                      side 0      ; ADS->addr
+    in x, 1                              ; DMA flag (X pre-set to 1)
+    in null, 13              side 0      ; pad, autopush
+    jmp top                              ; back to idle (no sideset)
+
+% c-sdk {
+static inline void ior_capture_program_init(PIO pio, uint sm, uint offset) {
+    pio_sm_config c = ior_capture_program_get_default_config(offset);
+
+    sm_config_set_in_pins(&c, AD0_PIN);
+    sm_config_set_in_shift(&c, false, true, 32);   // shift left, autopush at 32
+    sm_config_set_sideset_pins(&c, ADS_PIN);
+    sm_config_set_jmp_pin(&c, DACK_PIN);
+    sm_config_set_clkdiv(&c, 1.0f);
+
+    // AD0-AD9 as inputs
+    pio_sm_set_consecutive_pindirs(pio, sm, AD0_PIN, 10, false);
+    // IOR as input
+    pio_sm_set_consecutive_pindirs(pio, sm, IOR_PIN, 1, false);
+    // DACK as input
+    pio_sm_set_consecutive_pindirs(pio, sm, DACK_PIN, 1, false);
+    // ADS as output (sideset pin)
+    pio_gpio_init(pio, ADS_PIN);
+    pio_sm_set_consecutive_pindirs(pio, sm, ADS_PIN, 1, true);
+
+    pio_sm_init(pio, sm, offset, &c);
+
+    // Pre-set X to 1 (used as DMA flag in 'in x, 1')
+    pio_sm_exec(pio, sm, pio_encode_set(pio_x, 1));
+
+    pio_sm_set_enabled(pio, sm, true);
+}
+%}
