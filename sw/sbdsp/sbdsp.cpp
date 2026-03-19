@@ -143,54 +143,6 @@ static __force_inline void sbdsp_dma_disable(bool pause) {
 }
 
 uint32_t sbdsp_generate_sample() {
-#if 0
-    // Consume ready DMA samples when the fractional accumulator says we need them
-    while (sbdsp.rsm.samplecnt >= sbdsp.rateratio) {
-        if (!sbdsp.rsm.dma_sample_ready) break;  // DMA not ready yet
-
-        sbdsp.rsm.old_sample = sbdsp.rsm.new_sample;
-        sbdsp.rsm.new_sample = sbdsp.rsm.dma_sample;
-        sbdsp.rsm.dma_sample_ready = false;
-        sbdsp.rsm.samplecnt -= sbdsp.rateratio;
-
-        // Track transfer count
-        sbdsp.dma_xfer_count_left--;
-        if (!sbdsp.dma_xfer_count_left) {
-            sbdsp.dma_done = true;
-            if (sbdsp.dma_16bit) {
-                sbdsp.irq_16_pending = true;
-            } else {
-                sbdsp.irq_8_pending = true;
-            }
-            PIC_ActivateIRQ();
-            if (sbdsp.autoinit) {
-                sbdsp.dma_xfer_count_left = sbdsp.dma_xfer_count;
-            } else {
-                sbdsp_dma_disable(false);
-                return sbdsp.cur_sample;    // return last sample rendered
-            }
-        }
-
-        // Pipeline: kick off next DMA transfer
-        if (sbdsp.dma_enabled && !sbdsp.rsm.dma_pending) {
-            sbdsp.rsm.dma_pending = true;
-            DMA_Multi_Start_Write(&dma_config, sbdsp.dma_bytes_per_frame);
-        }
-    }
-
-    // Linear interpolation between old_sample and new_sample
-    int16_t old_l = (int16_t)(sbdsp.rsm.old_sample & 0xFFFF);
-    int16_t old_r = (int16_t)(sbdsp.rsm.old_sample >> 16);
-    int16_t new_l = (int16_t)(sbdsp.rsm.new_sample & 0xFFFF);
-    int16_t new_r = (int16_t)(sbdsp.rsm.new_sample >> 16);
-
-    int16_t out_l = (int16_t)((old_l * (sbdsp.rateratio - sbdsp.rsm.samplecnt)
-                     + new_l * sbdsp.rsm.samplecnt) / sbdsp.rateratio);
-    int16_t out_r = (int16_t)((old_r * (sbdsp.rateratio - sbdsp.rsm.samplecnt)
-                     + new_r * sbdsp.rsm.samplecnt) / sbdsp.rateratio);
-
-    sbdsp.rsm.samplecnt += 1 << SB_RSM_FRAC;
-#else 
     sbdsp.rs.phase_acc += sbdsp.rateratio;
     while (sbdsp.rs.phase_acc >= (1 << SB_RSM_FRAC)) {
         sbdsp.rs.phase_acc -= (1 << SB_RSM_FRAC);
@@ -243,8 +195,6 @@ uint32_t sbdsp_generate_sample() {
     int32_t out_l = ((l0 * phase_frac) + (l1 * ((1 << SB_RSM_FRAC) - phase_frac))) >> SB_RSM_FRAC;
     int32_t out_r = ((r0 * phase_frac) + (r1 * ((1 << SB_RSM_FRAC) - phase_frac))) >> SB_RSM_FRAC;
 
-#endif
-    
     return (uint32_t)((out_l & 0xFFFF) | (out_r << 16));
 }
 
