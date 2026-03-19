@@ -117,9 +117,8 @@ int16_t sbdsp_muted();
 uint32_t sbdsp_generate_sample();
 static inline uint32_t sbdsp_sample_stereo() {
     extern sbdsp_t sbdsp;
-    if (!(sbdsp.speaker_on & ~sbdsp.dac_resume_pending)) return 0;
-    if (sbdsp.dma_enabled) sbdsp.cur_sample = sbdsp_generate_sample();
-    return sbdsp.cur_sample;  // direct DAC fallback
+    if (sbdsp.dma_enabled && !sbdsp.dac_resume_pending) sbdsp.cur_sample = sbdsp_generate_sample();
+    return sbdsp.speaker_on ? sbdsp.cur_sample : 0;
 }
 
 #endif // SBDSP_H
