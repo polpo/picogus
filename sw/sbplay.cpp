@@ -105,9 +105,13 @@ static int16_t get_opl_sample()
 {
     int16_t opl_current_sample;
     OPL_Pico_simple(&opl_current_sample, 1);
-    opl_current_sample = scale_sample(opl_current_sample << 1, opl_volume, 1);
     return opl_current_sample;
 }
+
+typedef union {
+    uint32_t data32;
+    int16_t  data16[2];
+} sample_pair;
 
 static Resampler<get_opl_sample> resampler;
 
@@ -115,11 +119,6 @@ static Resampler<get_opl_sample> resampler;
 // 8390 clock cycles per sample (370MHz / 8390 ~= 44100Hz)
 static constexpr uint32_t clocks_per_sample_minus_one = (SYS_CLK_HZ / 44100) - 1;
 static constexpr uint pwm_slice_num = 4; // slices 0-3 are taken by USB joystick support
-
-typedef union {
-    uint32_t data32;
-    int16_t data16[2];
-} sample_pair;
 
 #ifdef CDROM
 static audio_fifo_t* cd_fifo;
@@ -137,8 +136,8 @@ void audio_sample_handler(void) {
 #else
         uint32_t card_stereo = sbdsp_sample_stereo();
 #endif
-        sample_l = scale_sample((int16_t)(card_stereo & 0xFFFF), sb_volume, 0);
-        sample_r = scale_sample((int16_t)(card_stereo >> 16), sb_volume, 0);
+        sample_l = scale_sample((int16_t)(card_stereo & 0xFFFF), volume.sb_pcm[0], 0);
+        sample_r = scale_sample((int16_t)(card_stereo >> 16),    volume.sb_pcm[1], 0);
     }
 #endif
 
@@ -146,8 +145,8 @@ void audio_sample_handler(void) {
     static uint32_t cd_index = 0;
     const uint32_t has_cd_samples = fifo_take_samples_inline(cd_fifo, 2);
     if (has_cd_samples) {
-        sample_l += scale_sample(cd_fifo->buffer[cd_index++], cd_audio_volume, 0);
-        sample_r += scale_sample(cd_fifo->buffer[cd_index++], cd_audio_volume, 0);
+        sample_l += scale_sample(cd_fifo->buffer[cd_index++], volume.cd_audio[0], 0);
+        sample_r += scale_sample(cd_fifo->buffer[cd_index++], volume.cd_audio[1], 0);
         // sample_l += cd_fifo->buffer[cd_index++];
         // sample_r += cd_fifo->buffer[cd_index++];
         cd_index &= AUDIO_FIFO_BITS;
@@ -158,16 +157,21 @@ void audio_sample_handler(void) {
     const uint32_t has_opl_samples = fifo_take_samples_inline(&opl_out_fifo, 1);
     if (has_opl_samples) {
         int16_t opl_sample = opl_out_fifo.buffer[opl_out_index++];
-        sample_l += opl_sample;
-        sample_r += opl_sample;
+        sample_l += scale_sample(opl_sample, volume.opl[0] << 1, 0);
+        sample_r += scale_sample(opl_sample, volume.opl[1] << 1, 0);
         opl_out_index &= AUDIO_FIFO_BITS;
     }
 
-    const sample_pair clamped = {.data16 = {
-        clamp16(sample_l),
-        clamp16(sample_r)
-    }};
-    audio_pio->txf[PICO_AUDIO_I2S_SM] = clamped.data32;
+#ifdef SOUND_SB
+    // apply SB master volume and clamp the output
+    sample_l = scale_sample(sample_l, volume.sb_master[0], 1);
+    sample_r = scale_sample(sample_r, volume.sb_master[1], 1);
+#else
+    sample_l = clamp16(sample_l);
+    sample_r = clamp16(sample_r);
+#endif
+
+    audio_pio->txf[PICO_AUDIO_I2S_SM] = ((sample_l & 0xFFFF) | (sample_r << 16));
 }
 
 void play_adlib() {

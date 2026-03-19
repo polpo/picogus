@@ -27,12 +27,17 @@ extern "C" {
 #include "system/flash_settings.h"
 #include "clamp.h"
 
-extern int32_t opl_volume;
-extern int32_t sb_volume;
-extern int32_t cd_audio_volume;
-extern int32_t gus_volume;
-extern int32_t psg_volume;
+struct volctrl_t {
+    // 0 - left, 1 - right
+    int32_t opl[2];             // OPL3   (aka MIDI)
+    int32_t sb_pcm[2];          // SB PCM (aka Voice)
+    int32_t cd_audio[2];        // CD audio
+    int32_t sb_master[2];       // SB Master volume
 
+    int32_t gus;
+    int32_t psg;
+};
+extern struct volctrl_t volume;
 
 extern int32_t set_volume_scale (uint8_t percent);
 

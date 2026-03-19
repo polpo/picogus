@@ -24,12 +24,16 @@
 #include "volctrl.h"
 extern Settings settings;
 
-int32_t opl_volume = 0x10000; // default 1.0x volume
-int32_t sb_volume = 0x10000; // default 1.0x volume
-int32_t cd_audio_volume = 0x10000; // default 1.0x volume
-int32_t gus_volume = 0x10000; // default 1.0x volume
-int32_t psg_volume = 0x10000; // default 1.0x volume
-
+// initialize to default 1.0 scale at start
+struct volctrl_t volume = {
+    .opl = {0x10000, 0x10000},
+    .sb_pcm = {0x10000, 0x10000},
+    .cd_audio = {0x10000, 0x10000},
+    .sb_master = {0x10000, 0x10000},
+    .gus = 0x10000,
+    .psg = 0x10000,
+};
+extern struct volctrl_t volume;
 
 int32_t set_volume_scale (uint8_t percent) {
      if (percent > 100)
@@ -56,6 +60,7 @@ void set_volume(uint16_t mode) {
 
     switch (mode){
         case CMD_MAINVOL:
+            volume.sb_master[0] = volume.sb_master[1] = 0x10000;    // reset SB master volume
             set_volume(CMD_OPLVOL);
             set_volume(CMD_SBVOL);
             set_volume(CMD_CDVOL);
@@ -63,19 +68,19 @@ void set_volume(uint16_t mode) {
             set_volume(CMD_PSGVOL);
             break;
         case CMD_OPLVOL:
-            opl_volume = set_volume_scale(settings.Volume.oplVol);
+            volume.opl[0] = volume.opl[1] = set_volume_scale(settings.Volume.oplVol);
             break;
         case CMD_SBVOL:
-            sb_volume = set_volume_scale(settings.Volume.sbVol);
+            volume.sb_pcm[0] = volume.sb_pcm[0] = set_volume_scale(settings.Volume.sbVol);
             break;
         case CMD_CDVOL:
-            cd_audio_volume = set_volume_scale(settings.Volume.cdVol);
+            volume.cd_audio[0] = volume.cd_audio[0] = set_volume_scale(settings.Volume.cdVol);
             break;
         case CMD_GUSVOL:
-            gus_volume = set_volume_scale(settings.Volume.gusVol);
+            volume.gus = set_volume_scale(settings.Volume.gusVol);
             break;
         case CMD_PSGVOL:
-            psg_volume = set_volume_scale(settings.Volume.psgVol);
+            volume.psg = set_volume_scale(settings.Volume.psgVol);
             break;
     }   
 }
