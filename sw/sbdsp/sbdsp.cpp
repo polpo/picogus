@@ -716,23 +716,26 @@ static __force_inline void sbmixer_write(uint8_t value) {
 }
 
 uint8_t sbdsp_read(uint8_t address) {
+    // emulate address aliasing seen on pre-SB16
     switch (address) {
-        case DSP_READ:
+        case DSP_READ:   // +0xA
+        case DSP_READ+1: // +0xB
             sbdsp.dav_pc = 0;
             return sbdsp.outbox;
-        case DSP_READ_STATUS: //e
+        case DSP_READ_STATUS: // +0xE
             if (sbdsp.irq_8_pending) {
                 sbdsp.irq_8_pending = false;
                 PIC_DeActivateIRQ();
             }
             return sbdsp.dav_pc << 7 | DSP_UNUSED_STATUS_BITS_PULLED_HIGH;
-        case DSP_IRQ_16_STATUS:
+        case DSP_IRQ_16_STATUS: // +0xD
             if (sbdsp.irq_16_pending) {
                 sbdsp.irq_16_pending = false;
                 PIC_DeActivateIRQ();
             }
             return 0xff;
-        case DSP_WRITE_STATUS://c
+        case DSP_WRITE_STATUS:  // +0xC
+        case DSP_WRITE_STATUS+1:// +0xD
             if (sbdsp.reset_state)
                 return 0xFF; // busy during reset
             return (sbdsp.dav_dsp | sbdsp.dsp_busy | sbdsp.dac_resume_pending) << 7 | DSP_UNUSED_STATUS_BITS_PULLED_HIGH;
@@ -745,12 +748,14 @@ uint8_t sbdsp_read(uint8_t address) {
 
 void sbdsp_write(uint8_t address, uint8_t value) {
     switch (address) {
-        case DSP_WRITE://c
+        case DSP_WRITE:   // 0xC
+        case DSP_WRITE+1: // 0xD
             if (sbdsp.dav_dsp) printf("WARN - DAV_DSP OVERWRITE\n");
             sbdsp.inbox = value;
             sbdsp.dav_dsp = 1;
             break;
-        case DSP_RESET:
+        case DSP_RESET:   // 0x6
+        case DSP_RESET+1: // 0x7
             sbdsp_reset(value);
             break;
         case MIXER_COMMAND:
