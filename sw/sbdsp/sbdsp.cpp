@@ -116,6 +116,25 @@ static dma_inst_t dma_config;
 #define MIXER_IRQ_STATUS        0x82
 #define MIXER_STEREO            0xE
 
+#define MIXER_VOL_VOICE         0x04
+#define MIXER_VOL_MASTER        0x22
+#define MIXER_VOL_MIDI          0x26
+#define MIXER_VOL_CD            0x28
+#define MIXER_VOL_LINE          0x2E
+
+#define MIXER_VOL_MASTER_L      0x30        // SB16
+#define MIXER_VOL_MASTER_R      0x31        // SB16
+#define MIXER_VOL_VOICE_L       0x32        // SB16
+#define MIXER_VOL_VOICE_R       0x33        // SB16
+#define MIXER_VOL_MIDI_L        0x34        // SB16
+#define MIXER_VOL_MIDI_R        0x35        // SB16
+#define MIXER_VOL_CD_L          0x36        // SB16
+#define MIXER_VOL_CD_R          0x37        // SB16
+#define MIXER_VOL_LINE_L        0x38        // SB16
+#define MIXER_VOL_LINE_R        0x39        // SB16
+
+#define MIXER_OUT_SWITCH        0x3C        // SB16
+
 #define DSP_UNUSED_STATUS_BITS_PULLED_HIGH 0x7F
 
 static char const copyright_string[] = "COPYRIGHT (C) CREATIVE TECHNOLOGY LTD, 1992.";
@@ -272,10 +291,13 @@ uint16_t sbdsp_sample_rate() {
     return sbdsp.sample_rate;
 }
 
+static void sbmixer_reset(void);
 void sbdsp_init() {
     puts("Initing ISA DMA PIO...");
     SBDSP_DMA_isr_pt = sbdsp_dma_isr;
 
+    sbdsp.dsp_version.major = DSP_VERSION_MAJOR;
+    sbdsp.dsp_version.minor = DSP_VERSION_MINOR;
     sbdsp.dma = 0x2; // force DMA 1 for now
     sbdsp.interrupt = 0x2; // force IRQ 5 for now
 
@@ -286,6 +308,9 @@ void sbdsp_init() {
     sb_8051_ram[0x0e] = 0xff;
     sb_8051_ram[0x0f] = 0x07;
     sb_8051_ram[0x37] = 0x38;
+
+    // Reset mixer
+    sbmixer_reset();
 }
 
 
@@ -437,11 +462,11 @@ void sbdsp_process(void) {
         case DSP_VERSION:
             if (sbdsp.current_command_index == 0) {
                 sbdsp.current_command_index = 1;
-                sbdsp_output(DSP_VERSION_MAJOR);
+                sbdsp_output(sbdsp.dsp_version.major);
             } else {
                 if (!sbdsp.dav_pc) {
                     sbdsp.current_command = 0;
-                    sbdsp_output(DSP_VERSION_MINOR);
+                    sbdsp_output(sbdsp.dsp_version.minor);
                 }
             }
             break;
@@ -675,6 +700,98 @@ static __force_inline void sbdsp_reset(uint8_t value) {
     }
 }
 
+// --------------
+// SB Mixer functions
+
+// volume table, -4dB per step (matches SB16 mixer scale)
+static const int32_t sbmixer_voltab[32] = {
+        0,     66,     83,    104,    131,    165,    207,    261,  // vol 0..7
+      328,    414,    521,    655,    825,   1039,   1308,   1646,  // vol 8..15
+     2072,   2609,   3285,   4135,   5206,   6554,   8250,  10387,  // vol 16..23
+    13076,  16462,  20724,  26090,  32846,  41350,  52057,  65535   // vol 24..31
+};
+
+// set volume using SBPro mixer registers
+static void sbmixer_pro_set(uint8_t sbpro_reg, uint8_t value) {
+    mixer_state[sbpro_reg] = value;
+
+    // update SB16 and actual mixer registers
+    int vol_r = ((value >> 0) & 0xF), vol_l = (value >> 4) & 0xF;
+    vol_l = (vol_l << 1) | (vol_l >> 3);
+    vol_r = (vol_r << 1) | (vol_r >> 3);
+
+    int     sb16_reg = 0;
+    int32_t *volreg  = NULL;
+
+    switch (sbpro_reg) {
+        case MIXER_VOL_MASTER: sb16_reg = MIXER_VOL_MASTER_L; volreg = &volume.sb_master[0]; break;
+        case MIXER_VOL_VOICE:  sb16_reg = MIXER_VOL_VOICE_L;  volreg = &volume.sb_pcm[0];    break;
+        case MIXER_VOL_MIDI:   sb16_reg = MIXER_VOL_MIDI_L;   volreg = &volume.opl[0];       break;
+        case MIXER_VOL_CD:     sb16_reg = MIXER_VOL_CD_L;     volreg = &volume.cd_audio[0];  break;
+        case MIXER_VOL_LINE:   sb16_reg = MIXER_VOL_LINE_L;   volreg = NULL;  break;
+        default: break;
+    }
+
+    if (sb16_reg) {
+        mixer_state[sb16_reg + 0] = vol_l << 3;
+        mixer_state[sb16_reg + 1] = vol_r << 3;
+    }
+    if (volreg) {
+        volreg[0] = sbmixer_voltab[vol_l];
+        volreg[1] = sbmixer_voltab[vol_r];
+    }
+}
+
+// set volume using SB16 mixer registers
+static void sbmixer_16_set(uint8_t sb16_reg, uint8_t value) {
+    mixer_state[sb16_reg] = value & 0xF8;
+
+    int sbpro_reg = 0;
+    int32_t *volreg  = NULL;
+
+    switch (sb16_reg) {
+        case MIXER_VOL_MASTER_L: sbpro_reg = MIXER_VOL_MASTER; volreg = &volume.sb_master[0]; break;
+        case MIXER_VOL_MASTER_R: sbpro_reg = MIXER_VOL_MASTER; volreg = &volume.sb_master[1]; break;
+
+        case MIXER_VOL_VOICE_L:  sbpro_reg = MIXER_VOL_VOICE;  volreg = &volume.sb_pcm[0]; break;
+        case MIXER_VOL_VOICE_R:  sbpro_reg = MIXER_VOL_VOICE;  volreg = &volume.sb_pcm[1]; break;
+
+        case MIXER_VOL_MIDI_L:   sbpro_reg = MIXER_VOL_MIDI;   volreg = &volume.opl[0]; break;
+        case MIXER_VOL_MIDI_R:   sbpro_reg = MIXER_VOL_MIDI;   volreg = &volume.opl[1]; break;
+
+        case MIXER_VOL_CD_L:     sbpro_reg = MIXER_VOL_CD;     volreg = &volume.cd_audio[0]; break;
+        case MIXER_VOL_CD_R:     sbpro_reg = MIXER_VOL_CD;     volreg = &volume.cd_audio[1]; break;
+
+        case MIXER_VOL_LINE_L:   sbpro_reg = MIXER_VOL_LINE;   volreg = NULL; break;
+        case MIXER_VOL_LINE_R:   sbpro_reg = MIXER_VOL_LINE;   volreg = NULL; break;
+        default: break;
+    }
+
+    if (sbpro_reg) {
+        int regmask = (sb16_reg & 1) ? 0x0F : 0xF0;
+        int proval  = (value & 0xF0) >> ((sb16_reg & 1) ? 0 : 4);
+        mixer_state[sbpro_reg] = (mixer_state[sbpro_reg] & regmask) | proval;
+    }
+    if (volreg) {
+        *volreg = sbmixer_voltab[value >> 3];
+    }
+}
+
+static void sbmixer_reset(void) {
+    memset(mixer_state, 0, sizeof(mixer_state));
+
+    // initialize default values
+    sbmixer_pro_set(MIXER_VOL_MASTER, 0xFF);
+    sbmixer_pro_set(MIXER_VOL_VOICE,  0xEE);
+    sbmixer_pro_set(MIXER_VOL_MIDI,   0xEE);
+    sbmixer_pro_set(MIXER_VOL_CD,     0xEE);
+    sbmixer_pro_set(MIXER_VOL_LINE,   0x00);
+
+    // preinit (non-functional) bass/treble settings and output switches
+    mixer_state[0x3C] = 0x6; // CD L/R enabled, Line/Mic disabled
+    mixer_state[0x44] = mixer_state[0x45] = mixer_state[0x46] = mixer_state[0x47] = 0x80;
+}
+
 static __force_inline uint8_t sbmixer_read(void) {
     switch (sbdsp.mixer_command) {
         case MIXER_INTERRUPT:
@@ -696,7 +813,17 @@ static __force_inline uint8_t sbmixer_read(void) {
 static __force_inline void sbmixer_write(uint8_t value) {
     switch (sbdsp.mixer_command) {
         case 0x00: // Mixer reset
-            memset(mixer_state, 0, sizeof(mixer_state));
+            sbmixer_reset();
+            break;
+        case MIXER_VOL_VOICE:
+        case MIXER_VOL_MASTER:
+        case MIXER_VOL_MIDI:
+        case MIXER_VOL_CD:
+        case MIXER_VOL_LINE:
+            sbmixer_pro_set(sbdsp.mixer_command, value);
+            break;
+        case MIXER_VOL_MASTER_L ... MIXER_VOL_LINE_R:
+            sbmixer_16_set(sbdsp.mixer_command, value);
             break;
         case MIXER_INTERRUPT:
             // sbdsp.interrupt = value;
@@ -714,6 +841,7 @@ static __force_inline void sbmixer_write(uint8_t value) {
             break;
     }
 }
+
 
 uint8_t sbdsp_read(uint8_t address) {
     // emulate address aliasing seen on pre-SB16

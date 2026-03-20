@@ -73,6 +73,11 @@ typedef struct sbdsp_t {
     volatile bool irq_8_pending;
     volatile bool irq_16_pending;
 
+    union {
+        struct { uint8_t minor, major; };
+        uint16_t w;
+    } dsp_version;
+
     uint8_t interrupt;
     uint8_t dma;
 

@@ -105,7 +105,7 @@ static int16_t get_opl_sample()
 {
     int16_t opl_current_sample;
     OPL_Pico_simple(&opl_current_sample, 1);
-    return opl_current_sample;
+    return opl_current_sample << 2;     // TODO: adjust
 }
 
 typedef union {
@@ -157,8 +157,8 @@ void audio_sample_handler(void) {
     const uint32_t has_opl_samples = fifo_take_samples_inline(&opl_out_fifo, 1);
     if (has_opl_samples) {
         int16_t opl_sample = opl_out_fifo.buffer[opl_out_index++];
-        sample_l += scale_sample(opl_sample, volume.opl[0] << 1, 0);
-        sample_r += scale_sample(opl_sample, volume.opl[1] << 1, 0);
+        sample_l += scale_sample(opl_sample, volume.opl[0], 0);
+        sample_r += scale_sample(opl_sample, volume.opl[1], 0);
         opl_out_index &= AUDIO_FIFO_BITS;
     }
 

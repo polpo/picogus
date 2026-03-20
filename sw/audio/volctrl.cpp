@@ -71,10 +71,10 @@ void set_volume(uint16_t mode) {
             volume.opl[0] = volume.opl[1] = set_volume_scale(settings.Volume.oplVol);
             break;
         case CMD_SBVOL:
-            volume.sb_pcm[0] = volume.sb_pcm[0] = set_volume_scale(settings.Volume.sbVol);
+            volume.sb_pcm[0] = volume.sb_pcm[1] = set_volume_scale(settings.Volume.sbVol);
             break;
         case CMD_CDVOL:
-            volume.cd_audio[0] = volume.cd_audio[0] = set_volume_scale(settings.Volume.cdVol);
+            volume.cd_audio[0] = volume.cd_audio[1] = set_volume_scale(settings.Volume.cdVol);
             break;
         case CMD_GUSVOL:
             volume.gus = set_volume_scale(settings.Volume.gusVol);
