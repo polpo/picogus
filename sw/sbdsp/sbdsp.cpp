@@ -703,7 +703,7 @@ static __force_inline void sbdsp_reset(uint8_t value) {
 // --------------
 // SB Mixer functions
 
-#if 0
+#if 1
 // volume table, 0.12 fixedpoint, -1.5dB per step
 static const int32_t sbmixer_voltab[32] = {
         0,     9,    15,    21,    29,    39,    51,    65,  // vol 0..7
@@ -712,7 +712,7 @@ static const int32_t sbmixer_voltab[32] = {
      1223,  1453,  1727,  2053,  2440,  2900,  3446,  4096   // vol 24..31
 };
 #else
-// volume table, 0.12 fixedpoint, -2dB per step (matches SB16 mixer scale)
+// volume table, 0.12 fixedpoint, -2dB per step (matches SB16 mixer scale?)
 static const int32_t sbmixer_voltab[32] = {
         0,     2,     4,     6,     8,    10,    13,    16,  // vol 0..7
        21,    26,    33,    41,    52,    65,    82,   103,  // vol 8..15
@@ -720,6 +720,16 @@ static const int32_t sbmixer_voltab[32] = {
       817,  1029,  1295,  1631,  2053,  2584,  3254,  4096   // vol 24..31
 };
 #endif
+
+// set SB16 output switches
+static void sbmixer_out_switch(uint8_t value) {
+    mixer_state[MIXER_OUT_SWITCH] = value;
+
+    volume.cd_audio[1] = (value & (1 << 1)) ? sbmixer_voltab[mixer_state[MIXER_VOL_CD_R] >> 3] : 0;
+    volume.cd_audio[0] = (value & (1 << 2)) ? sbmixer_voltab[mixer_state[MIXER_VOL_CD_L] >> 3] : 0;
+    
+    // ignore Mic/Line at this moment
+}
 
 // set volume using SBPro mixer registers
 static void sbmixer_pro_set(uint8_t sbpro_reg, uint8_t value) {
@@ -737,7 +747,7 @@ static void sbmixer_pro_set(uint8_t sbpro_reg, uint8_t value) {
         case MIXER_VOL_MASTER: sb16_reg = MIXER_VOL_MASTER_L; volreg = &volume.sb_master[0]; break;
         case MIXER_VOL_VOICE:  sb16_reg = MIXER_VOL_VOICE_L;  volreg = &volume.sb_pcm[0];    break;
         case MIXER_VOL_MIDI:   sb16_reg = MIXER_VOL_MIDI_L;   volreg = &volume.opl[0];       break;
-        case MIXER_VOL_CD:     sb16_reg = MIXER_VOL_CD_L;     volreg = &volume.cd_audio[0];  break;
+        case MIXER_VOL_CD:     sb16_reg = MIXER_VOL_CD_L;     volreg = (mixer_state[MIXER_OUT_SWITCH] & (3 << 1)) ? &volume.cd_audio[0] : NULL; break;
         case MIXER_VOL_LINE:   sb16_reg = MIXER_VOL_LINE_L;   volreg = NULL;  break;
         default: break;
     }
@@ -769,8 +779,8 @@ static void sbmixer_16_set(uint8_t sb16_reg, uint8_t value) {
         case MIXER_VOL_MIDI_L:   sbpro_reg = MIXER_VOL_MIDI;   volreg = &volume.opl[0]; break;
         case MIXER_VOL_MIDI_R:   sbpro_reg = MIXER_VOL_MIDI;   volreg = &volume.opl[1]; break;
 
-        case MIXER_VOL_CD_L:     sbpro_reg = MIXER_VOL_CD;     volreg = &volume.cd_audio[0]; break;
-        case MIXER_VOL_CD_R:     sbpro_reg = MIXER_VOL_CD;     volreg = &volume.cd_audio[1]; break;
+        case MIXER_VOL_CD_L:     sbpro_reg = MIXER_VOL_CD;     volreg = (mixer_state[MIXER_OUT_SWITCH] & (1 << 2)) ? &volume.cd_audio[0] : NULL; break;
+        case MIXER_VOL_CD_R:     sbpro_reg = MIXER_VOL_CD;     volreg = (mixer_state[MIXER_OUT_SWITCH] & (1 << 1)) ? &volume.cd_audio[1] : NULL; break;
 
         case MIXER_VOL_LINE_L:   sbpro_reg = MIXER_VOL_LINE;   volreg = NULL; break;
         case MIXER_VOL_LINE_R:   sbpro_reg = MIXER_VOL_LINE;   volreg = NULL; break;
@@ -796,9 +806,9 @@ static void sbmixer_reset(void) {
     sbmixer_pro_set(MIXER_VOL_MIDI,   0xEE);
     sbmixer_pro_set(MIXER_VOL_CD,     0xEE);
     sbmixer_pro_set(MIXER_VOL_LINE,   0x00);
+    sbmixer_out_switch(0x6); // CD L/R enabled, Line/Mic disabled
 
-    // preinit (non-functional) bass/treble settings and output switches
-    mixer_state[0x3C] = 0x6; // CD L/R enabled, Line/Mic disabled
+    // preinit (non-functional) bass/treble settings
     mixer_state[0x44] = mixer_state[0x45] = mixer_state[0x46] = mixer_state[0x47] = 0x80;
 }
 
@@ -834,6 +844,9 @@ static __force_inline void sbmixer_write(uint8_t value) {
             break;
         case MIXER_VOL_MASTER_L ... MIXER_VOL_LINE_R:
             sbmixer_16_set(sbdsp.mixer_command, value);
+            break;
+        case MIXER_OUT_SWITCH:
+            sbmixer_out_switch(value);
             break;
         case MIXER_INTERRUPT:
             // sbdsp.interrupt = value;
