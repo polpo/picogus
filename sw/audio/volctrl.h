@@ -39,10 +39,11 @@ struct volctrl_t {
 };
 extern struct volctrl_t volume;
 
-extern int32_t set_volume_scale (uint8_t percent);
+#define VOLCTRL_FRACT_BITS 12       // leave enough headroom for mixing
 
+extern int32_t set_volume_scale (uint8_t percent);
 static inline int32_t scale_sample (int32_t sample, const int32_t scale, const bool clamp) {
-    sample = (sample * scale) >> 16;
+    sample = (sample * scale) >> VOLCTRL_FRACT_BITS;
 
     if (clamp)
         sample = clamp16(sample);

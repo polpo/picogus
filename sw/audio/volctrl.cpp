@@ -26,12 +26,12 @@ extern Settings settings;
 
 // initialize to default 1.0 scale at start
 struct volctrl_t volume = {
-    .opl = {0x10000, 0x10000},
-    .sb_pcm = {0x10000, 0x10000},
-    .cd_audio = {0x10000, 0x10000},
-    .sb_master = {0x10000, 0x10000},
-    .gus = 0x10000,
-    .psg = 0x10000,
+    .opl        = {(1 << VOLCTRL_FRACT_BITS), (1 << VOLCTRL_FRACT_BITS)},
+    .sb_pcm     = {(1 << VOLCTRL_FRACT_BITS), (1 << VOLCTRL_FRACT_BITS)},
+    .cd_audio   = {(1 << VOLCTRL_FRACT_BITS), (1 << VOLCTRL_FRACT_BITS)},
+    .sb_master  = {(1 << VOLCTRL_FRACT_BITS), (1 << VOLCTRL_FRACT_BITS)},
+    .gus        =  (1 << VOLCTRL_FRACT_BITS),
+    .psg        =  (1 << VOLCTRL_FRACT_BITS),
 };
 extern struct volctrl_t volume;
 
@@ -52,7 +52,7 @@ int32_t set_volume_scale (uint8_t percent) {
     int32_t normalized = (adjusted * 256) / 100;  // Scale to 0-256 (using 8-bit precision)
     int32_t squared = (normalized * normalized) >> 8;  // Square and scale back
     int32_t cubed = (squared * normalized) >> 8;  // Cube and scale back
-    return cubed << 8;  // Final scale to 16.16 fixed point (65536 = 256 << 8)
+    return cubed << (VOLCTRL_FRACT_BITS - 8);  // Final scale to 20.12 fixed point
 }
 
 
@@ -60,7 +60,7 @@ void set_volume(uint16_t mode) {
 
     switch (mode){
         case CMD_MAINVOL:
-            volume.sb_master[0] = volume.sb_master[1] = 0x10000;    // reset SB master volume
+            volume.sb_master[0] = volume.sb_master[1] = (1 << VOLCTRL_FRACT_BITS);    // reset SB master volume
             set_volume(CMD_OPLVOL);
             set_volume(CMD_SBVOL);
             set_volume(CMD_CDVOL);

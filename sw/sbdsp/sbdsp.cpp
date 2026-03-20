@@ -703,13 +703,23 @@ static __force_inline void sbdsp_reset(uint8_t value) {
 // --------------
 // SB Mixer functions
 
-// volume table, -4dB per step (matches SB16 mixer scale)
+#if 0
+// volume table, 0.12 fixedpoint, -1.5dB per step
 static const int32_t sbmixer_voltab[32] = {
-        0,     66,     83,    104,    131,    165,    207,    261,  // vol 0..7
-      328,    414,    521,    655,    825,   1039,   1308,   1646,  // vol 8..15
-     2072,   2609,   3285,   4135,   5206,   6554,   8250,  10387,  // vol 16..23
-    13076,  16462,  20724,  26090,  32846,  41350,  52057,  65535   // vol 24..31
+        0,     9,    15,    21,    29,    39,    51,    65,  // vol 0..7
+       77,    92,   109,   130,   154,   183,   217,   258,  // vol 8..15
+      307,   365,   434,   516,   613,   728,   866,  1029,  // vol 16..23
+     1223,  1453,  1727,  2053,  2440,  2900,  3446,  4096   // vol 24..31
 };
+#else
+// volume table, 0.12 fixedpoint, -2dB per step (matches SB16 mixer scale)
+static const int32_t sbmixer_voltab[32] = {
+        0,     2,     4,     6,     8,    10,    13,    16,  // vol 0..7
+       21,    26,    33,    41,    52,    65,    82,   103,  // vol 8..15
+      130,   163,   205,   258,   325,   410,   516,   649,  // vol 16..23
+      817,  1029,  1295,  1631,  2053,  2584,  3254,  4096   // vol 24..31
+};
+#endif
 
 // set volume using SBPro mixer registers
 static void sbmixer_pro_set(uint8_t sbpro_reg, uint8_t value) {
