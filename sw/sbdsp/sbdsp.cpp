@@ -401,7 +401,8 @@ void sbdsp_process(void) {
                 sbdsp.current_command_index++;
             }
             break;
-        case DSP_SET_SAMPLING_RATE:
+        case DSP_SET_SAMPLING_RATE:     // set playback  sample rate
+        case DSP_SET_SAMPLING_RATE+1:   // set recording sample rate - misused by FT2
             if (sbdsp.dav_dsp) {
                 if (sbdsp.current_command_index == 1) { // wSamplingRate.HighByte
                     sbdsp.sample_rate = sbdsp.inbox << 8;
