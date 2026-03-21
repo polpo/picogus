@@ -132,10 +132,14 @@ static dma_inst_t dma_config;
 #define MIXER_VOL_CD_R          0x37        // SB16
 #define MIXER_VOL_LINE_L        0x38        // SB16
 #define MIXER_VOL_LINE_R        0x39        // SB16
-
 #define MIXER_OUT_SWITCH        0x3C        // SB16
 
 #define DSP_UNUSED_STATUS_BITS_PULLED_HIGH 0x7F
+
+// mixer locking settings
+#define MIXER_LOCK_NONE                 0   // none, all registers writeable
+#define MIXER_LOCK_ALL_BUT_SBP_VOICE   14   // lock all but SBPro Voice (for stereo FX like in Wolf3D)
+#define MIXER_LOCK_ALL                 15   // lock all registers 
 
 static char const copyright_string[] = "COPYRIGHT (C) CREATIVE TECHNOLOGY LTD, 1992.";
 
@@ -217,6 +221,31 @@ uint32_t sbdsp_generate_sample() {
     return (uint32_t)((out_l & 0xFFFF) | (out_r << 16));
 }
 
+static void sbdsp_handle_time_constant(uint8_t tc) {
+    if (sbdsp.options.fix_tc) {
+        // round time constants to 11/22/44 KHz sample rates
+        switch (tc) {
+            case (256 - 62): // 16129 Hz
+            case (256 - 63): // 15873 Hz
+                sbdsp.time_constant = 0; sbdsp.sample_rate = 16000; return;
+            case (256 - 31): // 32258 Hz
+                sbdsp.time_constant = 0; sbdsp.sample_rate = 32000; return;
+            case (256 - 91): // 10989 Hz
+            case (256 - 90): // 11111 Hz
+                sbdsp.time_constant = 0; sbdsp.sample_rate = 11025; return;
+            case (256 - 45): // 22222 Hz
+            case (256 - 46): // 21739 Hz
+                sbdsp.time_constant = 0; sbdsp.sample_rate = 22050; return;
+            case (256 - 22): // 45454 Hz
+            case (256 - 23): // 43478 Hz
+                sbdsp.time_constant = 0; sbdsp.sample_rate = 44100; return;
+            default: break;
+        }
+    }
+    sbdsp.time_constant = sbdsp.inbox;
+    sbdsp.sample_rate = 0; // Rate of 0 indicates time constant drives DMA timing
+}
+
 static __force_inline void sbdsp_set_dma_interval() {
     if (sbdsp.sample_rate) {
         uint32_t actual_sr = (sbdsp.sample_rate >> (sbdsp.dma_stereo_sbpro ? 1 : 0));
@@ -291,15 +320,40 @@ uint16_t sbdsp_sample_rate() {
     return sbdsp.sample_rate;
 }
 
+void sbdsp_set_irq(uint8_t irq) {
+    sbdsp.resources.irq = irq;
+    int mixer_irq;
+    switch (irq) {
+        case 2:  mixer_irq = 1; break;
+        case 7:  mixer_irq = 4; break;
+        case 10: mixer_irq = 8; break;
+        case 5:
+        default: mixer_irq = 2; break;
+    }
+    mixer_state[MIXER_INTERRUPT] = mixer_irq | 0xF0;  // as seen on real SB16
+}
+
+void sbdsp_set_dma(uint8_t dma) {
+    sbdsp.resources.dma = dma;
+    mixer_state[MIXER_DMA] = dma < 4 ? (1 << dma) : 0;  // 8-bit DMA channel only
+}
+
+void sbdsp_set_options(uint8_t opts) {
+    sbdsp.options.b = opts;
+    // TODO apply them in runtime where applicable
+}
+
 static void sbmixer_reset(void);
 void sbdsp_init() {
     puts("Initing ISA DMA PIO...");
     SBDSP_DMA_isr_pt = sbdsp_dma_isr;
 
-    sbdsp.dsp_version.major = DSP_VERSION_MAJOR;
-    sbdsp.dsp_version.minor = DSP_VERSION_MINOR;
-    sbdsp.dma = 0x2; // force DMA 1 for now
-    sbdsp.interrupt = 0x2; // force IRQ 5 for now
+    sbdsp.options.mixer_lock = MIXER_LOCK_NONE;
+    sbdsp.options.fix_tc     = 0;
+    sbdsp.dsp_version.major  = DSP_VERSION_MAJOR;
+    sbdsp.dsp_version.minor  = DSP_VERSION_MINOR;
+    sbdsp_set_irq(5);
+    sbdsp_set_dma(1);
 
     sbdsp.outbox = 0xAA;
     dma_config = DMA_multi_init(pio0, DMA_PIO_SM, SBDSP_DMA_isr_pt);
@@ -392,8 +446,7 @@ void sbdsp_process(void) {
         case DSP_SET_TIME_CONSTANT:
             if (sbdsp.dav_dsp) {
                 if (sbdsp.current_command_index == 1) {
-                    sbdsp.time_constant = sbdsp.inbox;
-                    sbdsp.sample_rate = 0; // Rate of 0 indicates time constant drives DMA timing
+                    sbdsp_handle_time_constant(sbdsp.inbox);
                     sbdsp_set_dma_interval();
                     sbdsp.dav_dsp = 0;
                     sbdsp.current_command = 0;
@@ -815,10 +868,6 @@ static void sbmixer_reset(void) {
 
 static __force_inline uint8_t sbmixer_read(void) {
     switch (sbdsp.mixer_command) {
-        case MIXER_INTERRUPT:
-            return sbdsp.interrupt;
-        case MIXER_DMA:
-            return sbdsp.dma;
         case MIXER_IRQ_STATUS:
             // Bits 0-2: IRQ pending flags. Upper bits: ViBRA type identifier.
             return (sbdsp.irq_8_pending ? 0x01 : 0) | (sbdsp.irq_16_pending ? 0x02 : 0) | 0x70;
@@ -832,15 +881,26 @@ static __force_inline uint8_t sbmixer_read(void) {
 }
 
 static __force_inline void sbmixer_write(uint8_t value) {
+    // mixer locking
+    switch(sbdsp.options.mixer_lock) {
+        case MIXER_LOCK_ALL_BUT_SBP_VOICE:
+            if (sbdsp.mixer_command != MIXER_VOL_VOICE)
+            // fallthrough
+        case MIXER_LOCK_ALL:
+            return;
+        default:
+            break;
+    }
+
     switch (sbdsp.mixer_command) {
         case 0x00: // Mixer reset
             sbmixer_reset();
             break;
-        case MIXER_VOL_VOICE:
         case MIXER_VOL_MASTER:
         case MIXER_VOL_MIDI:
         case MIXER_VOL_CD:
         case MIXER_VOL_LINE:
+        case MIXER_VOL_VOICE:
             sbmixer_pro_set(sbdsp.mixer_command, value);
             break;
         case MIXER_VOL_MASTER_L ... MIXER_VOL_LINE_R:

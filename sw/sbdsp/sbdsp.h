@@ -72,16 +72,27 @@ typedef struct sbdsp_t {
     bool dac_resume_pending;
     volatile bool irq_8_pending;
     volatile bool irq_16_pending;
+    uint8_t reset_state;
 
     union {
         struct { uint8_t minor, major; };
         uint16_t w;
     } dsp_version;
 
-    uint8_t interrupt;
-    uint8_t dma;
+    union {
+        uint8_t irq;
+        uint8_t dma;
+    } resources;
 
-    uint8_t reset_state;
+    // additional options
+    union {
+        struct {
+            uint8_t reserved   : 3; // reserved for OPL speed sensitivity fix and future settings
+            uint8_t fix_tc     : 1; // fix time constant for exact 11/22/44k Hz
+            uint8_t mixer_lock : 4; // mixer lock
+        };
+        uint8_t b;
+    } options;
 
     volatile uint32_t cur_sample;  // packed stereo pair: L in low 16, R in high 16
 #if 0
@@ -125,5 +136,34 @@ static inline uint32_t sbdsp_sample_stereo() {
     if (sbdsp.dma_enabled && !sbdsp.dac_resume_pending) sbdsp.cur_sample = sbdsp_generate_sample();
     return sbdsp.speaker_on ? sbdsp.cur_sample : 0;
 }
+
+// -------------------------
+// PicoGUS configuration interface helpers
+
+static inline uint16_t sbdsp_get_dsp_version() {
+    extern sbdsp_t sbdsp;
+    return sbdsp.dsp_version.w;
+}
+static inline void sbdsp_set_dsp_version(uint16_t dspver) {
+    extern sbdsp_t sbdsp;
+    sbdsp.dsp_version.w = dspver;
+}
+
+static inline uint8_t sbdsp_get_irq() {
+    extern sbdsp_t sbdsp;
+    return sbdsp.resources.irq;
+}
+static inline uint8_t sbdsp_get_dma() {
+    extern sbdsp_t sbdsp;
+    return sbdsp.resources.dma;
+}
+void sbdsp_set_irq(uint8_t irq); 
+void sbdsp_set_dma(uint8_t dma); 
+
+static inline uint8_t sbdsp_get_options() {
+    extern sbdsp_t sbdsp;
+    return sbdsp.options.b;
+}
+void sbdsp_set_options(uint8_t opts);
 
 #endif // SBDSP_H
