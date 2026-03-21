@@ -172,7 +172,8 @@ void processSettings(void);
 const char* firmware_string = PICO_PROGRAM_NAME " v" PICO_PROGRAM_VERSION_STRING;
 
 static uint8_t basePort_low;
-static uint8_t  mouseSensitivity_low;
+static uint8_t mouseSensitivity_low;
+static uint8_t picogus_dataLatch_low;
 
 __force_inline void select_picogus(uint8_t value) {
     // printf("select picogus %x\n", value);
@@ -243,6 +244,13 @@ __force_inline void select_picogus(uint8_t value) {
         cur_read_idx = 0;
 #endif
         break;
+#ifdef SOUND_SB
+    case CMD_SBDSPVER:
+        picogus_dataLatch_low = 0;
+    case CMD_SBIRQ:
+    case CMD_SBDMA:
+        break;
+#endif
     case CMD_CDSTATUS:
     case CMD_CDLOAD:
     case CMD_CDAUTOADV:
@@ -287,6 +295,12 @@ __force_inline void write_picogus_low(uint8_t value) {
         break;
     case CMD_MOUSESEN:  // USB Mouse Sensitivity (8.8 fixedpoint)
         mouseSensitivity_low = value;
+        break;
+#ifdef SOUND_SB
+    case CMD_SBDSPVER:
+        picogus_dataLatch_low = value;
+        break;
+#endif
         break;
     }
 }
@@ -358,7 +372,26 @@ __force_inline void write_picogus_high(uint8_t value) {
 #endif
         break;
     case CMD_OPLWAIT: // Adlib speed sensitive fix
-        settings.SB.oplSpeedSensitive = value;
+    //case CMD_SBOPTS:  // ... and SB emulation options
+        settings.SB.oplSpeedSensitive = value & 1;  // HACK until settings struct resolved
+#ifdef SOUND_SB
+        sbdsp_set_options(value);
+#endif
+        break;
+    case CMD_SBDSPVER:
+#ifdef SOUND_SB
+        sbdsp_set_dsp_version((value << 8) | picogus_dataLatch_low);
+#endif
+        break;
+    case CMD_SBIRQ:
+#ifdef SOUND_SB
+        sbdsp_set_irq(value);
+#endif
+        break;
+    case CMD_SBDMA:
+#ifdef SOUND_SB
+        sbdsp_set_dma(value);
+#endif
         break;
     case CMD_MOUSEPORT:  // USB Mouse port (0 - disabled)
         settings.Mouse.basePort = (value || basePort_low) ? ((value << 8) | basePort_low) : 0xFFFF;
