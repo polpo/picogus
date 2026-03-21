@@ -107,8 +107,16 @@ static void usage(card_mode_t mode, bool print_all)
     if (mode == SB_MODE || print_all) {
         //         "...............................................................................\n"
         pageprintf("Sound Blaster settings:\n");
-        pageprintf("   /sbport x    - set the base port of the Sound Blaster. Default: 220\n");
-        pageprintf("   /sbvol x     - set the Sound Blaster audio volume: 0 - 100%\n");
+        pageprintf("   /sbport x      - set the base port of the Sound Blaster. Default: 220\n");
+        pageprintf("   /sbirq x       - set the SB IRQ (must match jumper settings!). Default: 5\n");
+        pageprintf("   /sbdma x       - set the SB DMA (must match jumper settings!). Default: 1\n");
+        pageprintf("   /sbtype x      - set the Sound Blaster type. Default: 6 (SB 16)\n");
+        pageprintf("          1 - SB 1.x,          2 - SB Pro 1 (dual OPL2), 3 - SB 2.0,\n");
+        pageprintf("          4 - SB Pro 2 (OPL3), 6 - SB 16\n");
+        pageprintf("   /sbvol x       - set the Sound Blaster audio volume: 0 - 100%\n");
+        pageprintf("   /sbfixtc 1|0   - fix SB time constant to match common rates. Default: 0\n");
+        pageprintf("   /sblockmixer n - lock SB mixer settings. Default: 0 (no lock)\n");
+        pageprintf("          0 - no lock, 1 - lock all but Voice Volume, 2 - lock all\n");
     }
     if (mode == SB_MODE || mode == ADLIB_MODE || print_all) {
         pageprintf("AdLib settings:\n");
@@ -176,11 +184,19 @@ static void err_blaster(void)
     //              "................................................................................\n"
     fprintf(stderr, "ERROR: In SB mode but no BLASTER variable set or is malformed!\n");
     fprintf(stderr, "The BLASTER environment variable must be set in the following format:\n");
-    fprintf(stderr, "\tset BLASTER=Axxx Iy Dz T3\n");
-    fprintf(stderr, "Where xxx = port, y = IRQ, z = DMA. T3 indicates an SB 2.0 compatible card.\n");
-    fprintf(stderr, "Port is set via /sbport xxx option; DMA and IRQ configued via jumper.\n");
+    fprintf(stderr, "\tset BLASTER=Axxx Iy Dz Hz Tw\n");
+    fprintf(stderr, "Where xxx = port, y = IRQ, z = DMA. w = SB type:\n");
+    fprintf(stderr, "    1 - SB 1.x,          2 - SB Pro 1 (dual OPL2), 3 - SB 2.0,\n");
+    fprintf(stderr, "    4 - SB Pro 2 (OPL3), 6 - SB 16\n");
+    fprintf(stderr, "Port is set via /sbport xxx option; DMA and IRQ configued via jumper then also\n");
+    fprintf(stderr, "set via /sbirq y and /sbdma y options.\n");
 }
 
+static void err_blaster16_dma_mismatch(void)
+{
+    //              "................................................................................\n"
+    fprintf(stderr, "ERROR: In SB 16 mode, low (Dx) and high (Hx) DMA in BLASTER variable must match!\n");
+}
 
 static void err_pigus(void)
 {
@@ -247,17 +263,33 @@ static int init_gus(void)
 
 static int init_sb(void)
 {
+    // SB DSP version table
+    const uint16_t dspver[] = {0, 0x105, 0x300, 0x201, 0x301, 0, 0x405};
+
     char* blaster = getenv("BLASTER");
     if (blaster == NULL) {
         err_blaster();
         return 1;
     }
+    char blasterTemp[256];
+    strncpy(blasterTemp, blaster, sizeof(blasterTemp));
 
     // Parse BLASTER
-    uint16_t port;
-    int e;
-    e = sscanf(blaster, "A%hx I%*hhu D%*hhu T3", &port);
-    if (e != 1) {
+    char* p = strtok(blasterTemp, " ");
+    uint16_t port = -1, irq  = -1, dma8 = -1, dma16 = -1, sbtype = 0;
+    while (p != NULL) {
+        switch (*p) {
+            case 'a': case 'A': port   = strtol(p + 1, NULL, 16); break;
+            case 'i': case 'I': irq    = strtol(p + 1, NULL, 10); break;
+            case 'd': case 'D': dma8   = strtol(p + 1, NULL, 10); break;
+            case 'h': case 'H': dma16  = strtol(p + 1, NULL, 10); break;
+            case 't': case 'T': sbtype = strtol(p + 1, NULL, 10); break;
+            default: break;
+        }
+        p = strtok(NULL, " ");
+    }
+
+    if ((port == -1) || (irq == -1) || (dma8 == -1) || (sbtype > 6) || (dspver[sbtype] == 0) || ((sbtype == 6) && (dma8 != dma16))) {
         err_blaster();
         return 2;
     }
@@ -268,6 +300,28 @@ static int init_sb(void)
         err_blaster();
         return 2;
     }
+
+    outp(CONTROL_PORT, CMD_SBIRQ); // Select IRQ register
+    uint8_t tmp_irq = inp(DATA_PORT_HIGH);
+    if (irq != tmp_irq) {
+        err_blaster();
+        return 2;
+    }
+
+    outp(CONTROL_PORT, CMD_SBDMA); // Select DMA register
+    uint8_t tmp_dma = inp(DATA_PORT_HIGH);
+    if (dma8 != tmp_dma) {
+        err_blaster();
+        return 2;
+    }
+
+    outp(CONTROL_PORT, CMD_SBTYPE); // Select SB type register
+    uint8_t tmp_type = inp(DATA_PORT_HIGH);
+    if (sbtype != tmp_type) {
+        err_blaster();
+        return 2;
+    }
+
     return 0;
 }
 
@@ -630,13 +684,13 @@ static void send_string(const uint8_t cmd, const char* str, const int16_t max_le
     outp(DATA_PORT_HIGH, 0);
 }
 
-static bool cmdDisplayUsage(const char* arg, const int print_all)
+static bool cmdDisplayUsage(const char* arg, const int print_all, const int cmd2, const int cmd3)
 {
     usage(gMode, print_all);
     return true;
 }
 
-static bool cmdSendBool(const char* arg, const int cmd)
+static bool cmdSendBool(const char* arg, const int cmd, const int cmd2, const int cmd3)
 {
     uint8_t value;
 
@@ -654,7 +708,27 @@ static bool cmdSendBool(const char* arg, const int cmd)
     return true;
 }
 
-static bool cmdSetMode(const char* arg, const int cmd)
+static bool cmdSendBoolMasked(const char* arg, const int cmd, const int mask, const int shift)
+{
+    uint8_t value, oldvalue;
+
+    if (!strcmp(arg, "1") || !stricmp(arg, "true") || !stricmp(arg, "on")) {
+        value = 1;
+    } else if (!strcmp(arg, "0") || !stricmp(arg, "false") || !stricmp(arg, "off")) {
+        value = 0;
+    } else {
+        usage(gMode, false);
+        return false;
+    }
+
+    outp(CONTROL_PORT, cmd);
+    oldvalue = inp(DATA_PORT_HIGH);
+    outp(DATA_PORT_HIGH, (uint8_t)(oldvalue & ~mask) | ((value << shift) & mask));
+    return true;
+}
+
+
+static bool cmdSetMode(const char* arg, const int cmd, const int cmd2, const int cmd3)
 {
     if (!stricmp(arg, "TANDY") || !stricmp(arg, "CMS")) {
         // Backwards compatibility for old tandy and cms modes
@@ -687,9 +761,45 @@ static bool ctrlSendUint8(const char *arg, int cmd, int min, int max)
     return true;
 }
 
-static bool cmdSendUint8(const char* arg, const int cmd)
+static bool ctrlSendUint8Masked(const char *arg, int cmd, int min, int max, int mask, int shift) {
+    char* endptr;
+    uint8_t val = (uint8_t)strtoul(arg, &endptr, 10);
+    uint8_t oldval = 0;
+
+    if (*endptr != '\0' || val < min || val > max) {
+        usage(gMode, false);
+        return false;
+    }
+
+    outp(CONTROL_PORT, cmd);
+    oldval = inp(DATA_PORT_HIGH);
+    outp(DATA_PORT_HIGH, (uint8_t)(oldval & ~mask) | ((val << shift) & mask));
+    return true;
+}
+
+static bool cmdSendUint8(const char* arg, const int cmd, const int cmd2, const int cmd3)
 {   
     return ctrlSendUint8(arg, cmd, 0, 255);
+}
+
+static bool cmdSendSBType(const char* arg, const int cmd, const int cmd2, const int cmd3) {
+    char* endptr;
+    uint8_t val = (uint8_t)strtoul(arg, &endptr, 10);
+
+    if (*endptr != '\0' || val < 1 || val > 6 || val == 5) {
+        usage(gMode, false);
+        return false;
+    }
+
+    outp(CONTROL_PORT, cmd);
+    outp(DATA_PORT_HIGH, (uint8_t)val);
+    return true;
+}
+
+static bool cmdSendUint8Masked(const char* arg, const int cmd, const int cmd2, const int cmd3)
+{   
+    // cmd2 - mask, cmd3 - shift
+    return ctrlSendUint8Masked(arg, cmd, 0, 255, cmd2, cmd3);
 }
 
 static bool ctrlSendUint16(const char *arg, int cmd, long min, long max, int base)
@@ -707,27 +817,27 @@ static bool ctrlSendUint16(const char *arg, int cmd, long min, long max, int bas
     return true;
 }
 
-static bool cmdSendUint16(const char* arg, const int cmd)
+static bool cmdSendUint16(const char* arg, const int cmd, const int cmd2, const int cmd3)
 {
     return ctrlSendUint16(arg, cmd, 0, 65535, 10);
 }
 
-static bool cmdSendPort(const char* arg, const int cmd)
+static bool cmdSendPort(const char* arg, const int cmd, const int cmd2, const int cmd3)
 {
     return ctrlSendUint16(arg, cmd, 0, 0x3FF, 16);
 }
 
-static bool cmdDefaults(const char* arg, const int cmd)
+static bool cmdDefaults(const char* arg, const int cmd, const int cmd2, const int cmd3)
 {
-    return cmdSendUint8(CMD_DEFAULTS, 0xff);
+    return cmdSendUint8(CMD_DEFAULTS, 0xff, 0, 0);
 }
 
-static bool cmdSetVol(const char* arg, const int cmd)
+static bool cmdSetVol(const char* arg, const int cmd, const int cmd2, const int cmd3)
 {
     return ctrlSendUint8(arg, cmd, 0, 100);
 }
 
-static bool cmdSendMousePort(const char *arg, const int cmd)
+static bool cmdSendMousePort(const char *arg, const int cmd, const int cmd2, const int cmd3)
 {
     char* endptr;
     uint8_t val = (uint8_t)strtoul(arg, &endptr, 10);
@@ -753,66 +863,71 @@ static bool cmdSendMousePort(const char *arg, const int cmd)
     return true;
 }
 
-static bool cmdSendMouseSen(const char* arg, const int cmd)
+static bool cmdSendMouseSen(const char* arg, const int cmd, const int cmd2, const int cmd3)
 {
     return ctrlSendUint16(arg, cmd, 0, 1024, 10);
 }
 
-static bool cmdSendMouseProto(const char* arg, const int cmd)
+static bool cmdSendMouseProto(const char* arg, const int cmd, const int cmd2, const int cmd3)
 {
     return ctrlSendUint8(arg, cmd, 0, 3);
 }
 
-static bool cmdSendMouseRate(const char* arg, const int cmd)
+static bool cmdSendMouseRate(const char* arg, const int cmd, const int cmd2, const int cmd3)
 {
     return ctrlSendUint8(arg, cmd, 20, 200);
 }
 
-static bool cmdWifiStatus(const char* arg, const int cmd)
+static bool cmdSendSBLockMixer(const char* arg, const int cmd, const int cmd2, const int cmd3)
+{
+    return ctrlSendUint8Masked(arg, cmd, 0, 2, (2 << 1), 1);
+}
+
+static bool cmdWifiStatus(const char* arg, const int cmd, const int cmd2, const int cmd3)
 {
     wifi_printStatus();
     exit(0);
 }
 
-static bool cmdWifiSSID(const char* arg, const int cmd)
+static bool cmdWifiSSID(const char* arg, const int cmd, const int cmd2, const int cmd3)
 {
     wifichg = true;
     send_string(cmd, arg, 32);
     return true;
 }
 
-static bool cmdWifiPass(const char* arg, const int cmd)
+static bool cmdWifiPass(const char* arg, const int cmd, const int cmd2, const int cmd3)
 {
     wifichg = true;
     send_string(cmd, arg, 63);
     return true;
 }
 
-static bool cmdWifiNoPass(const char* arg, const int cmd)
+static bool cmdWifiNoPass(const char* arg, const int cmd, const int cmd2, const int cmd3)
 {
     wifichg = true;
     send_string(cmd, "", 1);
     return true;
 }
 
-static bool cmdCDLoadName(const char* arg, const int cmd)
+static bool cmdCDLoadName(const char* arg, const int cmd, const int cmd2, const int cmd3)
 {
     send_string(cmd, arg, 127);
     exit(wait_for_cd_load());
 }
 
-static bool cmdCDList(const char* arg, const int cmd)
+static bool cmdCDList(const char* arg, const int cmd, const int cmd2, const int cmd3)
 {
     exit(print_cdimage_list());
 }
 
-static bool cmdCDLoad(const char* arg, const int cmd)
+static bool cmdCDLoad(const char* arg, const int cmd, const int cmd2, const int cmd3)
 {
     ctrlSendUint8(arg, cmd, 0, 255);
     exit(wait_for_cd_load());
 }
 
-static bool cmdGUSBuffer(const char* arg, const int cmd)
+static bool cmdGUSBuffer(const char* arg, const int cmd, const int cmd2, const int cmd3)
 {
     uint8_t tmp_uint8;
     uint8_t e = sscanf(arg, "%hhu", &tmp_uint8);
@@ -826,7 +941,7 @@ static bool cmdGUSBuffer(const char* arg, const int cmd)
     return true;
 }
 
-static bool cmdFlashPico(const char* arg, const int cmd)
+static bool cmdFlashPico(const char* arg, const int cmd, const int cmd2, const int cmd3)
 {
     if (strlen(arg) > 255)
     {
@@ -837,7 +952,7 @@ static bool cmdFlashPico(const char* arg, const int cmd)
     return true;
 }
 
-static bool cmdSave(const char* arg, const int cmd)
+static bool cmdSave(const char* arg, const int cmd, const int cmd2, const int cmd3)
 {
     permanent = true;
     return true;
@@ -868,6 +983,11 @@ ParseCommand parseCommands[] = {
     {"/gusdma", cmdSendUint8, CMD_GUSDMA, ARG_REQUIRE, "0"},
     {"/gusport", cmdSendPort, CMD_GUSPORT, ARG_REQUIRE, "240"},
     {"/sbport", cmdSendPort, CMD_SBPORT, ARG_REQUIRE, "220"},
+    {"/sbirq", cmdSendUint8, CMD_SBIRQ, ARG_REQUIRE, "5"},
+    {"/sbdma", cmdSendUint8, CMD_SBDMA, ARG_REQUIRE, "1"},
+    {"/sbtype", cmdSendSBType, CMD_SBTYPE, ARG_REQUIRE, "6"},
+    {"/sbfixtc", cmdSendBoolMasked, CMD_SBOPTS, ARG_REQUIRE, "0", (1 << 0), 0},
+    {"/sblockmixer", cmdSendSBLockMixer, CMD_SBOPTS, ARG_REQUIRE, "0"},
     {"/oplport", cmdSendPort, CMD_OPLPORT, ARG_REQUIRE, "388"},
     {"/oplwait", cmdSendBool, CMD_OPLWAIT, ARG_REQUIRE, "false"},
     {"/mpuport", cmdSendPort, CMD_MPUPORT, ARG_REQUIRE, "330"},
@@ -941,7 +1061,7 @@ int parseCommand(int argc, char* argv[], int* i, ParseCommand commands[])
                 return retVal;
             }
         }
-        return command->routine(arg, command->cmd);
+        return command->routine(arg, command->cmd, command->cmd2, command->cmd3);
     } else {
         printf("Invalid command %s. Run pgusinit /? for usage help", argv[idx]);
     }
@@ -1006,7 +1126,7 @@ static void printGUSMode()
 static void printAdlibMode()
 {
     printf("Running in AdLib/OPL2 mode on port %x", ctrlGetUint16(CMD_OPLPORT));
-    printf("%s\n", ctrlGetUint8(CMD_OPLWAIT) ? ", wait on" : "");
+    printf("%s\n", ctrlGetUint8(CMD_OPLWAIT) & 1 ? ", wait on" : "");
 }
 
 static void printUSBMode()
@@ -1023,16 +1143,29 @@ static void printPSGMode()
 
 static void printSBMode()
 {
+    static char *strMode[] = {"(invalid)", "1.x", "Pro 1", "2.0", "Pro 2", "(invalid)", "16"};
+    static char *strLockMixerMode[] = {"unlocked", "locked except Voice Volume", "locked", "(invalid)"};
+    
     if (init_sb()) {
         return;
     }
-    printf("Running in Sound Blaster 2.0 mode on port %x ", ctrlGetUint16(CMD_SBPORT));
+    printf("Running in Sound Blaster %s mode on port %x, IRQ %d, DMA %d\n",
+        ctrlGetUint8(CMD_SBTYPE) > 6 ? "(invalid)" : strMode[ctrlGetUint8(CMD_SBTYPE)],
+        ctrlGetUint16(CMD_SBPORT),
+        ctrlGetUint8(CMD_SBIRQ),
+        ctrlGetUint8(CMD_SBDMA)
+    );
+    uint8_t tmp_uint8 = ctrlGetUint8(CMD_SBOPTS);
+    printf("SB Time Constant fix: %s, SB mixer: %s\n",
+        (tmp_uint8 >> 0) & 1 ? "enabled" : "disabled",
+        strLockMixerMode[(tmp_uint8 >> 1) & 3]
+    );
     uint16_t tmp_uint16 = ctrlGetUint16(CMD_OPLPORT);
     if (tmp_uint16) {
-        printf("(AdLib port %x", tmp_uint16);
-        printf("%s)\n", ctrlGetUint8(CMD_OPLWAIT) ? ", wait on" : "");
+        printf("AdLib port %x", tmp_uint16);
+        printf("%s\n", ctrlGetUint8(CMD_OPLWAIT) & 1 ? ", wait on" : "");
     } else {
-        printf("(AdLib port disabled)\n");
+        printf("AdLib port disabled\n");
     }
     print_cdemu_status();
 }

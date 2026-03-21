@@ -84,12 +84,10 @@ typedef struct sbdsp_t {
         uint8_t dma;
     } resources;
 
-    // additional options
     union {
         struct {
-            uint8_t reserved   : 3; // reserved for OPL speed sensitivity fix and future settings
-            uint8_t fix_tc     : 1; // fix time constant for exact 11/22/44k Hz
-            uint8_t mixer_lock : 4; // mixer lock
+            uint8_t fixTC      : 1;
+            uint8_t lockMixer  : 2;
         };
         uint8_t b;
     } options;
@@ -140,30 +138,9 @@ static inline uint32_t sbdsp_sample_stereo() {
 // -------------------------
 // PicoGUS configuration interface helpers
 
-static inline uint16_t sbdsp_get_dsp_version() {
-    extern sbdsp_t sbdsp;
-    return sbdsp.dsp_version.w;
-}
-static inline void sbdsp_set_dsp_version(uint16_t dspver) {
-    extern sbdsp_t sbdsp;
-    sbdsp.dsp_version.w = dspver;
-}
-
-static inline uint8_t sbdsp_get_irq() {
-    extern sbdsp_t sbdsp;
-    return sbdsp.resources.irq;
-}
-static inline uint8_t sbdsp_get_dma() {
-    extern sbdsp_t sbdsp;
-    return sbdsp.resources.dma;
-}
+void sbdsp_set_type(uint8_t type);
 void sbdsp_set_irq(uint8_t irq); 
 void sbdsp_set_dma(uint8_t dma); 
-
-static inline uint8_t sbdsp_get_options() {
-    extern sbdsp_t sbdsp;
-    return sbdsp.options.b;
-}
-void sbdsp_set_options(uint8_t opts);
+void sbdsp_set_options(uint8_t options); 
 
 #endif // SBDSP_H

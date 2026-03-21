@@ -66,7 +66,7 @@ extern cms_buffer_t opl_cmd_buffer;
 #include "mouse/sermouse.h"
 #endif
 
-#ifdef SOUND_MPU
+#if (defined(SOUND_MPU) || defined(SOUND_SB))
 #include "system/flash_settings.h"
 extern Settings settings;
 #include "mpu401/export.h"
@@ -201,6 +201,10 @@ void play_adlib() {
     ad1848_init();
 #else
     sbdsp_init();
+    sbdsp_set_type(settings.SB16.sbType);
+    sbdsp_set_irq(settings.SB16.irq);
+    sbdsp_set_dma(settings.SB16.dma);
+    sbdsp_set_options(settings.SB16.options);
 #endif
 #endif
     init_audio();

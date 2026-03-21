@@ -13,6 +13,7 @@ Author : Kevin Moonlight <me@yyzkevin.com>
 
 Copyright (C) 2023 Kevin Moonlight
 Copyright (C) 2024 Ian Scott
+Copyright (C) 2026 Artem Vasilev
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the "Software"), to deal in
@@ -49,8 +50,12 @@ static irq_handler_t SBDSP_DMA_isr_pt;
 static dma_inst_t dma_config;
 #define DMA_PIO_SM 2
 
-#define DSP_VERSION_MAJOR 4
-#define DSP_VERSION_MINOR 5
+#define SB_TYPE_SB1         0x1
+#define SB_TYPE_SBPRO1      0x2
+#define SB_TYPE_SB2         0x3
+#define SB_TYPE_SBPRO2      0x4
+#define SB_TYPE_SB2MCV      0x5
+#define SB_TYPE_SB16        0x6
 
 // Sound Blaster DSP I/O port offsets
 #define DSP_RESET           0x6
@@ -138,8 +143,8 @@ static dma_inst_t dma_config;
 
 // mixer locking settings
 #define MIXER_LOCK_NONE                 0   // none, all registers writeable
-#define MIXER_LOCK_ALL_BUT_SBP_VOICE   14   // lock all but SBPro Voice (for stereo FX like in Wolf3D)
-#define MIXER_LOCK_ALL                 15   // lock all registers 
+#define MIXER_LOCK_ALL_BUT_SBP_VOICE    1   // lock all but SBPro Voice (for stereo FX like in Wolf3D)
+#define MIXER_LOCK_ALL                  2   // lock all registers 
 
 static char const copyright_string[] = "COPYRIGHT (C) CREATIVE TECHNOLOGY LTD, 1992.";
 
@@ -222,7 +227,7 @@ uint32_t sbdsp_generate_sample() {
 }
 
 static void sbdsp_handle_time_constant(uint8_t tc) {
-    if (sbdsp.options.fix_tc) {
+    if (sbdsp.options.fixTC) {
         // round time constants to 11/22/44 KHz sample rates
         switch (tc) {
             case (256 - 62): // 16129 Hz
@@ -320,11 +325,31 @@ uint16_t sbdsp_sample_rate() {
     return sbdsp.sample_rate;
 }
 
+void sbdsp_set_options(uint8_t options) {
+    sbdsp.options.b = options;
+    // TODO if any to apply
+}
+
+void sbdsp_set_type(uint8_t type) {
+    if ((type == 0) && (type > SB_TYPE_SB16)) type = SB_TYPE_SB16;
+    switch (type) {
+        default:
+        case SB_TYPE_SB1:     sbdsp.dsp_version.major = 1; sbdsp.dsp_version.minor = 5; break;
+        case SB_TYPE_SB2:     
+        case SB_TYPE_SB2MCV:  sbdsp.dsp_version.major = 2; sbdsp.dsp_version.minor = 1; break;
+        case SB_TYPE_SBPRO1:  sbdsp.dsp_version.major = 3; sbdsp.dsp_version.minor = 0; break;
+        case SB_TYPE_SBPRO2:  sbdsp.dsp_version.major = 3; sbdsp.dsp_version.minor = 1; break;
+        case SB_TYPE_SB16:    sbdsp.dsp_version.major = 4; sbdsp.dsp_version.minor = 5; break;
+    }
+    return;
+}
+
 void sbdsp_set_irq(uint8_t irq) {
     sbdsp.resources.irq = irq;
     int mixer_irq;
     switch (irq) {
-        case 2:  mixer_irq = 1; break;
+        case 2:
+        case 9:  mixer_irq = 1; break;
         case 7:  mixer_irq = 4; break;
         case 10: mixer_irq = 8; break;
         case 5:
@@ -338,22 +363,10 @@ void sbdsp_set_dma(uint8_t dma) {
     mixer_state[MIXER_DMA] = dma < 4 ? (1 << dma) : 0;  // 8-bit DMA channel only
 }
 
-void sbdsp_set_options(uint8_t opts) {
-    sbdsp.options.b = opts;
-    // TODO apply them in runtime where applicable
-}
-
 static void sbmixer_reset(void);
 void sbdsp_init() {
     puts("Initing ISA DMA PIO...");
     SBDSP_DMA_isr_pt = sbdsp_dma_isr;
-
-    sbdsp.options.mixer_lock = MIXER_LOCK_NONE;
-    sbdsp.options.fix_tc     = 0;
-    sbdsp.dsp_version.major  = DSP_VERSION_MAJOR;
-    sbdsp.dsp_version.minor  = DSP_VERSION_MINOR;
-    sbdsp_set_irq(5);
-    sbdsp_set_dma(1);
 
     sbdsp.outbox = 0xAA;
     dma_config = DMA_multi_init(pio0, DMA_PIO_SM, SBDSP_DMA_isr_pt);
@@ -882,7 +895,7 @@ static __force_inline uint8_t sbmixer_read(void) {
 
 static __force_inline void sbmixer_write(uint8_t value) {
     // mixer locking
-    switch(sbdsp.options.mixer_lock) {
+    switch(sbdsp.options.lockMixer) {
         case MIXER_LOCK_ALL_BUT_SBP_VOICE:
             if (sbdsp.mixer_command != MIXER_VOL_VOICE)
             // fallthrough

@@ -25,7 +25,7 @@ extern "C" {
 #include <stdbool.h>
 
 #define SETTINGS_MAGIC 0x70677573  // "pgus" in ascii
-#define SETTINGS_VERSION 4
+#define SETTINGS_VERSION 5
 
 // When adding new fields to Settings struct:
 // 1. Increment SETTINGS_VERSION
@@ -95,6 +95,18 @@ typedef struct Settings {
         uint8_t gusVol;
         uint8_t psgVol;
     } Volume;
+    struct { 
+        uint8_t  irq;
+        uint8_t  dma;
+        uint8_t  sbType;
+        union {
+            struct {
+                uint8_t fixTC      : 1;
+                uint8_t lockMixer  : 2;
+            };
+            uint8_t  options;
+        };
+    } SB16; // TEMPORARY - may be changed!
 } Settings;
 
 

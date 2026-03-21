@@ -244,13 +244,10 @@ __force_inline void select_picogus(uint8_t value) {
         cur_read_idx = 0;
 #endif
         break;
-#ifdef SOUND_SB
-    case CMD_SBDSPVER:
-        picogus_dataLatch_low = 0;
+    case CMD_SBTYPE:
     case CMD_SBIRQ:
     case CMD_SBDMA:
-        break;
-#endif
+    case CMD_SBOPTS:
     case CMD_CDSTATUS:
     case CMD_CDLOAD:
     case CMD_CDAUTOADV:
@@ -295,12 +292,6 @@ __force_inline void write_picogus_low(uint8_t value) {
         break;
     case CMD_MOUSESEN:  // USB Mouse Sensitivity (8.8 fixedpoint)
         mouseSensitivity_low = value;
-        break;
-#ifdef SOUND_SB
-    case CMD_SBDSPVER:
-        picogus_dataLatch_low = value;
-        break;
-#endif
         break;
     }
 }
@@ -372,25 +363,30 @@ __force_inline void write_picogus_high(uint8_t value) {
 #endif
         break;
     case CMD_OPLWAIT: // Adlib speed sensitive fix
-    //case CMD_SBOPTS:  // ... and SB emulation options
-        settings.SB.oplSpeedSensitive = value & 1;  // HACK until settings struct resolved
-#ifdef SOUND_SB
-        sbdsp_set_options(value);
-#endif
+        settings.SB.oplSpeedSensitive = value;
         break;
-    case CMD_SBDSPVER:
+        
+    case CMD_SBTYPE:
+        settings.SB16.sbType = value;
 #ifdef SOUND_SB
-        sbdsp_set_dsp_version((value << 8) | picogus_dataLatch_low);
+        sbdsp_set_type(value);
 #endif
         break;
     case CMD_SBIRQ:
+        settings.SB16.irq = value;
 #ifdef SOUND_SB
         sbdsp_set_irq(value);
 #endif
         break;
     case CMD_SBDMA:
+        settings.SB16.dma = value;
 #ifdef SOUND_SB
         sbdsp_set_dma(value);
+#endif
+    case CMD_SBOPTS:
+        settings.SB16.options = value;
+#ifdef SOUND_SB
+        sbdsp_set_options(value);
 #endif
         break;
     case CMD_MOUSEPORT:  // USB Mouse port (0 - disabled)
@@ -606,6 +602,14 @@ __force_inline uint8_t read_picogus_high(void) {
         return settings.Mouse.sensitivity >> 8;
     case CMD_NE2KPORT: // NE2000 Base port
         return settings.NE2K.basePort == 0xFFFF ? 0 : (settings.NE2K.basePort >> 8);
+    case CMD_SBTYPE:   // SB type
+        return settings.SB16.sbType;
+    case CMD_SBIRQ:    // SB IRQ
+        return settings.SB16.irq;
+    case CMD_SBDMA:    // SB DMA
+        return settings.SB16.dma;
+    case CMD_SBOPTS:   // SB Options
+        return settings.SB16.options;
     /*
     case CMD_WIFISSID:
         break;

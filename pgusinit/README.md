@@ -86,11 +86,30 @@ https://github.com/polpo/picogus/wiki/Compatibility-list
 
 ### Sound Blaster/AdLib options
 
+Sound Blaster emulation requires the BLASTER variable to be set, in the format:
+
+`set BLASTER=A220 I5 D1 H1 T6`, where 220 is the PicoGUS's SB emulation port,
+5 is the IRQ, 1 is the DMA, 6 is the emulated SB type (see `/sbtype` option)
+
 * `/sbport x` - sets the base port of the Sound Blaster. Defaults to 220.
+* `/sbirq x` - sets the IRQ of the Sound Blaster. Must match jumper settings.
+* `/sbdma x` - sets the DMA of the Sound Blaster. Must match jumper settings.
+* `/sbtype x` - sets the Sound Blaster type: Allowed values are:
+  1 - SB 1.x,          2 - SB Pro 1 (dual OPL2), 3 - SB 2.0
+  4 - SB Pro 2 (OPL3), 6 - SB 16
 * `/oplport x` - sets the base port of the OPL/AdLib. Defaults to 388.
 * `/oplwait` - wait on OPL2 data write. Can fix speed-sensitive early AdLib
   games on fast systems (example: 688 Attack Sub).
+* `/sbvol  x` - sets the volume of the SB PCM output to x percent.
 * `/oplvol x` - sets the volume of the OPL2 output to x percent.
+* `/sbfixtc 1|0 ` - fix SB time constant for 11/22/44 kHz sample rate. Can fix
+  PCM audio slightly pitched up or down in pre-SB16 games and applications.
+  Note than certain programs are already aware of SB time constant inaccuracy
+  and will sound wrong if this option is enabled. Default = 0 (disabled)
+* `/sblockmixer n` - lock writes to SB mixer settings. Choices:
+  0 - write lock disabled (default)
+  1 - lock all but Voice Volume registers (for panning effects e.g. in Wolf3D)
+  2 - lock all registers
 
 ### MPU-401 options
 
