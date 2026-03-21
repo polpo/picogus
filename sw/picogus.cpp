@@ -383,6 +383,7 @@ __force_inline void write_picogus_high(uint8_t value) {
 #ifdef SOUND_SB
         sbdsp_set_dma(value);
 #endif
+        break;
     case CMD_SBOPTS:
         settings.SB16.options = value;
 #ifdef SOUND_SB

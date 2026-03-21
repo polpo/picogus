@@ -54,7 +54,7 @@ static dma_inst_t dma_config;
 #define SB_TYPE_SBPRO1      0x2
 #define SB_TYPE_SB2         0x3
 #define SB_TYPE_SBPRO2      0x4
-#define SB_TYPE_SB2MCV      0x5
+#define SB_TYPE_SBPRO2MCA   0x5
 #define SB_TYPE_SB16        0x6
 
 // Sound Blaster DSP I/O port offsets
@@ -334,12 +334,12 @@ void sbdsp_set_type(uint8_t type) {
     if ((type == 0) && (type > SB_TYPE_SB16)) type = SB_TYPE_SB16;
     switch (type) {
         default:
-        case SB_TYPE_SB1:     sbdsp.dsp_version.major = 1; sbdsp.dsp_version.minor = 5; break;
-        case SB_TYPE_SB2:     
-        case SB_TYPE_SB2MCV:  sbdsp.dsp_version.major = 2; sbdsp.dsp_version.minor = 1; break;
-        case SB_TYPE_SBPRO1:  sbdsp.dsp_version.major = 3; sbdsp.dsp_version.minor = 0; break;
-        case SB_TYPE_SBPRO2:  sbdsp.dsp_version.major = 3; sbdsp.dsp_version.minor = 1; break;
-        case SB_TYPE_SB16:    sbdsp.dsp_version.major = 4; sbdsp.dsp_version.minor = 5; break;
+        case SB_TYPE_SB1:       sbdsp.dsp_version.major = 1; sbdsp.dsp_version.minor = 5; break;
+        case SB_TYPE_SB2:       sbdsp.dsp_version.major = 2; sbdsp.dsp_version.minor = 1; break;
+        case SB_TYPE_SBPRO1:    sbdsp.dsp_version.major = 3; sbdsp.dsp_version.minor = 0; break;
+        case SB_TYPE_SBPRO2
+        case SB_TYPE_SBPRO2MCA: sbdsp.dsp_version.major = 3; sbdsp.dsp_version.minor = 1; break;
+        case SB_TYPE_SB16:      sbdsp.dsp_version.major = 4; sbdsp.dsp_version.minor = 5; break;
     }
     return;
 }
