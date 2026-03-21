@@ -247,7 +247,7 @@ static void sbdsp_handle_time_constant(uint8_t tc) {
             default: break;
         }
     }
-    sbdsp.time_constant = sbdsp.inbox;
+    sbdsp.time_constant = tc;
     sbdsp.sample_rate = 0; // Rate of 0 indicates time constant drives DMA timing
 }
 
@@ -726,8 +726,6 @@ void sbdsp_process(void) {
 
 static uint32_t DSP_Reset_EventHandler(Bitu val) {
     sbdsp.reset_state = 0;
-    sbdsp.outbox = 0xAA;
-    sbdsp.dav_pc = 1;
     sbdsp.current_command = 0;
     sbdsp.current_command_index = 0;
 
@@ -735,10 +733,14 @@ static uint32_t DSP_Reset_EventHandler(Bitu val) {
     sbdsp.dma_xfer_count = 0;
     sbdsp.dma_xfer_count_left = 0;
     sbdsp.dma_stereo = false;
+    sbdsp.dma_stereo_sbpro = false;
     sbdsp.dma_signed = false;
     sbdsp.speaker_on = false;
     sbdsp.dma_done = false;
     sbdsp.dac_resume_pending = false;
+
+    sbdsp.outbox = 0xAA;
+    sbdsp.dav_pc = 1;
     return 0;
 }
 static PIC_TimerEvent DSP_Reset_Event = {
