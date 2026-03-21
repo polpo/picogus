@@ -337,7 +337,7 @@ void sbdsp_set_type(uint8_t type) {
         case SB_TYPE_SB1:       sbdsp.dsp_version.major = 1; sbdsp.dsp_version.minor = 5; break;
         case SB_TYPE_SB2:       sbdsp.dsp_version.major = 2; sbdsp.dsp_version.minor = 1; break;
         case SB_TYPE_SBPRO1:    sbdsp.dsp_version.major = 3; sbdsp.dsp_version.minor = 0; break;
-        case SB_TYPE_SBPRO2
+        case SB_TYPE_SBPRO2:
         case SB_TYPE_SBPRO2MCA: sbdsp.dsp_version.major = 3; sbdsp.dsp_version.minor = 1; break;
         case SB_TYPE_SB16:      sbdsp.dsp_version.major = 4; sbdsp.dsp_version.minor = 5; break;
     }

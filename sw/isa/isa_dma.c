@@ -18,6 +18,8 @@
 
 #include "isa_dma.h"
 
+#define dma_clkdiv ((float)RP2_CLOCK_SPEED / 183000.0)
+
 dma_inst_t DMA_init(PIO pio, uint sm, irq_handler_t dma_isr) {
     dma_inst_t dma;
     dma.offset = pio_add_program(pio, &dma_write_program);
@@ -44,7 +46,7 @@ dma_inst_t DMA_multi_init(PIO pio, uint sm, irq_handler_t dma_isr) {
     pio_sm_claim(pio, sm);
     dma.sm = sm;
     dma.pio = pio;
-    dma_write_multi_program_init(pio, dma.sm, dma.offset);
+    dma_write_multi_program_init(pio, dma.sm, dma.offset, dma_clkdiv);
 
     if (dma_isr) {
         uint pio_irq = (pio == pio0) ? PIO0_IRQ_0 : PIO1_IRQ_0;

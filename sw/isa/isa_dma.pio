@@ -111,13 +111,14 @@ deassert_drq:
     jmp continue
 
 % c-sdk {
-static inline void dma_write_multi_program_init(PIO pio, uint sm, uint offset) {
+static inline void dma_write_multi_program_init(PIO pio, uint sm, uint offset, float clkdiv) {
     pio_sm_config c = dma_write_multi_program_get_default_config(offset);
 
     // Set up AD0 bus as input
     sm_config_set_in_pins(&c, AD0_PIN);
     // Autopush - default 8 bits (1 byte), reconfigurable at runtime for frame size
     sm_config_set_in_shift(&c, true, true, 8);
+    sm_config_set_clkdiv(&c, clkdiv);
 
     // Autopull 32 bits (loop count)
     sm_config_set_out_shift(&c, false, true /* autopull */, 32);
