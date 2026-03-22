@@ -84,6 +84,8 @@ typedef struct sbdsp_t {
         uint8_t dma;
     } resources;
 
+    uint8_t ident_e2[2];
+
     union {
         struct {
             uint8_t fixTC      : 1;

@@ -106,6 +106,7 @@ static dma_inst_t dma_config;
 
 #define DSP_IDENT               0xE0
 #define DSP_VERSION             0xE1
+#define DSP_IDENT_E2            0xE2
 #define DSP_COPYRIGHT           0xE3
 #define DSP_WRITETEST           0xE4
 #define DSP_READTEST            0xE8
@@ -376,6 +377,10 @@ void sbdsp_init() {
     sb_8051_ram[0x0f] = 0x07;
     sb_8051_ram[0x37] = 0x38;
 
+    // Initialize buffer for the E2 command
+    sbdsp.ident_e2[0] = 0xAA;
+    sbdsp.ident_e2[1] = 0x96;
+    
     // Reset mixer
     sbmixer_reset();
 }
@@ -547,6 +552,20 @@ void sbdsp_process(void) {
                 sbdsp.current_command_index++;
             }
             break;
+        case DSP_IDENT_E2: // yet another "protection"... used by CT-VOICE.DRV
+            if (sbdsp.dav_dsp) {
+                if (sbdsp.current_command_index == 1) {
+                    sbdsp.dav_dsp = 0;
+                    sbdsp.current_command = 0;
+                    sbdsp.ident_e2[0] += sbdsp.inbox ^ sbdsp.ident_e2[1];
+                    sbdsp.ident_e2[1] = (sbdsp.ident_e2[1] >> 2) | (sbdsp.ident_e2[1] << 6);
+                    // ideally it should output this byte via DMA, but we don't support DMA IORs yet
+                    // so stuff to outbox for now
+                    sbdsp_output(sbdsp.ident_e2[0]);
+                }
+                sbdsp.current_command_index++;
+            }
+            break;
         case DSP_COPYRIGHT:
             if (sbdsp.current_command_index == 0) {
                 sbdsp.current_command_index = 1;
@@ -586,6 +605,12 @@ void sbdsp_process(void) {
                     sbdsp.current_command = 0;
                 }
                 sbdsp.current_command_index++;
+            }
+            break;
+        case DSP_DIRECT_ADC:
+            if (sbdsp.current_command_index == 0) {
+                sbdsp.current_command = 0;
+                sbdsp_output(0x80);         // fake silent input
             }
             break;
         case DSP_WRITETEST:
@@ -674,9 +699,9 @@ void sbdsp_process(void) {
                     sbdsp.dma_xfer_count_left = sbdsp.dma_xfer_count;
                     sbdsp.dav_dsp = 0;
                     sbdsp.current_command = 0;
-                    sbdsp.dma_done = false;
                     sbdsp.speaker_on = true;
                     sbdsp_set_dma_interval();
+                    sbdsp.dma_done = false;
                     sbdsp_dma_enable();
                 }
                 sbdsp.current_command_index++;
