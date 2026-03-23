@@ -810,9 +810,7 @@ __force_inline void handle_iow(void) {
         // DSP ports
         default:
             pio_sm_put(pio0, IOW_PIO_SM, IO_WAIT);
-            sbdsp_process();
             sbdsp_write(port & 0xF, iow_read & 0xFF);
-            sbdsp_process();
             break;
         }
     } else // if follows down below

@@ -248,6 +248,9 @@ void play_adlib() {
         }
 #endif
 
+        // Process DSP commands
+        sbdsp_process();
+
         // Generate OPL samples and add to output FIFO
         while (fifo_free_space(&opl_out_fifo) > 0) {
             // Interpolate at current position

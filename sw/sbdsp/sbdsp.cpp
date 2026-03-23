@@ -750,7 +750,6 @@ void sbdsp_process(void) {
 }
 
 static uint32_t DSP_Reset_EventHandler(Bitu val) {
-    sbdsp.reset_state = 0;
     sbdsp.current_command = 0;
     sbdsp.current_command_index = 0;
 
@@ -766,6 +765,7 @@ static uint32_t DSP_Reset_EventHandler(Bitu val) {
 
     sbdsp.outbox = 0xAA;
     sbdsp.dav_pc = 1;
+    sbdsp.reset_state = 0;
     return 0;
 }
 static PIC_TimerEvent DSP_Reset_Event = {
@@ -777,16 +777,17 @@ static __force_inline void sbdsp_reset(uint8_t value) {
     switch (value) {
         case 1:
             PIC_RemoveEvent(&DSP_Reset_Event);
+            while (sbdsp.dsp_busy) tight_loop_contents();   // TODO timeout!!!!!!
+            sbdsp.reset_state = 1;
             sbdsp.autoinit = 0;
             sbdsp_dma_disable(false);
-            sbdsp.reset_state = 1;
             break;
         case 0:
             if (sbdsp.reset_state == 1) {
+                sbdsp.reset_state = 2;
                 sbdsp.dav_pc = 0;
                 PIC_RemoveEvent(&DSP_Reset_Event);
                 PIC_AddEvent(&DSP_Reset_Event, 100, 0);
-                sbdsp.reset_state = 2;
             }
             break;
         default:
