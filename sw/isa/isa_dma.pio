@@ -103,7 +103,8 @@ dma_loop:
 continue:
     wait 1 gpio IOW_PIN  side 0b1       ; wait for IOW deassert
     in pins, 8           side 0b0       ; input data, muxes back to addr
-    wait 0 gpio DACK_PIN                ; wait for DACK deassert - necessary, otherwise could still be asserted next dma_loop
+    ; commented out since it will blow up in DMA demand mode (Unreal/FC in SBPro mode)
+    ; wait 0 gpio DACK_PIN                ; wait for DACK deassert - necessary, otherwise could still be asserted next dma_loop
     jmp x-- dma_loop                    ; loop until (X+1) bytes have been transferred
 .wrap
 deassert_drq:
