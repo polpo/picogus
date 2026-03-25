@@ -1010,9 +1010,7 @@ __force_inline void handle_ior(void) {
             pio_sm_put(pio0, IOR_PIO_SM, IOR_SET_VALUE | OPL_Pico_PortRead(OPL_REGISTER_PORT));
             break;
         default:
-            sbdsp_process();
             pio_sm_put(pio0, IOR_PIO_SM, IOR_SET_VALUE | sbdsp_read(port & 0xF));
-            sbdsp_process();
             break;
         }
     } else // if follows down below

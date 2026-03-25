@@ -969,18 +969,21 @@ static __force_inline void sbmixer_write(uint8_t value) {
 
 
 uint8_t sbdsp_read(uint8_t address) {
+    uint8_t out = 0xFF;
+
     // emulate address aliasing seen on pre-SB16
     switch (address) {
         case DSP_READ:   // +0xA
         case DSP_READ+1: // +0xB
+            out = sbdsp.outbox;
             sbdsp.dav_pc = 0;
-            return sbdsp.outbox;
+            return out;
         case DSP_READ_STATUS: // +0xE
             if (sbdsp.irq_8_pending) {
                 sbdsp.irq_8_pending = false;
                 PIC_DeActivateIRQ();
             }
-            return sbdsp.dav_pc << 7 | DSP_UNUSED_STATUS_BITS_PULLED_HIGH;
+            return (sbdsp.dav_pc << 7) | DSP_UNUSED_STATUS_BITS_PULLED_HIGH;
         case DSP_IRQ_16_STATUS: // +0xD
             if (sbdsp.irq_16_pending) {
                 sbdsp.irq_16_pending = false;
@@ -991,7 +994,7 @@ uint8_t sbdsp_read(uint8_t address) {
         case DSP_WRITE_STATUS+1:// +0xD
             if (sbdsp.reset_state)
                 return 0xFF; // busy during reset
-            return (sbdsp.dav_dsp | sbdsp.dsp_busy | sbdsp.dac_resume_pending) << 7 | DSP_UNUSED_STATUS_BITS_PULLED_HIGH;
+            return ((sbdsp.dav_dsp | sbdsp.dsp_busy | sbdsp.dac_resume_pending) << 7) | DSP_UNUSED_STATUS_BITS_PULLED_HIGH;
         case MIXER_DATA:
             return sbmixer_read();
         default:
