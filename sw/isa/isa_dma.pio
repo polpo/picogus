@@ -97,16 +97,15 @@ restart:
     out x, 32                           ; wait to trigger DMA operation - X has number of bytes to xfer minus 1
     set pins, 1                         ; assert DRQ
 dma_loop:
-    wait 1 gpio DACK_PIN                ; DACK assert - no sideset up to this point as it could interfere with isa_io.pio
-    wait 0 gpio IOW_PIN  side 0b1       ; wait for IOW assert, muxes to data
-    jmp !x deassert_drq                 ; if last loop, deassert DRQ
+    wait 0 gpio IOW_PIN                 ; wait for IOW  assert - no sideset up to this point as it could interfere with isa_io.pio
+    wait 1 gpio DACK_PIN                ; wait for DACK assert 
+    jmp pin, dma_loop                   ; make sure both IOW+DACK asserted
+    jmp !x deassert_drq  side 0b1       ; if last loop, deassert DRQ - mux to data
 continue:
     wait 1 gpio IOW_PIN  side 0b1       ; wait for IOW deassert
     in pins, 8           side 0b0       ; input data, muxes back to addr
-    ; commented out since it will blow up in DMA demand mode (Unreal/FC in SBPro mode)
-    ; wait 0 gpio DACK_PIN                ; wait for DACK deassert - necessary, otherwise could still be asserted next dma_loop
     jmp x-- dma_loop                    ; loop until (X+1) bytes have been transferred
-.wrap
+.wrap                                   ; we don't wait for DACK deassert here as it will not be compatible with DMA controller demand mode
 deassert_drq:
     set pins, 0                         ; deassert DRQ
     jmp continue
@@ -127,6 +126,9 @@ static inline void dma_write_multi_program_init(PIO pio, uint sm, uint offset, f
     // Set the pin direction for IOW and AD0 bus as input at the PIO
     pio_sm_set_consecutive_pindirs(pio, sm, IOW_PIN, 1, false);
     pio_sm_set_consecutive_pindirs(pio, sm, AD0_PIN, 8, false);
+
+    // Set IOW as JMP pin
+    sm_config_set_jmp_pin(&c, IOW_PIN);
 
     // Config DMA pins
     sm_config_set_set_pins(&c, DRQ_PIN, 1);
