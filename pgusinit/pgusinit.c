@@ -34,6 +34,7 @@ static card_mode_t newMode = 0;
 static board_type_t board_type;
 static bool wifichg = false;
 static bool permanent = false;
+static bool resources_from_env = false;
 static bool is_console;
 static uint8_t page_lines;
 
@@ -95,6 +96,7 @@ static void usage(card_mode_t mode, bool print_all)
     if (mode == GUS_MODE || print_all) {
         //         "...............................................................................\n"
         pageprintf("GUS settings:\n");
+        pageprintf("   /gusenv     - set the base port of the GUS from ULTRASND variable\n");
         pageprintf("   /gusport x  - set the base port of the GUS. Default: 240\n");
         pageprintf("   /gusbuf n   - set audio buffer to n samples. Default: 4, Min: 1, Max: 256\n");
         pageprintf("                 (tweaking can help programs that hang or have audio glitches)\n");
@@ -107,7 +109,8 @@ static void usage(card_mode_t mode, bool print_all)
     if (mode == SB_MODE || print_all) {
         //         "...............................................................................\n"
         pageprintf("Sound Blaster settings:\n");
-        pageprintf("   /sbport x      - set the base port of the Sound Blaster. Default: 220\n");
+        pageprintf("   /sbenv         - set the SB base port, IRQ, DMA and type from SET BLASTER=\n");
+        pageprintf("   /sbport x      - set the SB base port. Default: 220\n");
         pageprintf("   /sbirq x       - set the SB IRQ (must match jumper settings!). Default: 5\n");
         pageprintf("   /sbdma x       - set the SB DMA (must match jumper settings!). Default: 1\n");
         pageprintf("   /sbtype x      - set the Sound Blaster type. Default: 6 (SB 16)\n");
@@ -229,11 +232,18 @@ static int init_gus(void)
         return 2;
     }
 
-    outp(CONTROL_PORT, CMD_GUSPORT); // Select port register
-    uint16_t tmp_port = inpw(DATA_PORT_LOW);
-    if (port != tmp_port) {
-        err_ultrasnd();
-        return 2;
+    if (resources_from_env) {
+        // init GUS base port from ULTRASND environment variable
+        outp(CONTROL_PORT, CMD_GUSPORT); // Select port register
+        outpw(DATA_PORT_LOW, port);
+    } else {
+        // verify ULTRASND against GUS mode settings
+        outp(CONTROL_PORT, CMD_GUSPORT); // Select port register
+        uint16_t tmp_port = inpw(DATA_PORT_LOW);
+        if (port != tmp_port) {
+            err_ultrasnd();
+            return 2;
+        }
     }
 
     // Detect if there's something GUS-like...
@@ -294,32 +304,48 @@ static int init_sb(void)
         return 2;
     }
 
-    outp(CONTROL_PORT, CMD_SBPORT); // Select port register
-    uint16_t tmp_port = inpw(DATA_PORT_LOW);
-    if (port != tmp_port) {
-        err_blaster();
-        return 2;
-    }
+    if (resources_from_env) {
+        // update resources from BLASTER environment variable
+        outp(CONTROL_PORT, CMD_SBPORT); // Select port register
+        outpw(DATA_PORT_LOW, port);
 
-    outp(CONTROL_PORT, CMD_SBIRQ); // Select IRQ register
-    uint8_t tmp_irq = inp(DATA_PORT_HIGH);
-    if (irq != tmp_irq) {
-        err_blaster();
-        return 2;
-    }
+        outp(CONTROL_PORT, CMD_SBIRQ); // Select IRQ register
+        outp(DATA_PORT_HIGH, irq);
 
-    outp(CONTROL_PORT, CMD_SBDMA); // Select DMA register
-    uint8_t tmp_dma = inp(DATA_PORT_HIGH);
-    if (dma8 != tmp_dma) {
-        err_blaster();
-        return 2;
-    }
+        outp(CONTROL_PORT, CMD_SBDMA); // Select DMA register
+        outp(DATA_PORT_HIGH, irq);
 
-    outp(CONTROL_PORT, CMD_SBTYPE); // Select SB type register
-    uint8_t tmp_type = inp(DATA_PORT_HIGH);
-    if (sbtype != tmp_type) {
-        err_blaster();
-        return 2;
+        outp(CONTROL_PORT, CMD_SBTYPE); // Select SB type register
+        outp(DATA_PORT_HIGH, sbtype);
+    } else {
+        // verify BLASTER variable against current SB mode settings
+        outp(CONTROL_PORT, CMD_SBPORT); // Select port register
+        uint16_t tmp_port = inpw(DATA_PORT_LOW);
+        if (port != tmp_port) {
+            err_blaster();
+            return 2;
+        }
+
+        outp(CONTROL_PORT, CMD_SBIRQ); // Select IRQ register
+        uint8_t tmp_irq = inp(DATA_PORT_HIGH);
+        if (irq != tmp_irq) {
+            err_blaster();
+            return 2;
+        }
+
+        outp(CONTROL_PORT, CMD_SBDMA); // Select DMA register
+        uint8_t tmp_dma = inp(DATA_PORT_HIGH);
+        if (dma8 != tmp_dma) {
+            err_blaster();
+            return 2;
+        }
+
+        outp(CONTROL_PORT, CMD_SBTYPE); // Select SB type register
+        uint8_t tmp_type = inp(DATA_PORT_HIGH);
+        if (sbtype != tmp_type) {
+            err_blaster();
+            return 2;
+        }
     }
 
     return 0;
@@ -684,6 +710,11 @@ static void send_string(const uint8_t cmd, const char* str, const int16_t max_le
     outp(DATA_PORT_HIGH, 0);
 }
 
+static bool cmdSetResourcesFromEnv(const char* arg, const int cmd, const int cmd2, const int cmd3) {
+    resources_from_env = true;
+    return true;
+}
+
 static bool cmdDisplayUsage(const char* arg, const int print_all, const int cmd2, const int cmd3)
 {
     usage(gMode, print_all);
@@ -978,10 +1009,12 @@ ParseCommand parseCommands[] = {
     {"/joy", cmdSendBool, CMD_JOYEN, ARG_REQUIRE},
     {"/mode", cmdSetMode, 0, ARG_REQUIRE},
     {"/wtvol", cmdSetVol, CMD_WTVOL, ARG_REQUIRE},
+    {"/gusenv", cmdSetResourcesFromEnv, 1, ARG_NONE},
     {"/gus44k", cmdSendBool, CMD_GUS44K, ARG_REQUIRE, "false"},
     {"/gusbuf", cmdGUSBuffer, CMD_GUSBUF, ARG_REQUIRE, "4"},
     {"/gusdma", cmdSendUint8, CMD_GUSDMA, ARG_REQUIRE, "0"},
     {"/gusport", cmdSendPort, CMD_GUSPORT, ARG_REQUIRE, "240"},
+    {"/sbenv", cmdSetResourcesFromEnv, 1, ARG_NONE},
     {"/sbport", cmdSendPort, CMD_SBPORT, ARG_REQUIRE, "220"},
     {"/sbirq", cmdSendUint8, CMD_SBIRQ, ARG_REQUIRE, "5"},
     {"/sbdma", cmdSendUint8, CMD_SBDMA, ARG_REQUIRE, "1"},

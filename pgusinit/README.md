@@ -64,6 +64,7 @@ GUS emulation requires the ULTRASND variable to be set, in the format:
 5 is the IRQ. pgusinit will check that the port set on the PicoGUS matches the
 port specified in ULTRASND.
 
+* `/gusenv` - sets the base I/O port from ULTRASND variable.
 * `/gusport x` - sets the base I/O port of the GUS to x. Defaults to 240.
 * `/gusbuf n` - sets the audio buffer size to n samples. Defaults to 4 with a
   minimum of 1 and maximum of 256. Some programs require a different value to
@@ -91,6 +92,7 @@ Sound Blaster emulation requires the BLASTER variable to be set, in the format:
 `set BLASTER=A220 I5 D1 H1 T6`, where 220 is the PicoGUS's SB emulation port,
 5 is the IRQ, 1 is the DMA, 6 is the emulated SB type (see `/sbtype` option)
 
+* `/sbenv` - sets SB base port, IRQ, DMA and type from BLASTER variable.
 * `/sbport x` - sets the base port of the Sound Blaster. Defaults to 220.
 * `/sbirq x` - sets the IRQ of the Sound Blaster. Must match jumper settings.
 * `/sbdma x` - sets the DMA of the Sound Blaster. Must match jumper settings.
