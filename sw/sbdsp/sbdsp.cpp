@@ -742,7 +742,7 @@ void sbdsp_process(void) {
             //not in a command
             break;
         default:
-            printf("Unknown Command: %x\n", sbdsp.current_command);
+            //printf("Unknown Command: %x\n", sbdsp.current_command);
             sbdsp.current_command = 0;
             break;
     }
