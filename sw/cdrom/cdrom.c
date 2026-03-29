@@ -582,7 +582,7 @@ uint8_t cdrom_read_toc(cdrom_t *dev, unsigned char *b, uint8_t track) {
     int first_track;
     int last_track;
     dev->ops->get_tracks(dev, &first_track, &last_track);    
-    if(track > last_track)  return 0;    //should we allow +1 here?
+    if(track > last_track)  return 0;
     dev->ops->get_track_info(dev, track, 0, &ti);
     b[0]=0x0;
     b[1]=ti.attr;
@@ -591,7 +591,7 @@ uint8_t cdrom_read_toc(cdrom_t *dev, unsigned char *b, uint8_t track) {
     b[4]=ti.m;
     b[5]=ti.s;
     b[6]=ti.f;
-    b[7]=0;    
+    b[7]=0;
     return 1;    
 
 }    

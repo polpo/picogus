@@ -88,7 +88,7 @@ void media_update();
 
 void MKE_COMMAND(uint8_t value) {  
     uint16_t i,len;
-    uint8_t x[12];//this is wasteful handling of buffers for compatibility, but will optimize later.
+    uint8_t x[12] = {0};
     subchannel_t subc;
 
     if(mke.command_buffer_pending) {                 
@@ -111,8 +111,8 @@ void MKE_COMMAND(uint8_t value) {
         cdrom_output_status(&cdrom);
     }
 
-    if(!mke.command_buffer_pending && mke.command_buffer[0]) { // We are done and we have a command        
-        switch(mke.command_buffer[0]) { 
+    if(!mke.command_buffer_pending && mke.command_buffer[0]) { // We are done and we have a command
+        switch(mke.command_buffer[0]) {
             case 06: //TRAY OUT
                 cdrom_fifo_clear(&cdrom.info_fifo);
                 printf("TRAY OUT\n");
@@ -198,16 +198,11 @@ void MKE_COMMAND(uint8_t value) {
                 break;
             case CMD1_READTOC:
                 cdrom_fifo_clear(&cdrom.info_fifo);
-                if(cdrom_read_toc(&cdrom,(uint8_t *)&x,mke.command_buffer[2])) {
-                    cdrom_fifo_write_multiple(&cdrom.info_fifo, x, 8);
-                }
-                /*
-                for(i=0;i<8;i++) {
-                    mke_log("%02x ",x[i]);
-                    cdrom_fifo_write(&cdrom.info_fifo,x[i]);
-                }
-                */
-                /* mke_log("\n"); */
+                cdrom_read_toc(&cdrom,(uint8_t *)&x,mke.command_buffer[2]);
+                /* Always push 8 bytes even if the track wasn't found.
+                   The driver expects exactly 8 bytes + status; pushing
+                   fewer desynchronizes the protocol. */
+                cdrom_fifo_write_multiple(&cdrom.info_fifo, x, 8);
                 cdrom_output_status(&cdrom);
                 break;
             case CMD1_PLAY_MSF:
@@ -302,8 +297,10 @@ void MKE_WRITE(uint16_t address, uint8_t value) {
         case 3:
             mke.enable_register=value;
             break;
+        case 2:
+            /* Reset register - silently ignore */
+            break;
         default:
-            printf("w %03x %02x\n", address, value);
             break;
     }    
 }
@@ -340,13 +337,11 @@ uint8_t MKE_READ(uint16_t address) {
             break;
         case 2://Data
             return cdrom_fifo_read(&cdrom.data_fifo);    
-            case 3:
-                return mke.enable_register;
-                break;
         default:
-            /* mke_log("MKE Unknown Read Address: %03x\n",address); */
-            printf("MKE Unknown Read Address: %03x\n",address);
-            break;
+            /* Port 3 and any other port returns 0xFF.
+               This is needed for the Windows 95/98 built-in driver to
+               function correctly during drive detection. */
+            return 0xFF;
     }
 }
 
