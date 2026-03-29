@@ -556,7 +556,7 @@ uint8_t cdrom_get_subq(cdrom_t *dev,uint8_t *b) {
      * empty or seek_pos is at the start of the track. */
 #if USE_CD_AUDIO_FIFO
     {
-        uint32_t buffered_sectors = dev->audio_fifo.samples_in_fifo / (SAMPLES_PER_SECTOR * 2);
+        uint32_t buffered_sectors = (dev->audio_fifo.write_idx - dev->audio_fifo.read_idx) / (SAMPLES_PER_SECTOR * 2);
         uint32_t report_pos = (buffered_sectors < dev->seek_pos) ?
                               (dev->seek_pos - buffered_sectors) : 0;
         dev->ops->get_subchannel(dev, report_pos, &subc);

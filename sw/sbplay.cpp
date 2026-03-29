@@ -164,24 +164,22 @@ void audio_sample_handler(void) {
 #ifdef CDROM
     // Read L+R sample pair directly from FIFO using read_idx before advancing.
     // Must request exactly 2 (stereo pair) or skip — never read partial pairs.
-    if (cd_fifo->state != FIFO_STATE_STOPPED && cd_fifo->samples_in_fifo >= 2) {
+    if (cd_fifo->state != FIFO_STATE_STOPPED && cd_fifo->write_idx - cd_fifo->read_idx >= 2) {
         uint32_t idx = cd_fifo->read_idx;
-        sample_l += scale_sample(cd_fifo->buffer[idx],                    cd_audio_volume, 0);
+        sample_l += scale_sample(cd_fifo->buffer[idx & AUDIO_FIFO_BITS],              cd_audio_volume, 0);
         sample_r += scale_sample(cd_fifo->buffer[(idx + 1) & AUDIO_FIFO_BITS], cd_audio_volume, 0);
-        cd_fifo->read_idx = (idx + 2) & AUDIO_FIFO_BITS;
-        cd_fifo->samples_in_fifo -= 2;
-        if (cd_fifo->samples_in_fifo == 0) cd_fifo->state = FIFO_STATE_STOPPED;
+        cd_fifo->read_idx = idx + 2;
+        if (cd_fifo->write_idx == cd_fifo->read_idx) cd_fifo->state = FIFO_STATE_STOPPED;
     }
 #endif
 
     // Read OPL stereo pair from FIFO — always consume 2 samples (L then R).
-    if (opl_out_fifo.state != FIFO_STATE_STOPPED && opl_out_fifo.samples_in_fifo >= 2) {
+    if (opl_out_fifo.state != FIFO_STATE_STOPPED && opl_out_fifo.write_idx - opl_out_fifo.read_idx >= 2) {
         uint32_t idx = opl_out_fifo.read_idx;
-        sample_l += opl_out_fifo.buffer[idx];
+        sample_l += opl_out_fifo.buffer[idx & AUDIO_FIFO_BITS];
         sample_r += opl_out_fifo.buffer[(idx + 1) & AUDIO_FIFO_BITS];
-        opl_out_fifo.read_idx = (idx + 2) & AUDIO_FIFO_BITS;
-        opl_out_fifo.samples_in_fifo -= 2;
-        if (opl_out_fifo.samples_in_fifo == 0) opl_out_fifo.state = FIFO_STATE_STOPPED;
+        opl_out_fifo.read_idx = idx + 2;
+        if (opl_out_fifo.write_idx == opl_out_fifo.read_idx) opl_out_fifo.state = FIFO_STATE_STOPPED;
     }
 
     const sample_pair clamped = {.data16 = {

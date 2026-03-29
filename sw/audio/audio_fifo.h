@@ -25,7 +25,6 @@
 
 #include <stdint.h>
 #include <stdbool.h>
-#include "hardware/sync.h"
 
 // Configuration
 #define AUDIO_FIFO_SIZE 4096  // Must be power of 2
@@ -48,14 +47,15 @@ typedef enum {
 } fifo_state_t;
 
 // FIFO structure
+// Lock-free SPSC: write_idx is only modified by the producer, read_idx only
+// by the consumer.  Both are unmasked uint32_t counters — mask with
+// AUDIO_FIFO_BITS when indexing into buffer[].  Level = write_idx - read_idx
+// (unsigned subtraction handles wrap correctly).
 typedef struct {
     audio_sample_t buffer[AUDIO_FIFO_SIZE];
     volatile uint32_t write_idx;
     volatile uint32_t read_idx;
     volatile fifo_state_t state;
-    // mutex_t mutex;
-    // semaphore_t data_available;
-    volatile uint32_t samples_in_fifo;
 } audio_fifo_t;
 
 // FIFO management functions (implemented in audio_fifo.c)
@@ -66,31 +66,26 @@ bool fifo_add_samples(audio_fifo_t *fifo, const audio_sample_t *samples_buffer, 
 
 // Inline functions for performance
 static inline uint32_t fifo_level(audio_fifo_t *fifo) {
-    return fifo->samples_in_fifo;
+    return fifo->write_idx - fifo->read_idx;
 }
 
 static inline bool fifo_add_sample(audio_fifo_t *fifo, audio_sample_t sample) {
-    if (fifo->samples_in_fifo == AUDIO_FIFO_SIZE) {
+    uint32_t level = fifo->write_idx - fifo->read_idx;
+    if (level == AUDIO_FIFO_SIZE) {
         return false;
     }
-    fifo->buffer[fifo->write_idx] = sample;
-    fifo->write_idx = (fifo->write_idx + 1) & AUDIO_FIFO_BITS;
-    // Disable interrupts around the counter increment: the PWM ISR (consumer)
-    // runs on the same core and its samples_in_fifo-- can preempt the
-    // load-add-store here, causing a lost decrement and an inflated count.
-    uint32_t irq_save = save_and_disable_interrupts();
-    fifo->samples_in_fifo++;
-    if (fifo->samples_in_fifo >= AUDIO_FIFO_START_THRESHOLD) {
+    fifo->buffer[fifo->write_idx & AUDIO_FIFO_BITS] = sample;
+    fifo->write_idx++;
+    if (level + 1 >= AUDIO_FIFO_START_THRESHOLD) {
         fifo->state = FIFO_STATE_RUNNING;
     }
-    restore_interrupts(irq_save);
     return true;
 }
 
 uint32_t fifo_take_samples(audio_fifo_t *fifo, uint32_t num_samples);
 
 static inline uint32_t fifo_free_space(audio_fifo_t *fifo) {
-   return AUDIO_FIFO_SIZE - fifo->samples_in_fifo;
+   return AUDIO_FIFO_SIZE - (fifo->write_idx - fifo->read_idx);
 }
 
 // Inline version of fifo_take_samples for performance-critical code
@@ -98,10 +93,10 @@ static inline uint32_t fifo_take_samples_inline(audio_fifo_t *fifo, uint32_t num
     if (fifo->state == FIFO_STATE_STOPPED) {
         return 0;
     }
-    uint32_t samples_returned = fifo->samples_in_fifo < num_samples ? fifo->samples_in_fifo : num_samples;
-    fifo->read_idx = (fifo->read_idx + samples_returned) & AUDIO_FIFO_BITS;
-    fifo->samples_in_fifo -= samples_returned;
-    if (fifo->samples_in_fifo == 0) {
+    uint32_t level = fifo->write_idx - fifo->read_idx;
+    uint32_t samples_returned = level < num_samples ? level : num_samples;
+    fifo->read_idx += samples_returned;
+    if (fifo->write_idx == fifo->read_idx) {
         fifo->state = FIFO_STATE_STOPPED;
     }
     return samples_returned;
