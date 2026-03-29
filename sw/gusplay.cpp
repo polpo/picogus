@@ -74,7 +74,7 @@ static void init_audio(void) {
 
 // Setup values for audio sample clock
 // 8390 clock cycles per sample (370MHz / 8390 ~= 44100Hz)
-static constexpr uint32_t clocks_per_sample_minus_one = (SYS_CLK_HZ / 44100) - 1;
+static constexpr uint32_t clocks_per_sample_minus_one = (RP2_CLOCK_SPEED * 1000u / 44100) - 1;
 static constexpr uint pwm_slice_num = 4; // slices 0-3 are taken by USB joystick support
 
 void audio_sample_handler(void) {

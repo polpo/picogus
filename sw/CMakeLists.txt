@@ -57,18 +57,10 @@ endfunction()
 
 # Global definitions across all targets
 add_compile_definitions(
-    # 370MHz is extremely closely evenly divisible by 44100Hz
+    # 370MHz is extremely closely evenly divisible by 44100Hz.
+    # Actual overclock happens at runtime via overclock_370mhz() since 370MHz
+    # requires PLL REFDIV=2 which can't be set via SDK boot-time defaults.
     RP2_CLOCK_SPEED=370000
-    SYS_CLK_HZ=370000000
-    # Manually set up PLLs because of non-default REFDIV
-    PLL_SYS_REFDIV=2
-    PLL_SYS_VCO_FREQ_HZ=1110000000
-    PLL_SYS_POSTDIV1=3
-    PLL_SYS_POSTDIV2=1
-    # Set voltage before main so no need to do so on the fly
-    SYS_CLK_VREG_VOLTAGE_AUTO_ADJUST=1
-    SYS_CLK_VREG_VOLTAGE_MIN=VREG_VOLTAGE_1_25
-    SYS_CLK_VREG_VOLTAGE_AUTO_ADJUST_DELAY_US=10000
     PICO_DEFAULT_UART=0
     PICO_DEFAULT_UART_TX_PIN=28
     PICO_DEFAULT_UART_RX_PIN=-1

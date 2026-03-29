@@ -20,6 +20,7 @@
 #include <stdio.h>
 
 #include "flash_settings.h"
+#include "overclock.h"
 #include "hardware/flash.h"
 #include "hardware/sync.h"
 #include "hardware/clocks.h"
@@ -211,8 +212,8 @@ void saveSettings(const Settings* settings)
     flash_range_erase(SETTINGS_SECTOR, FLASH_SECTOR_SIZE);    // last sector
     putchar('/');
     flash_range_program(SETTINGS_SECTOR, data, FLASH_PAGE_SIZE);
-    set_sys_clock_khz(RP2_CLOCK_SPEED, true);
     restore_interrupts(ints);
+    overclock_370mhz();
     printf("settings saved");
 }
 

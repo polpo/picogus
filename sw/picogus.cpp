@@ -27,6 +27,7 @@
 #include "hardware/vreg.h"
 #include "hardware/clocks.h"
 
+#include "system/overclock.h"
 #include "system/pico_reflash.h"
 #include "system/flash_settings.h"
 
@@ -1207,7 +1208,7 @@ __force_inline bool ior_has_data() {
 }
 
 #if AUDIO_CALLBACK_CORE0
-static constexpr uint32_t clocks_per_sample_minus_one = (SYS_CLK_HZ / 44100) - 1;
+static constexpr uint32_t clocks_per_sample_minus_one = (RP2_CLOCK_SPEED * 1000u / 44100) - 1;
 static constexpr uint pwm_slice_num = 4; // slices 0-3 are taken by USB joystick support
 #endif
 
@@ -1215,6 +1216,7 @@ static constexpr uint pwm_slice_num = 4; // slices 0-3 are taken by USB joystick
 int main()
 {
     busy_wait_ms(250);
+    overclock_370mhz();
 #ifdef ASYNC_UART
     stdio_async_uart_init_full(UART_ID, BAUD_RATE, UART_TX_PIN, UART_RX_PIN);
 #else
