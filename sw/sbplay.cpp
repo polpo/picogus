@@ -99,7 +99,6 @@ static struct {
     sample_pair buffer[OPL_FIFO_SIZE];
     volatile uint32_t write_idx;
     volatile uint32_t read_idx;
-    volatile fifo_state_t state;
 } opl_out_fifo;
 
 static inline uint32_t opl_fifo_free_space() {
@@ -201,10 +200,11 @@ void audio_sample_handler(void) {
     }
 #endif
 
-    if (opl_out_fifo.state != FIFO_STATE_STOPPED && opl_out_fifo.write_idx - opl_out_fifo.read_idx >= 1) {
+    // OPL FIFO: no start-threshold needed (same-core, filled continuously).
+    // Just check level directly.
+    if (opl_out_fifo.write_idx != opl_out_fifo.read_idx) {
         sample_pair opl = opl_out_fifo.buffer[opl_out_fifo.read_idx & OPL_FIFO_BITS];
         opl_out_fifo.read_idx++;
-        if (opl_out_fifo.write_idx == opl_out_fifo.read_idx) opl_out_fifo.state = FIFO_STATE_STOPPED;
         sample_l += scale_sample(opl.data16[0], volume.opl[0], 0);
         sample_r += scale_sample(opl.data16[1], volume.opl[1], 0);
     }

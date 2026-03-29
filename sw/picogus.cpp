@@ -786,8 +786,10 @@ __force_inline void handle_iow(void) {
 #else
     if ((port >> 4) == sb_port_test) {
         switch (port - settings.SB.basePort) {
-        // OPL ports
-        case 0x8:
+        // OPL ports: base+0..3 are OPL3 (bank 1 + bank 2).
+        // base+8..9 are SB16 duplicates of base+0..1 (bank 1 only).
+        case 0x0:
+        case 0x8: // OPL bank 1 address
             // Fast write
             pio_sm_put(pio0, IOW_PIO_SM, IO_END);
 #if OPL_CMD_BUFFER
@@ -798,7 +800,8 @@ __force_inline void handle_iow(void) {
             // Fast write - return early as we've already written 0x0u to the PIO
             return;
             break;
-        case 0x9:
+        case 0x1:
+        case 0x9: // OPL bank 1 data
             pio_sm_put(pio0, IOW_PIO_SM, IO_WAIT);
 #if OPL_CMD_BUFFER
             {
@@ -816,7 +819,7 @@ __force_inline void handle_iow(void) {
             OPL_Pico_WriteRegister(opl_addr, iow_read & 0xff);
 #endif
             break;
-        case 0xA: // OPL3 bank 2 address
+        case 0x2: // OPL3 bank 2 address
             // Fast write
             pio_sm_put(pio0, IOW_PIO_SM, IO_END);
 #if OPL_CMD_BUFFER
@@ -825,7 +828,7 @@ __force_inline void handle_iow(void) {
             opl_addr = 0x100 | (iow_read & 0xff);
 #endif
             return;
-        case 0xB: // OPL3 bank 2 data
+        case 0x3: // OPL3 bank 2 data
             pio_sm_put(pio0, IOW_PIO_SM, IO_WAIT);
 #if OPL_CMD_BUFFER
             {
@@ -1057,10 +1060,14 @@ __force_inline void handle_ior(void) {
     if ((port >> 4) == sb_port_test) {
         pio_sm_put(pio0, IOR_PIO_SM, IO_WAIT);
         switch (port - settings.SB.basePort) {
-        case 0x8:
+        case 0x0:
+        case 0x8: // OPL bank 1 status
             // Timer state is maintained on Core 0 (carve-out handles timer regs immediately),
             // so OPL_Pico_PortRead never needs to wait for the cmd buffer to drain.
             pio_sm_put(pio0, IOR_PIO_SM, IOR_SET_VALUE | OPL_Pico_PortRead(OPL_REGISTER_PORT));
+            break;
+        case 0x2: // OPL3 bank 2 status
+            pio_sm_put(pio0, IOR_PIO_SM, IOR_SET_VALUE | OPL_Pico_PortRead(OPL_REGISTER_PORT_OPL3));
             break;
         default:
             pio_sm_put(pio0, IOR_PIO_SM, IOR_SET_VALUE | sbdsp_read(port & 0xF));
