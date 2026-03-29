@@ -45,18 +45,18 @@ static critical_section_t midi_crit;
 typedef uint32_t Bit32u;
 typedef int32_t Bits;
 
-#define SYSEX_SIZE 8192     // sysex buffer for delay calculation
-
 /* RAWBUF: This is the buffer for outgoing MIDI data. The larger the buffer,
     the less likely it is to overrun when SysEx delay is enabled and large SysEx
     transfers are occurring. */
 //#define RAWBUF  14336
 #ifdef MPU_ONLY
+#define SYSEX_SIZE 8192     // sysex buffer for delay calculation
 #define RAWBUF  65536
 #define RAWBUF_BITS  65535
 #else
-#define RAWBUF  16384
-#define RAWBUF_BITS  16383
+#define SYSEX_SIZE 2048     // sysex buffer for delay calculation
+#define RAWBUF  8192
+#define RAWBUF_BITS  8191
 #endif // MPU_ONLY
 
 typedef struct ring_buffer {
