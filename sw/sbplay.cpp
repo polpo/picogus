@@ -36,7 +36,11 @@
 
 #include "audio/audio_fifo.h"
 #if SOUND_SB
+#ifdef SOUND_WSS
+#include "ad1848/ad1848.h"
+#else
 #include "sbdsp/sbdsp.h"
+#endif
 #endif // SOUND_SB
 #if defined(SOUND_SB) || defined(USB_MOUSE) || defined(SOUND_MPU)
 #include "system/pico_pic.h"
@@ -61,7 +65,7 @@ extern cms_buffer_t opl_cmd_buffer;
 #include "mouse/sermouse.h"
 #endif
 
-#ifdef SOUND_MPU
+#if (defined(SOUND_MPU) || defined(SOUND_SB))
 #include "system/flash_settings.h"
 extern Settings settings;
 #include "mpu401/export.h"
@@ -97,10 +101,11 @@ static constexpr uint32_t opl_ratio = fixed_ratio(49716, 44100);
 static audio_fifo_t opl_out_fifo;
 
 // Stereo OPL resampler state.
-// For ymfm backends (USE_YMFM_OPL / USE_YMF3812), OPL_Pico_stereo provides
-// true stereo (or symmetric mono for ym3812) from a single generate() call.
-// For emu8950 (pg-adlib), OPL_Pico_stereo doesn't exist — fall back to
-// OPL_Pico_simple and duplicate to both channels.
+// For stereo backends (dbopl, ymfm), OPL_Pico_stereo provides true stereo.
+// For emu8950, fall back to OPL_Pico_simple and duplicate to both channels.
+// Samples are clamped to int16_t before the resampler buffers to keep
+// the 16-bit phase interpolation products within int32_t range.
+// Volume is applied in the ISR after FIFO read, not here.
 static int32_t opl_resamp_l = 0, opl_resamp_r = 0;
 static int32_t opl_resamp_buf_l[2] = {0}, opl_resamp_buf_r[2] = {0};
 static uint32_t opl_resamp_phase = 0; // Q16.16 phase accumulator
@@ -115,12 +120,12 @@ static void opl_resample_tick()
 #if defined(USE_YMFM_OPL) || defined(USE_DBOPL_OPL) || defined(USE_YMF3812)
         int32_t l, r;
         OPL_Pico_stereo(&l, &r, 1);
-        opl_resamp_buf_l[0] = scale_sample(l, opl_volume, 1);
-        opl_resamp_buf_r[0] = scale_sample(r, opl_volume, 1);
+        opl_resamp_buf_l[0] = clamp16(l);
+        opl_resamp_buf_r[0] = clamp16(r);
 #else
         int32_t mono;
         OPL_Pico_simple(&mono, 1);
-        opl_resamp_buf_l[0] = opl_resamp_buf_r[0] = scale_sample(mono, opl_volume, 1);
+        opl_resamp_buf_l[0] = opl_resamp_buf_r[0] = clamp16(mono);
 #endif
         opl_resamp_phase -= (1u << 16);
     }
@@ -130,8 +135,12 @@ static void opl_resample_tick()
         opl_resamp_l = ((opl_resamp_buf_l[0] * phase_frac) + (opl_resamp_buf_l[1] * ((1 << 16) - phase_frac))) >> 16;
         opl_resamp_r = ((opl_resamp_buf_r[0] * phase_frac) + (opl_resamp_buf_r[1] * ((1 << 16) - phase_frac))) >> 16;
     }
-    
 }
+
+typedef union {
+    uint32_t data32;
+    int16_t  data16[2];
+} sample_pair;
 
 // Setup values for audio sample clock
 // 8390 clock cycles per sample (370MHz / 8390 ~= 44100Hz)
@@ -143,10 +152,6 @@ static constexpr uint pwm_slice_num = 4; // slices 0-3 are taken by USB joystick
 // 256 samples ~= 5.8 ms at 44100 Hz — matches one USB audio buffer period.
 static constexpr uint32_t OPL_FILL_PER_ITER = 256;
 
-typedef union {
-    uint32_t data32;
-    int16_t data16[2];
-} sample_pair;
 
 #ifdef CDROM
 static audio_fifo_t* cd_fifo;
@@ -158,16 +163,22 @@ void audio_sample_handler(void) {
     int32_t sample_l = 0, sample_r = 0;
 
 #ifdef SOUND_SB
-    sample_l = sample_r = sbdsp_sample();
+    {
+#ifdef SOUND_WSS
+        uint32_t card_stereo = ad1848_sample_stereo();
+#else
+        uint32_t card_stereo = sbdsp_sample_stereo();
+#endif
+        sample_l = scale_sample((int16_t)(card_stereo & 0xFFFF), volume.sb_pcm[0], 0);
+        sample_r = scale_sample((int16_t)(card_stereo >> 16),    volume.sb_pcm[1], 0);
+    }
 #endif
 
 #ifdef CDROM
-    // Read L+R sample pair directly from FIFO using read_idx before advancing.
-    // Must request exactly 2 (stereo pair) or skip — never read partial pairs.
     if (cd_fifo->state != FIFO_STATE_STOPPED && cd_fifo->write_idx - cd_fifo->read_idx >= 2) {
         uint32_t idx = cd_fifo->read_idx;
-        sample_l += scale_sample(cd_fifo->buffer[idx & AUDIO_FIFO_BITS],              cd_audio_volume, 0);
-        sample_r += scale_sample(cd_fifo->buffer[(idx + 1) & AUDIO_FIFO_BITS], cd_audio_volume, 0);
+        sample_l += scale_sample(cd_fifo->buffer[idx & AUDIO_FIFO_BITS],       volume.cd_audio[0], 0);
+        sample_r += scale_sample(cd_fifo->buffer[(idx + 1) & AUDIO_FIFO_BITS], volume.cd_audio[1], 0);
         cd_fifo->read_idx = idx + 2;
         if (cd_fifo->write_idx == cd_fifo->read_idx) cd_fifo->state = FIFO_STATE_STOPPED;
     }
@@ -176,17 +187,22 @@ void audio_sample_handler(void) {
     // Read OPL stereo pair from FIFO — always consume 2 samples (L then R).
     if (opl_out_fifo.state != FIFO_STATE_STOPPED && opl_out_fifo.write_idx - opl_out_fifo.read_idx >= 2) {
         uint32_t idx = opl_out_fifo.read_idx;
-        sample_l += opl_out_fifo.buffer[idx & AUDIO_FIFO_BITS];
-        sample_r += opl_out_fifo.buffer[(idx + 1) & AUDIO_FIFO_BITS];
+        sample_l += scale_sample(opl_out_fifo.buffer[idx & AUDIO_FIFO_BITS],       volume.opl[0], 0);
+        sample_r += scale_sample(opl_out_fifo.buffer[(idx + 1) & AUDIO_FIFO_BITS], volume.opl[1], 0);
         opl_out_fifo.read_idx = idx + 2;
         if (opl_out_fifo.write_idx == opl_out_fifo.read_idx) opl_out_fifo.state = FIFO_STATE_STOPPED;
     }
 
-    const sample_pair clamped = {.data16 = {
-        clamp16(sample_l),
-        clamp16(sample_r)
-    }};
-    audio_pio->txf[PICO_AUDIO_I2S_SM] = clamped.data32;
+#ifdef SOUND_SB
+    // apply SB master volume and clamp the output
+    sample_l = scale_sample(sample_l, volume.sb_master[0], 1);
+    sample_r = scale_sample(sample_r, volume.sb_master[1], 1);
+#else
+    sample_l = clamp16(sample_l);
+    sample_r = clamp16(sample_r);
+#endif
+
+    audio_pio->txf[PICO_AUDIO_I2S_SM] = ((sample_l & 0xFFFF) | (sample_r << 16));
 }
 
 void play_adlib() {
@@ -212,7 +228,15 @@ void play_adlib() {
 #endif
 
 #if SOUND_SB
+#ifdef SOUND_WSS
+    ad1848_init();
+#else
     sbdsp_init();
+    sbdsp_set_type(settings.SB16.sbType);
+    sbdsp_set_irq(settings.SB16.irq);
+    sbdsp_set_dma(settings.SB16.dma);
+    sbdsp_set_options(settings.SB16.options);
+#endif
 #endif
     init_audio();
 
@@ -255,6 +279,9 @@ void play_adlib() {
         }
 #endif
 #endif
+
+        // Process DSP commands
+        sbdsp_process();
 
         // Generate OPL stereo pairs and add to output FIFO (interleaved L, R).
         // Need 2 free slots per output sample.

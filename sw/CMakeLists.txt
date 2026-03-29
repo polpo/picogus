@@ -278,26 +278,31 @@ endfunction()
 
 ################################################################################
 # Build SB firmware
+option(SOUND_WSS "Build SB firmware with WSS (AD1848) support instead of SB16 DSP" OFF)
+
 function(build_sb TARGET_NAME MULTIFW)
     set(USB_JOYSTICK TRUE)
-    set(SOUND_MPU TRUE)
+    set(SOUND_MPU FALSE)
     set(SOUND_OPL TRUE)
     set(CDROM TRUE)
     config_target(${TARGET_NAME} ${MULTIFW})
     pico_set_program_name(${TARGET_NAME} "picogus-sb")
     target_sources(${TARGET_NAME} PRIVATE
         audio/volctrl.cpp
-        sbdsp/sbdsp.cpp
         sbplay.cpp
         isa/isa_dma.c
         audio/audio_fifo.c
         audio/audio_i2s_minimal.c
     )
+    if(SOUND_WSS)
+        target_sources(${TARGET_NAME} PRIVATE ad1848/ad1848.cpp)
+        target_compile_definitions(${TARGET_NAME} PRIVATE SOUND_WSS=1)
+    else()
+        target_sources(${TARGET_NAME} PRIVATE sbdsp/sbdsp.cpp)
+    endif()
     target_compile_definitions(${TARGET_NAME} PRIVATE
         SOUND_SB=1
         SOUND_DSP=1
-        SB_BUFFERLESS=1
-        SB_BUFFERLESS_NG=1
         USE_CD_AUDIO_FIFO=1
         # USE_IRQ=1
         # AUDIO_CALLBACK_CORE0=1
@@ -713,6 +718,27 @@ elseif(PROJECT_TYPE STREQUAL "USB")
 elseif(PROJECT_TYPE STREQUAL "NE2K")
     set(FW_TARGET pg-ne2k)
     build_ne2k(pg-ne2k FALSE)
+elseif(PROJECT_TYPE STREQUAL "ANALYZER")
+    set(FW_TARGET pg-analyzer)
+    add_executable(pg-analyzer isa_analyzer.cpp)
+    pico_set_program_name(pg-analyzer "picogus-analyzer")
+    pico_set_program_version(pg-analyzer ${CMAKE_PROJECT_VERSION})
+
+    target_compile_definitions(pg-analyzer PRIVATE
+        PICO_MALLOC_PANIC=0
+    )
+
+    pico_generate_pio_header(pg-analyzer ${CMAKE_CURRENT_LIST_DIR}/isa_analyzer.pio)
+
+    target_link_libraries(pg-analyzer
+        pico_stdlib
+        hardware_pio
+    )
+
+    pico_enable_stdio_uart(pg-analyzer 1)
+    pico_enable_stdio_usb(pg-analyzer 0)
+    pico_enable_stdio_semihosting(pg-analyzer 0)
+    pico_add_extra_outputs(pg-analyzer)
 endif()
 
 ################################################################################

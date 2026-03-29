@@ -68,6 +68,10 @@ static const char *modenames[8] = {
 #define CMD_MPUFAKE    0x22 // MPU fake all notes off
 
 #define CMD_OPLWAIT    0x30 // Adlib speed sensitive fix
+#define CMD_SBTYPE     0x31 // SB type
+#define CMD_SBIRQ      0x32 // SB IRQ
+#define CMD_SBDMA      0x33 // SB DMA
+#define CMD_SBOPTS     0x34 // SB options (mixer lock, time constant fix, etc.)
 
 #define CMD_MOUSEPORT  0x40 // Mouse Base port
 #define CMD_MOUSEPROTO 0x41 // Mouse protocol

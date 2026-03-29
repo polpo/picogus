@@ -27,17 +27,23 @@ extern "C" {
 #include "system/flash_settings.h"
 #include "clamp.h"
 
-extern int32_t opl_volume;
-extern int32_t sb_volume;
-extern int32_t cd_audio_volume;
-extern int32_t gus_volume;
-extern int32_t psg_volume;
+struct volctrl_t {
+    // 0 - left, 1 - right
+    int32_t opl[2];             // OPL3   (aka MIDI)
+    int32_t sb_pcm[2];          // SB PCM (aka Voice)
+    int32_t cd_audio[2];        // CD audio
+    int32_t sb_master[2];       // SB Master volume
 
+    int32_t gus;
+    int32_t psg;
+};
+extern struct volctrl_t volume;
+
+#define VOLCTRL_FRACT_BITS 12       // leave enough headroom for mixing
 
 extern int32_t set_volume_scale (uint8_t percent);
-
 static inline int32_t scale_sample (int32_t sample, const int32_t scale, const bool clamp) {
-    sample = (int32_t)(((int64_t)sample * scale) >> 16);
+    sample = (sample * scale) >> VOLCTRL_FRACT_BITS;
 
     if (clamp)
         sample = clamp16(sample);

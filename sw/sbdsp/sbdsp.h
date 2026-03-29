@@ -32,7 +32,6 @@ SPDX-License-Identifier: MIT
 
 #include <inttypes.h>
 #include <stdbool.h>
-#include "audio/audio_fifo.h"
 
 typedef struct sbdsp_t {
     uint8_t inbox;
@@ -41,35 +40,87 @@ typedef struct sbdsp_t {
     uint8_t current_command;
     uint8_t current_command_index;
 
-    uint16_t dma_interval;     
-    int16_t dma_interval_trim;
-    audio_fifo_t audio_fifo;
+    uint8_t mixer_command;
+
+    uint16_t dma_interval;
 
     uint16_t dac_pause_duration;
     uint8_t dac_pause_duration_low;
 
     uint16_t dma_block_size;
-    uint32_t dma_sample_count;
-    uint32_t dma_sample_count_rx;
+    uint32_t dma_bytes_per_frame;
+    uint16_t dma_sample_count;
+    uint32_t dma_xfer_count;
+    uint32_t dma_xfer_count_left;
 
     uint8_t time_constant;
     uint16_t sample_rate;
-                
-    bool autoinit;    
+
+    bool autoinit;
     bool dma_enabled;
+    bool dma_16bit;
+    bool dma_stereo;
+    bool dma_stereo_sbpro;
+    bool dma_signed;
+    volatile bool dma_done;
 
     bool speaker_on;
-        
+
     volatile bool dav_pc;
     volatile bool dav_dsp;
     volatile bool dsp_busy;
     bool dac_resume_pending;
+    volatile bool irq_8_pending;
+    volatile bool irq_16_pending;
+    uint8_t reset_state;
 
-    uint8_t reset_state;  
-   
-#ifdef SB_BUFFERLESS
-    volatile int16_t cur_sample;
+    union {
+        struct { uint8_t minor, major; };
+        uint16_t w;
+    } dsp_version;
+
+    union {
+        uint8_t irq;
+        uint8_t dma;
+    } resources;
+
+    uint8_t ident_e2[2];
+
+    union {
+        struct {
+            uint8_t fixTC      : 1;
+            uint8_t lockMixer  : 2;
+        };
+        uint8_t b;
+    } options;
+
+    volatile uint32_t cur_sample;  // packed stereo pair: L in low 16, R in high 16
+#if 0
+    struct {
+        uint32_t old_sample;
+        uint32_t new_sample;
+        volatile uint32_t dma_sample;
+        volatile bool dma_sample_ready;
+        bool dma_pending;        // a DMA transfer is in flight
+        int32_t samplecnt;
+    } rsm;                       // resampling state, memset to zero on start/stop
+#else
+    struct {
+        int32_t  phase_acc;
+        uint32_t buf[2];        // sample buffer, used for linear interpolation
+
+        // DMA stuff
+        // TODO: make it a very short (max. 8 samples) ring buffer for Creative ADPCM
+        // and rates slightly higher than 44100Hz (SB16 cap is 45454Hz)
+    } rs;
+    struct {
+        volatile uint32_t dma_sample;
+        volatile bool dma_sample_ready;
+        bool dma_pending;        // a DMA transfer is in flight
+    } rsm;
 #endif
+
+    int32_t rateratio;
 } sbdsp_t;
 
 void sbdsp_init();
@@ -79,14 +130,19 @@ uint8_t sbdsp_read(uint8_t address);
 uint16_t sbdsp_sample_rate();
 int16_t sbdsp_muted();
 
-#ifdef SB_BUFFERLESS
-static inline int16_t sbdsp_sample() {
+uint32_t sbdsp_generate_sample();
+static inline uint32_t sbdsp_sample_stereo() {
     extern sbdsp_t sbdsp;
-    return (sbdsp.speaker_on & ~sbdsp.dac_resume_pending) ? sbdsp.cur_sample : 0;
+    if (sbdsp.dma_enabled && !sbdsp.dac_resume_pending) sbdsp.cur_sample = sbdsp_generate_sample();
+    return sbdsp.speaker_on ? sbdsp.cur_sample : 0;
 }
-#endif
 
-void sbdsp_fifo_rx(uint8_t byte);
-void sbdsp_fifo_clear();
+// -------------------------
+// PicoGUS configuration interface helpers
+
+void sbdsp_set_type(uint8_t type);
+void sbdsp_set_irq(uint8_t irq); 
+void sbdsp_set_dma(uint8_t dma); 
+void sbdsp_set_options(uint8_t options); 
 
 #endif // SBDSP_H

@@ -85,6 +85,13 @@ static const Settings defaultSettings = {
         .cdVol = 100,
         .gusVol = 100,
         .psgVol = 80
+    },
+    .SB16 = {
+        .irq = 5,
+        .dma = 1,
+        .sbType = 6,
+        .fixTC = 0,
+        .lockMixer = 0
     }
 };
 
@@ -125,6 +132,11 @@ static const VersionFields versionFieldsTable[] = {
     // version 4 - added Volume settings
     {(const FieldInfo[]){
         FIELD(Volume),
+    }, 1},
+
+    // version 5 - added SB16 settings
+    {(const FieldInfo[]){
+        FIELD(SB16),
     }, 1},
 };
 

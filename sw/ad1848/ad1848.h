@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2022-2025  Ian Scott
+ *  Copyright (C) 2024  Ian Scott
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -15,30 +15,24 @@
  *  with this program; if not, write to the Free Software Foundation, Inc.,
  *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
-#include <conio.h>
-#include <dos.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+
+#pragma once
+
 #include <stdint.h>
 #include <stdbool.h>
-#include <i86.h>
 
-#include "../common/picogus.h"
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-enum CommandType
-{
-    ARG_NONE,
-    ARG_REQUIRE
-};
+void ad1848_init();
+void ad1848_write(uint8_t port, uint8_t data);
+uint8_t ad1848_read(uint8_t port);
 
-typedef struct {
-    char *name;
-    bool (*routine)(const char*, const int, const int, const int);
-    int cmd;
-    int type;
-    char *def;
-    int cmd2;
-    int cmd3;
-} ParseCommand;
+// Returns packed stereo pair: L in low 16 bits, R in high 16 bits.
+// Naturally atomic on Cortex-M0+ (32-bit aligned).
+uint32_t ad1848_sample_stereo();
 
+#ifdef __cplusplus
+}
+#endif

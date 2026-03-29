@@ -61,7 +61,13 @@ M62429* m62429;
 
 
 #ifdef SOUND_SB
+#ifdef SOUND_WSS
+#include "ad1848/ad1848.h"
+static constexpr uint16_t wss_port_test = 0x13;
+static uint8_t wss_config = 0b00001010; // DMA 1 and IRQ 7
+#else
 #include "sbdsp/sbdsp.h"
+#endif
 static uint16_t sb_port_test;
 #endif
 #ifdef SOUND_OPL
@@ -166,7 +172,8 @@ void processSettings(void);
 const char* firmware_string = PICO_PROGRAM_NAME " v" PICO_PROGRAM_VERSION_STRING;
 
 static uint8_t basePort_low;
-static uint8_t  mouseSensitivity_low;
+static uint8_t mouseSensitivity_low;
+static uint8_t picogus_dataLatch_low;
 
 __force_inline void select_picogus(uint8_t value) {
     // printf("select picogus %x\n", value);
@@ -237,6 +244,10 @@ __force_inline void select_picogus(uint8_t value) {
         cur_read_idx = 0;
 #endif
         break;
+    case CMD_SBTYPE:
+    case CMD_SBIRQ:
+    case CMD_SBDMA:
+    case CMD_SBOPTS:
     case CMD_CDSTATUS:
     case CMD_CDLOAD:
     case CMD_CDAUTOADV:
@@ -353,6 +364,31 @@ __force_inline void write_picogus_high(uint8_t value) {
         break;
     case CMD_OPLWAIT: // Adlib speed sensitive fix
         settings.SB.oplSpeedSensitive = value;
+        break;
+        
+    case CMD_SBTYPE:
+        settings.SB16.sbType = value;
+#ifdef SOUND_SB
+        sbdsp_set_type(value);
+#endif
+        break;
+    case CMD_SBIRQ:
+        settings.SB16.irq = value;
+#ifdef SOUND_SB
+        sbdsp_set_irq(value);
+#endif
+        break;
+    case CMD_SBDMA:
+        settings.SB16.dma = value;
+#ifdef SOUND_SB
+        sbdsp_set_dma(value);
+#endif
+        break;
+    case CMD_SBOPTS:
+        settings.SB16.options = value;
+#ifdef SOUND_SB
+        sbdsp_set_options(value);
+#endif
         break;
     case CMD_MOUSEPORT:  // USB Mouse port (0 - disabled)
         settings.Mouse.basePort = (value || basePort_low) ? ((value << 8) | basePort_low) : 0xFFFF;
@@ -567,6 +603,14 @@ __force_inline uint8_t read_picogus_high(void) {
         return settings.Mouse.sensitivity >> 8;
     case CMD_NE2KPORT: // NE2000 Base port
         return settings.NE2K.basePort == 0xFFFF ? 0 : (settings.NE2K.basePort >> 8);
+    case CMD_SBTYPE:   // SB type
+        return settings.SB16.sbType;
+    case CMD_SBIRQ:    // SB IRQ
+        return settings.SB16.irq;
+    case CMD_SBDMA:    // SB DMA
+        return settings.SB16.dma;
+    case CMD_SBOPTS:   // SB Options
+        return settings.SB16.options;
     /*
     case CMD_WIFISSID:
         break;
@@ -726,6 +770,20 @@ __force_inline void handle_iow(void) {
     } else // if follows down below
 #endif // SOUND_GUS
 #ifdef SOUND_SB
+#ifdef SOUND_WSS
+    if ((port >> 4) == wss_port_test) {
+        pio_sm_put(pio0, IOW_PIO_SM, IO_WAIT);
+        switch (port & 0xf) {
+        // WSS config ports
+        case 0 ... 3:
+            break;
+        // AD1848 ports
+        default:
+            ad1848_write(port & 0x3, iow_read & 0xFF);
+            break;
+        }
+    } else // if follows down below
+#else
     if ((port >> 4) == sb_port_test) {
         switch (port - settings.SB.basePort) {
         // OPL ports
@@ -786,13 +844,12 @@ __force_inline void handle_iow(void) {
             break;
         // DSP ports
         default:
-            pio_sm_put(pio0, IOW_PIO_SM, IO_WAIT);                        
-            sbdsp_process();
-            sbdsp_write(port & 0xF,iow_read & 0xFF);       
-            sbdsp_process();                                         
+            pio_sm_put(pio0, IOW_PIO_SM, IO_WAIT);
+            sbdsp_write(port & 0xF, iow_read & 0xFF);
             break;
-        } 
+        }
     } else // if follows down below
+#endif // SOUND_WSS
 #endif // SOUND_SB
 #ifdef CDROM
     if ((port >> 4) == cdrom_port_test) {      
@@ -978,6 +1035,25 @@ __force_inline void handle_ior(void) {
     } else // if follows down below
 #endif
 #if defined(SOUND_SB)
+#ifdef SOUND_WSS
+    if ((port >> 4) == wss_port_test) {
+        pio_sm_put(pio0, IOR_PIO_SM, IO_WAIT);
+        switch (port & 0xf) {
+        case 0: // interface register
+            pio_sm_put(pio0, IOR_PIO_SM, IOR_SET_VALUE | wss_config);
+            break;
+        case 1 ... 2:
+            pio_sm_put(pio0, IOR_PIO_SM, IOR_SET_VALUE | 0xff);
+            break;
+        case 3: // chip ID register
+            pio_sm_put(pio0, IOR_PIO_SM, IOR_SET_VALUE | 0x04);
+            break;
+        default:
+            pio_sm_put(pio0, IOR_PIO_SM, IOR_SET_VALUE | ad1848_read(port & 0x3));
+            break;
+        }
+    } else // if follows down below
+#else
     if ((port >> 4) == sb_port_test) {
         pio_sm_put(pio0, IOR_PIO_SM, IO_WAIT);
         switch (port - settings.SB.basePort) {
@@ -987,12 +1063,11 @@ __force_inline void handle_ior(void) {
             pio_sm_put(pio0, IOR_PIO_SM, IOR_SET_VALUE | OPL_Pico_PortRead(OPL_REGISTER_PORT));
             break;
         default:
-            sbdsp_process();
-            pio_sm_put(pio0, IOR_PIO_SM, IOR_SET_VALUE | sbdsp_read(port & 0xF));        
-            sbdsp_process();
+            pio_sm_put(pio0, IOR_PIO_SM, IOR_SET_VALUE | sbdsp_read(port & 0xF));
             break;
         }
     } else // if follows down below
+#endif // SOUND_WSS
 #endif
 #if defined(CDROM)
     if ((port >> 4) == cdrom_port_test) {
@@ -1252,8 +1327,12 @@ int main()
 
 
 #ifdef SOUND_SB
+#ifdef SOUND_WSS
+    puts("Initializing WSS AD1848");
+#else
     puts("Initializing SoundBlaster DSP");
-    // sbdsp_init();
+#endif
+    // init actually happens on core 1 in play_adlib()
 #endif // SOUND_SB
 #ifdef SOUND_OPL
     puts("Creating OPL");

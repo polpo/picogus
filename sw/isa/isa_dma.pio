@@ -86,3 +86,67 @@ static inline void dma_write_program_init(PIO pio, uint sm, uint offset) {
 }
 %}
 
+; Multi-transfer DMA: keeps DRQ asserted for multiple transfers in a single frame.
+; Used by WSS (AD1848) which transfers multi-byte audio frames (1-4 bytes) per DMA request.
+; 12 instructions
+.program dma_write_multi
+.side_set 1 opt                         ; sideset bit is ADS
+restart:
+    set pins, 0          side 0b0       ; deassert DRQ, muxes back to addr if canceled
+.wrap_target
+    out x, 32                           ; wait to trigger DMA operation - X has number of bytes to xfer minus 1
+    set pins, 1                         ; assert DRQ
+dma_loop:
+    wait 0 gpio IOW_PIN                 ; wait for IOW  assert - no sideset up to this point as it could interfere with isa_io.pio
+    wait 1 gpio DACK_PIN                ; wait for DACK assert 
+    jmp pin, dma_loop                   ; make sure both IOW+DACK asserted
+    jmp !x deassert_drq  side 0b1       ; if last loop, deassert DRQ - mux to data
+continue:
+    wait 1 gpio IOW_PIN  side 0b1       ; wait for IOW deassert
+    in pins, 8           side 0b0       ; input data, muxes back to addr
+    jmp x-- dma_loop                    ; loop until (X+1) bytes have been transferred
+.wrap                                   ; we don't wait for DACK deassert here as it will not be compatible with DMA controller demand mode
+deassert_drq:
+    set pins, 0                         ; deassert DRQ
+    jmp continue
+
+% c-sdk {
+static inline void dma_write_multi_program_init(PIO pio, uint sm, uint offset, float clkdiv) {
+    pio_sm_config c = dma_write_multi_program_get_default_config(offset);
+
+    // Set up AD0 bus as input
+    sm_config_set_in_pins(&c, AD0_PIN);
+    // Autopush - default 8 bits (1 byte), reconfigurable at runtime for frame size
+    sm_config_set_in_shift(&c, true, true, 8);
+    sm_config_set_clkdiv(&c, clkdiv);
+
+    // Autopull 32 bits (loop count)
+    sm_config_set_out_shift(&c, false, true /* autopull */, 32);
+
+    // Set the pin direction for IOW and AD0 bus as input at the PIO
+    pio_sm_set_consecutive_pindirs(pio, sm, IOW_PIN, 1, false);
+    pio_sm_set_consecutive_pindirs(pio, sm, AD0_PIN, 8, false);
+
+    // Set IOW as JMP pin
+    sm_config_set_jmp_pin(&c, IOW_PIN);
+
+    // Config DMA pins
+    sm_config_set_set_pins(&c, DRQ_PIN, 1);
+    pio_gpio_init(pio, DRQ_PIN);
+    gpio_set_drive_strength(DRQ_PIN, GPIO_DRIVE_STRENGTH_12MA);
+    pio_sm_set_consecutive_pindirs(pio, sm, DRQ_PIN, 1, true);
+    pio_sm_set_consecutive_pindirs(pio, sm, DACK_PIN, 1, false);
+
+    // set up ADS
+    sm_config_set_sideset_pins(&c, ADS_PIN);
+    pio_gpio_init(pio, ADS_PIN);
+    pio_sm_set_consecutive_pindirs(pio, sm, ADS_PIN, 1, true);
+
+    // Load our configuration, and jump to the start of the program
+    pio_sm_init(pio, sm, offset, &c);
+
+    // Set the state machine running
+    pio_sm_set_enabled(pio, sm, true);
+}
+%}
+
