@@ -251,6 +251,7 @@ function(build_gus TARGET_NAME MULTIFW)
         audio/volctrl.cpp
         gusplay.cpp
         isa/isa_dma.c
+        audio/audio_i2s_minimal.c
     )
     target_compile_definitions(${TARGET_NAME} PRIVATE
         SOUND_GUS=1

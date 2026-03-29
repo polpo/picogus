@@ -23,10 +23,12 @@
 #if PICO_ON_DEVICE
 #include "hardware/clocks.h"
 #include "hardware/structs/clocks.h"
+#include "hardware/pwm.h"
+#include "hardware/pio.h"
 #endif
 
 #include "pico/stdlib.h"
-#include "pico/audio_i2s.h"
+#include "audio/audio_i2s_minimal.h"
 
 #include "system/pico_pic.h"
 
@@ -55,44 +57,31 @@ extern irq_handler_t GUS_DMA_isr_pt;
 extern dma_inst_t dma_config;
 
 #include "gus/gus-x.h"
-#define SAMPLES_PER_BUFFER 1024
 
 #define DMA_PIO_SM 2
 
-struct audio_buffer_pool *init_audio() {
+#define audio_pio __CONCAT(pio, PICO_AUDIO_I2S_PIO)
 
-    static audio_format_t audio_format = {
-            .sample_freq = 44100,
-            .format = AUDIO_BUFFER_FORMAT_PCM_S16,
-            .channel_count = 2,
-    };
-
-    static struct audio_buffer_format producer_format = {
-            .format = &audio_format,
-            .sample_stride = 4
-    };
-
-    struct audio_buffer_pool *producer_pool = audio_new_producer_pool(&producer_format, 2,
-                                                                      SAMPLES_PER_BUFFER); // todo correct size
-    bool __unused ok;
-    const struct audio_format *output_format;
-    struct audio_i2s_config config = {
+static void init_audio(void) {
+    const struct audio_i2s_config config = {
             .data_pin = PICO_AUDIO_I2S_DATA_PIN,
             .clock_pin_base = PICO_AUDIO_I2S_CLOCK_PIN_BASE,
             .dma_channel = 6,
-            .pio_sm = 3,
+            .pio_sm = PICO_AUDIO_I2S_SM,
     };
+    audio_i2s_minimal_setup(&config, 44100);
+}
 
-    output_format = audio_i2s_setup(&audio_format, &config);
-    if (!output_format) {
-        panic("PicoAudio: Unable to open audio device.\n");
-    }
+// Setup values for audio sample clock
+// 8390 clock cycles per sample (370MHz / 8390 ~= 44100Hz)
+static constexpr uint32_t clocks_per_sample_minus_one = (SYS_CLK_HZ / 44100) - 1;
+static constexpr uint pwm_slice_num = 4; // slices 0-3 are taken by USB joystick support
 
-    //ok = audio_i2s_connect(producer_pool);
-    ok = audio_i2s_connect_extra(producer_pool, false, 1, SAMPLES_PER_BUFFER, NULL);
-    assert(ok);
-    audio_i2s_set_enabled(true);
-    return producer_pool;
+void audio_sample_handler(void) {
+    pwm_clear_irq(pwm_slice_num);
+
+    uint32_t sample = GUS_sample_stereo();
+    audio_pio->txf[PICO_AUDIO_I2S_SM] = sample;
 }
 
 // void __xip_cache("my_sub_section") (play_gus)(void) {
@@ -134,6 +123,7 @@ void play_gus() {
 #endif
 #endif
     GUS_Setup();
+
 #ifdef USB_STACK
     // Init TinyUSB for joystick support
     tuh_init(BOARD_TUH_RHPORT);
@@ -143,42 +133,27 @@ void play_gus() {
     MPU401_Init(settings.MPU.delaySysex, settings.MPU.fakeAllNotesOff);
 #endif
 
-    struct audio_buffer_pool *ap = init_audio();
-    for (;;) {
-        // uint8_t active_voices = GUS_activeChannels();
-        uint32_t playback_rate = GUS_basefreq();
-        // if GUS sample rate changed
-        if (ap->format->sample_freq != playback_rate) {
-            // printf("changing sample rate to %d", playback_rate);
-            // todo hack overwriting const
-            ((struct audio_format *) ap->format)->sample_freq = playback_rate;
-        }
-        struct audio_buffer *buffer = take_audio_buffer(ap, true);
-        int16_t *samples = (int16_t *) buffer->buffer->bytes;
+    init_audio();
 
-        // uint32_t gus_audio_begin = time_us_32();
-        uint32_t sample_count = GUS_CallBack(buffer->max_sample_count, samples);
-        buffer->sample_count = sample_count;
-        /*
-        uint32_t gus_audio_elapsed = time_us_32() - gus_audio_begin;
-        if (active_voices) {
-            // printf("%d\n", gus->active_voices);
-            // printf("%d us %d samples (tgt 23220)\n", gus_audio_elapsed, buffer->max_sample_count);
-            // uart_print_hex_u32(gus_audio_elapsed);
-            if (gus_audio_elapsed > 23220) {
-                gpio_xor_mask(1u << PICO_DEFAULT_LED_PIN);
-            }
-        }
-        */
-        // gpio_xor_mask(1u << PICO_DEFAULT_LED_PIN);
-        give_audio_buffer(ap, buffer);
+    printf("GUS IRQ-driven audio started (fixed 44.1kHz output)\n");
+
+    // Use the PWM peripheral to trigger an IRQ at 44100Hz
+    pwm_config pwm_c = pwm_get_default_config();
+    pwm_config_set_wrap(&pwm_c, clocks_per_sample_minus_one);
+    pwm_init(pwm_slice_num, &pwm_c, false);
+    pwm_set_irq_enabled(pwm_slice_num, true);
+    irq_set_exclusive_handler(PWM_IRQ_WRAP, audio_sample_handler);
+    irq_set_priority(PWM_IRQ_WRAP, PICO_LOWEST_IRQ_PRIORITY);
+    irq_set_enabled(PWM_IRQ_WRAP, true);
+    pwm_set_enabled(pwm_slice_num, true);
+
+    for (;;) {
 #ifdef USB_STACK
         // Service TinyUSB events
         tuh_task();
 #endif
 #ifdef SOUND_MPU
-        // Calculate number of midi bytes to send at current sample rate and number of samples generated
-        send_midi_bytes(MAX(31250 * sample_count / playback_rate + 1, 8));
+        send_midi_bytes(8);
 #endif
     }
 }

@@ -1711,6 +1711,22 @@ extern uint32_t GUS_CallBack(Bitu max_len, int16_t* play_buffer) {
     return s;
 }
 
+// Generate one stereo sample for IRQ-driven audio output.
+// Returns packed stereo: low 16 bits = left, high 16 bits = right.
+extern uint32_t GUS_sample_stereo(void) {
+    if ((GUS_reset_reg & 0x03) != 0x03) {
+        return 0;
+    }
+    int32_t accum[2] = {0, 0};
+    for (Bitu c = 0; c < myGUS.ActiveChannels; ++c) {
+        guschan[c]->generateSample(accum);
+    }
+    CheckVoiceIrq();
+    int16_t l = clamp16(accum[0]);
+    int16_t r = clamp16(accum[1]);
+    return ((uint32_t)(uint16_t)l) | ((uint32_t)(uint16_t)r << 16);
+}
+
 // Generate logarithmic to linear volume conversion tables
 static void MakeTables(void) {
     int i;
@@ -1785,9 +1801,9 @@ void GUS_SetDMAInterval(const uint16_t newInterval) {
     myGUS.dmaIntervalOverride = newInterval;
 }
 void GUS_SetFixed44k(const bool new_force44k) {
-    // PICOGUS special port to set audio buffer size
-    myGUS.fixed_44k_output = new_force44k;
-    printf("fixed 44k output: %u\n", myGUS.fixed_44k_output);
+    // IRQ-driven audio requires fixed 44k output; ignore attempts to disable
+    (void)new_force44k;
+    myGUS.fixed_44k_output = true;
 }
 
 
@@ -1872,6 +1888,11 @@ static GUS* test = NULL;
 void GUS_OnReset(void) {
     LOG_MSG("Allocating GUS emulation");
     test = new GUS();
+
+    // IRQ-driven audio always outputs at 44.1kHz, so force fixed_44k_output
+    // before any DOS software writes to GUS registers.
+    myGUS.fixed_44k_output = true;
+    myGUS.basefreq = 44100;
 
     critical_section_init(&gus_crit);
 }
