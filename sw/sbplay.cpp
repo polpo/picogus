@@ -98,7 +98,26 @@ static constexpr uint32_t fixed_ratio(uint16_t a, uint16_t b) {
 }
 
 static constexpr uint32_t opl_ratio = fixed_ratio(49716, 44100);
-static audio_fifo_t opl_out_fifo;
+
+// OPL FIFO — smaller than CD audio FIFO since producer and consumer are on
+// the same core. 256 stereo pairs ~= 5.8ms at 44100Hz.
+#define OPL_FIFO_SIZE 256
+#define OPL_FIFO_BITS (OPL_FIFO_SIZE - 1)
+static struct {
+    sample_pair buffer[OPL_FIFO_SIZE];
+    volatile uint32_t write_idx;
+    volatile uint32_t read_idx;
+    volatile fifo_state_t state;
+} opl_out_fifo;
+
+static inline uint32_t opl_fifo_free_space() {
+    return OPL_FIFO_SIZE - (opl_out_fifo.write_idx - opl_out_fifo.read_idx);
+}
+
+static inline void opl_fifo_add_sample(sample_pair sample) {
+    opl_out_fifo.buffer[opl_out_fifo.write_idx & OPL_FIFO_BITS] = sample;
+    opl_out_fifo.write_idx++;
+}
 
 // Stereo OPL resampler state.
 // For stereo backends (dbopl, ymfm), OPL_Pico_stereo provides true stereo.
@@ -137,11 +156,6 @@ static void opl_resample_tick()
     }
 }
 
-typedef union {
-    uint32_t data32;
-    int16_t  data16[2];
-} sample_pair;
-
 // Setup values for audio sample clock
 // 8390 clock cycles per sample (370MHz / 8390 ~= 44100Hz)
 static constexpr uint32_t clocks_per_sample_minus_one = (SYS_CLK_HZ / 44100) - 1;
@@ -175,22 +189,21 @@ void audio_sample_handler(void) {
 #endif
 
 #ifdef CDROM
-    if (cd_fifo->state != FIFO_STATE_STOPPED && cd_fifo->write_idx - cd_fifo->read_idx >= 2) {
-        uint32_t idx = cd_fifo->read_idx;
-        sample_l += scale_sample(cd_fifo->buffer[idx & AUDIO_FIFO_BITS],       volume.cd_audio[0], 0);
-        sample_r += scale_sample(cd_fifo->buffer[(idx + 1) & AUDIO_FIFO_BITS], volume.cd_audio[1], 0);
-        cd_fifo->read_idx = idx + 2;
+    if (cd_fifo->state != FIFO_STATE_STOPPED && cd_fifo->write_idx - cd_fifo->read_idx >= 1) {
+        sample_pair cd = cd_fifo->buffer[cd_fifo->read_idx & AUDIO_FIFO_BITS];
+        cd_fifo->read_idx++;
         if (cd_fifo->write_idx == cd_fifo->read_idx) cd_fifo->state = FIFO_STATE_STOPPED;
+        sample_l += scale_sample(cd.data16[0], volume.cd_audio[0], 0);
+        sample_r += scale_sample(cd.data16[1], volume.cd_audio[1], 0);
     }
 #endif
 
-    // Read OPL stereo pair from FIFO — always consume 2 samples (L then R).
-    if (opl_out_fifo.state != FIFO_STATE_STOPPED && opl_out_fifo.write_idx - opl_out_fifo.read_idx >= 2) {
-        uint32_t idx = opl_out_fifo.read_idx;
-        sample_l += scale_sample(opl_out_fifo.buffer[idx & AUDIO_FIFO_BITS],       volume.opl[0], 0);
-        sample_r += scale_sample(opl_out_fifo.buffer[(idx + 1) & AUDIO_FIFO_BITS], volume.opl[1], 0);
-        opl_out_fifo.read_idx = idx + 2;
+    if (opl_out_fifo.state != FIFO_STATE_STOPPED && opl_out_fifo.write_idx - opl_out_fifo.read_idx >= 1) {
+        sample_pair opl = opl_out_fifo.buffer[opl_out_fifo.read_idx & OPL_FIFO_BITS];
+        opl_out_fifo.read_idx++;
         if (opl_out_fifo.write_idx == opl_out_fifo.read_idx) opl_out_fifo.state = FIFO_STATE_STOPPED;
+        sample_l += scale_sample(opl.data16[0], volume.opl[0], 0);
+        sample_r += scale_sample(opl.data16[1], volume.opl[1], 0);
     }
 
 #ifdef SOUND_SB
@@ -266,7 +279,7 @@ void play_adlib() {
 
     for (;;) {
 #if CDROM
-        cdrom_audio_callback(&cdrom, AUDIO_FIFO_SIZE - SAMPLES_PER_SECTOR);
+        cdrom_audio_callback(&cdrom, AUDIO_FIFO_SIZE - STEREO_SAMPLES_PER_SECTOR);
 #endif
 
 #if 0
@@ -283,14 +296,13 @@ void play_adlib() {
         // Process DSP commands
         sbdsp_process();
 
-        // Generate OPL stereo pairs and add to output FIFO (interleaved L, R).
-        // Need 2 free slots per output sample.
+        // Generate OPL stereo pairs and add to output FIFO.
         for (uint32_t opl_i = 0;
-             opl_i < OPL_FILL_PER_ITER && fifo_free_space(&opl_out_fifo) >= 2;
+             opl_i < OPL_FILL_PER_ITER && opl_fifo_free_space() >= 1;
              opl_i++) {
             opl_resample_tick();
-            fifo_add_sample(&opl_out_fifo, (int16_t)opl_resamp_l);
-            fifo_add_sample(&opl_out_fifo, (int16_t)opl_resamp_r);
+            sample_pair p = {.data16 = {(int16_t)opl_resamp_l, (int16_t)opl_resamp_r}};
+            opl_fifo_add_sample(p);
         }
 #ifdef USB_STACK
         // Service TinyUSB events

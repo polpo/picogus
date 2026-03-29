@@ -26,19 +26,24 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-// Configuration
-#define AUDIO_FIFO_SIZE 4096  // Must be power of 2
-                              // Needs to be > 2*SAMPLES_PER_SECTOR (1176) to absorb
-                              // slow FAT/USB sector reads without underrun (~93ms at 44100Hz)
+// Packed stereo pair: left in low 16 bits, right in high 16 bits.
+typedef union {
+    uint32_t data32;
+    int16_t  data16[2];
+} sample_pair;
+
+// Each FIFO entry is a packed stereo pair.
+typedef sample_pair audio_sample_t;
+
+// CD audio FIFO size in stereo pairs — must be > SAMPLES_PER_SECTOR/2 (588
+// stereo frames per CD sector) to absorb slow USB/FAT reads.
+#define AUDIO_FIFO_SIZE 2048
 #define AUDIO_FIFO_BITS (AUDIO_FIFO_SIZE - 1)
-#define AUDIO_FIFO_START_THRESHOLD 512  // Start playback after 512 samples (~11ms); lower = faster post-seek response
+#define AUDIO_FIFO_START_THRESHOLD 256
 
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-// Audio sample type - adjust as needed for your audio format
-typedef int16_t audio_sample_t;
 
 // FIFO state
 typedef enum {

@@ -55,6 +55,7 @@
 
 #define RAW_SECTOR_SIZE     2352
 #define SAMPLES_PER_SECTOR  1176
+#define STEREO_SAMPLES_PER_SECTOR  588
 
 #define STAT_READY	    0x01
 #define STAT_PLAY  	    0x08
@@ -198,9 +199,8 @@ typedef struct cdrom {
 
     // int16_t cd_buffer[BUF_SIZE];
     uint8_t audio_sector_buffer[RAW_SECTOR_SIZE];
-    int16_t *current_sector_samples;       // Convenience pointer: (int16_t*)audio_sector_buffer
-    int audio_sector_total_samples;        // Samples available in current_sector_samples after a read
-    int audio_sector_consumed_samples;     // Samples consumed from current_sector_samples
+    sample_pair *current_sector_samples;   // Convenience pointer: (sample_pair*)audio_sector_buffer
+    int audio_sector_consumed_pairs;       // Stereo pairs consumed from current_sector_samples
 
 #if USE_CD_AUDIO_FIFO
     audio_fifo_t audio_fifo;
