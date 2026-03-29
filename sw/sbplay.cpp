@@ -30,6 +30,7 @@
 
 #include "pico/stdlib.h"
 #include "audio/audio_i2s_minimal.h"
+#include <resampler.hpp>
 #include "audio/volctrl.h"
 
 #include "opl.h"
@@ -90,15 +91,6 @@ static void init_audio(void) {
     audio_i2s_minimal_setup(&config, 44100);
 }
 
-/* Fixed-point format: Q16.16 (16 bits integer, 16 bits fractional) */
-static constexpr uint32_t FRAC_BITS = 16;
-static constexpr uint32_t FRAC_MASK = (1u << FRAC_BITS) - 1;
-static constexpr uint32_t fixed_ratio(uint16_t a, uint16_t b) {
-    return ((uint32_t)a << FRAC_BITS) / b;
-}
-
-static constexpr uint32_t opl_ratio = fixed_ratio(49716, 44100);
-
 // OPL FIFO — smaller than CD audio FIFO since producer and consumer are on
 // the same core. 256 stereo pairs ~= 5.8ms at 44100Hz.
 #define OPL_FIFO_SIZE 256
@@ -119,42 +111,53 @@ static inline void opl_fifo_add_sample(sample_pair sample) {
     opl_out_fifo.write_idx++;
 }
 
-// Stereo OPL resampler state.
-// For stereo backends (dbopl, ymfm), OPL_Pico_stereo provides true stereo.
-// For emu8950, fall back to OPL_Pico_simple and duplicate to both channels.
-// Samples are clamped to int16_t before the resampler buffers to keep
-// the 16-bit phase interpolation products within int32_t range.
+// OPL stereo sample callback — returns a clamped stereo pair.
 // Volume is applied in the ISR after FIFO read, not here.
-static int32_t opl_resamp_l = 0, opl_resamp_r = 0;
-static int32_t opl_resamp_buf_l[2] = {0}, opl_resamp_buf_r[2] = {0};
-static uint32_t opl_resamp_phase = 0; // Q16.16 phase accumulator
+static sample_pair get_opl_stereo_sample()
+{
+#if defined(USE_YMFM_OPL) || defined(USE_DBOPL_OPL) || defined(USE_YMF3812)
+    int32_t l, r;
+    OPL_Pico_stereo(&l, &r, 1);
+    return (sample_pair){.data16 = {clamp16(l), clamp16(r)}};
+#else
+    int32_t mono;
+    OPL_Pico_simple(&mono, 1);
+    int16_t s = clamp16(mono);
+    return (sample_pair){.data16 = {s, s}};
+#endif
+}
 
-static void opl_resample_tick()
+#ifdef USE_LINEAR_RESAMPLER
+static constexpr uint32_t FRAC_BITS = 16;
+static constexpr uint32_t fixed_ratio(uint16_t a, uint16_t b) {
+    return ((uint32_t)a << FRAC_BITS) / b;
+}
+static constexpr uint32_t opl_ratio = fixed_ratio(49716, 44100);
+
+static int32_t opl_resamp_buf_l[2] = {0}, opl_resamp_buf_r[2] = {0};
+static uint32_t opl_resamp_phase = 0;
+
+static sample_pair opl_resample_tick()
 {
     opl_resamp_phase += opl_ratio;
     while (opl_resamp_phase >= (1u << 16))
     {
         opl_resamp_buf_l[1] = opl_resamp_buf_l[0];
         opl_resamp_buf_r[1] = opl_resamp_buf_r[0];
-#if defined(USE_YMFM_OPL) || defined(USE_DBOPL_OPL) || defined(USE_YMF3812)
-        int32_t l, r;
-        OPL_Pico_stereo(&l, &r, 1);
-        opl_resamp_buf_l[0] = clamp16(l);
-        opl_resamp_buf_r[0] = clamp16(r);
-#else
-        int32_t mono;
-        OPL_Pico_simple(&mono, 1);
-        opl_resamp_buf_l[0] = opl_resamp_buf_r[0] = clamp16(mono);
-#endif
+        sample_pair in = get_opl_stereo_sample();
+        opl_resamp_buf_l[0] = in.data16[0];
+        opl_resamp_buf_r[0] = in.data16[1];
         opl_resamp_phase -= (1u << 16);
     }
-    {
-        // linear resampler - TODO adapt polyphase code from resampler/resampler.hpp
-        int32_t phase_frac = opl_resamp_phase & ((1u << 16) - 1);
-        opl_resamp_l = ((opl_resamp_buf_l[0] * phase_frac) + (opl_resamp_buf_l[1] * ((1 << 16) - phase_frac))) >> 16;
-        opl_resamp_r = ((opl_resamp_buf_r[0] * phase_frac) + (opl_resamp_buf_r[1] * ((1 << 16) - phase_frac))) >> 16;
-    }
+    int32_t phase_frac = opl_resamp_phase & ((1u << 16) - 1);
+    sample_pair out;
+    out.data16[0] = ((opl_resamp_buf_l[0] * phase_frac) + (opl_resamp_buf_l[1] * ((1 << 16) - phase_frac))) >> 16;
+    out.data16[1] = ((opl_resamp_buf_r[0] * phase_frac) + (opl_resamp_buf_r[1] * ((1 << 16) - phase_frac))) >> 16;
+    return out;
 }
+#else
+static StereoResampler<get_opl_stereo_sample> opl_resampler;
+#endif
 
 // Setup values for audio sample clock
 // 8390 clock cycles per sample (370MHz / 8390 ~= 44100Hz)
@@ -253,7 +256,11 @@ void play_adlib() {
 #endif
     init_audio();
 
+#ifdef USE_LINEAR_RESAMPLER
 	// opl_resamp_phase starts at 0; no explicit init needed.
+#else
+	opl_resampler.set_ratio(49716, 44100);
+#endif
 
 #ifdef SOUND_SB
     set_volume(CMD_SBVOL);
@@ -300,9 +307,11 @@ void play_adlib() {
         for (uint32_t opl_i = 0;
              opl_i < OPL_FILL_PER_ITER && opl_fifo_free_space() >= 1;
              opl_i++) {
-            opl_resample_tick();
-            sample_pair p = {.data16 = {(int16_t)opl_resamp_l, (int16_t)opl_resamp_r}};
-            opl_fifo_add_sample(p);
+#ifdef USE_LINEAR_RESAMPLER
+            opl_fifo_add_sample(opl_resample_tick());
+#else
+            opl_fifo_add_sample(opl_resampler.get_sample());
+#endif
         }
 #ifdef USB_STACK
         // Service TinyUSB events
