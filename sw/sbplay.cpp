@@ -237,7 +237,7 @@ void play_adlib() {
     tuh_init(BOARD_TUH_RHPORT);
 #endif
 
-    clamp_setup();
+    clamp_setup(0, 31);
 
 #ifdef SOUND_MPU
     MPU401_Init(settings.MPU.delaySysex, settings.MPU.fakeAllNotesOff);

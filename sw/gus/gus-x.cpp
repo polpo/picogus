@@ -1888,6 +1888,6 @@ void GUS_Setup() {
         interp_config_set_signed(&cfg, true);
         interp_set_config(interp0, 1, &cfg);
 #endif
-        clamp_setup();
+        clamp_setup(14, 17);
         set_volume(CMD_GUSVOL);
 }

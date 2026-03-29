@@ -364,8 +364,10 @@ function(build_sb_dbopl3 TARGET_NAME MULTIFW)
         SB_BUFFERLESS=1
         SB_BUFFERLESS_NG=1
         USE_CD_AUDIO_FIFO=1
+        INTERP_CLAMP=1
     )
     target_link_libraries(${TARGET_NAME} resampler)
+    target_link_libraries(${TARGET_NAME} hardware_interp)
     pico_generate_pio_header(${TARGET_NAME} ${CMAKE_CURRENT_LIST_DIR}/isa/isa_dma.pio)
 endfunction()
 

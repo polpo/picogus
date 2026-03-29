@@ -21,15 +21,16 @@
 #include "hardware/interp.h"
 #endif
 
-static void clamp_setup(void) {
+static void clamp_setup(uint8_t shift, uint8_t mask_msb) {
 #ifdef INTERP_CLAMP
     interp_config cfg;
-    // Clamp setup
+    // Clamp setup: input is shifted right by 'shift', then masked to bits
+    // 0..mask_msb, sign-extended, and clamped to [-32768, 32767].
     cfg = interp_default_config();
     interp_config_set_clamp(&cfg, true);
-    interp_config_set_shift(&cfg, 14);
+    interp_config_set_shift(&cfg, shift);
     // set mask according to new position of sign bit..
-    interp_config_set_mask(&cfg, 0, 17);
+    interp_config_set_mask(&cfg, 0, mask_msb);
     // ...so that the shifted value is correctly sign extended
     interp_config_set_signed(&cfg, true);
     interp_set_config(interp1, 0, &cfg);
