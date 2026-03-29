@@ -148,6 +148,7 @@ static uint32_t dma_interval = 0;
 
 class GUSChannels;
 static void CheckVoiceIrq(void);
+static void CheckVoiceIrq_unlocked(void);
 
 struct GFGus {
     uint8_t gRegSelectData;     // what is read back from 3X3. not necessarily the index selected, but
@@ -414,14 +415,16 @@ class GUSChannels {
             }
         }
         __force_inline void WriteWaveCtrl(uint8_t val) {
+            critical_section_enter_blocking(&gus_crit);
             uint32_t oldirq=myGUS.WaveIRQ;
             WaveCtrl = val & 0x7f;
 
             if ((val & 0xa0)==0xa0) myGUS.WaveIRQ|=irqmask;
             else myGUS.WaveIRQ&=~irqmask;
 
-            if (oldirq != myGUS.WaveIRQ) 
-                CheckVoiceIrq();
+            if (oldirq != myGUS.WaveIRQ)
+                CheckVoiceIrq_unlocked();
+            critical_section_exit(&gus_crit);
         }
         INLINE uint8_t ReadWaveCtrl(void) {
             uint8_t ret=WaveCtrl;
@@ -442,6 +445,7 @@ class GUSChannels {
             return PanPot;
         }
         __force_inline void WriteRampCtrl(uint8_t val) {
+            critical_section_enter_blocking(&gus_crit);
             uint32_t old=myGUS.RampIRQ;
             RampCtrl = val & 0x7f;
             //Manually set the irq
@@ -450,7 +454,8 @@ class GUSChannels {
             else
                 myGUS.RampIRQ &= ~irqmask;
             if (old != myGUS.RampIRQ)
-                CheckVoiceIrq();
+                CheckVoiceIrq_unlocked();
+            critical_section_exit(&gus_crit);
         }
         INLINE uint8_t ReadRampCtrl(void) {
             uint8_t ret=RampCtrl;
@@ -921,12 +926,11 @@ static INLINE void GUS_CheckIRQ(void) {
     }
 }
 
-__force_inline static void CheckVoiceIrq(void) {
-    critical_section_enter_blocking(&gus_crit);
+// Inner version: caller must already hold gus_crit
+__force_inline static void CheckVoiceIrq_unlocked(void) {
     Bitu totalmask=(myGUS.RampIRQ|myGUS.WaveIRQ) & myGUS.ActiveMask;
     if (!totalmask) {
         GUS_CheckIRQ();
-        critical_section_exit(&gus_crit);
         return;
     }
 
@@ -943,6 +947,11 @@ __force_inline static void CheckVoiceIrq(void) {
         myGUS.IRQChan++;
         if (myGUS.IRQChan>=myGUS.ActiveChannels) myGUS.IRQChan=0;
     }
+}
+
+__force_inline static void CheckVoiceIrq(void) {
+    critical_section_enter_blocking(&gus_crit);
+    CheckVoiceIrq_unlocked();
     critical_section_exit(&gus_crit);
 }
 
@@ -1020,6 +1029,7 @@ __force_inline static uint16_t ExecuteReadRegister(void) {
         if (curchan) return curchan->ReadRampCtrl() << 8;
         else return 0x0300;
     case 0x8f: // General channel IRQ status register
+        critical_section_enter_blocking(&gus_crit);
         tmpreg=myGUS.IRQChan|0x20;
         uint32_t mask;
         mask=1u << myGUS.IRQChan;
@@ -1028,10 +1038,8 @@ __force_inline static uint16_t ExecuteReadRegister(void) {
         myGUS.RampIRQ&=~mask;
         myGUS.WaveIRQ&=~mask;
         myGUS.IRQStatus&=0x9f;
-        // mega hack
-        // PIC_DeActivateIRQ();
-        CheckVoiceIrq();
-        // PIC_AddEvent(CheckVoiceIrq_async, 2, 3);
+        CheckVoiceIrq_unlocked();
+        critical_section_exit(&gus_crit);
         return (uint16_t)(tmpreg << 8);
     default:
 #if LOG_GUS
