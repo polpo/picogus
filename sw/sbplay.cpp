@@ -205,8 +205,9 @@ void audio_sample_handler(void) {
     if (opl_out_fifo.write_idx != opl_out_fifo.read_idx) {
         sample_pair opl = opl_out_fifo.buffer[opl_out_fifo.read_idx & OPL_FIFO_BITS];
         opl_out_fifo.read_idx++;
-        sample_l += scale_sample(opl.data16[0], volume.opl[0], 0);
-        sample_r += scale_sample(opl.data16[1], volume.opl[1], 0);
+        // 1.5x boost to match DSP levels (DOSBox-X uses SetScale(1.5f) for FM)
+        sample_l += scale_sample((int32_t)opl.data16[0] * 3 >> 1, volume.opl[0], 0);
+        sample_r += scale_sample((int32_t)opl.data16[1] * 3 >> 1, volume.opl[1], 0);
     }
 
 #ifdef SOUND_SB
