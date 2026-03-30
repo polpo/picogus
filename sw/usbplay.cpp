@@ -111,7 +111,6 @@ void play_usb() {
             struct audio_buffer *buffer;
             while (!(buffer = take_audio_buffer(ap, false))) {
                 tuh_task();
-                usb_hotplug_task();
             }
             int16_t *samples = (int16_t *) buffer->buffer->bytes;
             buffer->sample_count = cdrom_audio_callback_simple(&cdrom, samples, SAMPLES_PER_BUFFER << 1, false) >> 1;

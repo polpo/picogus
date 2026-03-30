@@ -34,6 +34,7 @@
 #include "hardware/structs/timer.h"
 #include "audio/volctrl.h"
 
+int32_t cd_audio_volume = (1 << VOLCTRL_FRACT_BITS);
 
 /* The addresses sent from the guest are absolute, ie. a LBA of 0 corresponds to a MSF of 00:00:00. Otherwise, the counter displayed by the guest is wrong:
    there is a seeming 2 seconds in which audio plays but counter does not move, while a data track before audio jumps to 2 seconds before the actual start

@@ -269,13 +269,12 @@ function(build_gus TARGET_NAME MULTIFW)
     target_link_libraries(${TARGET_NAME} rp2040-psram hardware_interp)
 endfunction()
 
+option(SOUND_WSS "Build SB firmware with WSS (AD1848) support instead of SB16 DSP" OFF)
 ################################################################################
 # Build SB firmware
-option(SOUND_WSS "Build SB firmware with WSS (AD1848) support instead of SB16 DSP" OFF)
-
-function(build_sb TARGET_NAME MULTIFW)
+function(build_sb_8950 TARGET_NAME MULTIFW)
     set(USB_JOYSTICK TRUE)
-    set(SOUND_MPU FALSE)
+    set(SOUND_MPU TRUE)
     set(SOUND_OPL TRUE)
     set(CDROM TRUE)
     config_target(${TARGET_NAME} ${MULTIFW})
@@ -305,11 +304,11 @@ function(build_sb TARGET_NAME MULTIFW)
 endfunction()
 
 ################################################################################
-# Build SB firmware — ymf262 OPL3 variant
+# Build SB firmware — ymfm ymf262 OPL3
 function(build_sb_ymf262 TARGET_NAME MULTIFW)
     set(USE_YMFM_OPL TRUE)
     set(USB_JOYSTICK TRUE)
-    set(SOUND_MPU FALSE)
+    set(SOUND_MPU TRUE)
     set(SOUND_OPL TRUE)
     set(CDROM TRUE)
     config_target(${TARGET_NAME} ${MULTIFW})
@@ -544,11 +543,11 @@ if(PROJECT_TYPE STREQUAL "MULTIFW")
 
     # ---------------------------------------------------------------------------
     # OPL variant for the adlib slot in the multifw bundle.
-    # Uncomment exactly one of the three lines below:
+    # Uncomment exactly one of the lines below:
     # set(MULTIFW_OPL_VARIANT "emu8950")   # original emu8950 — OPL2, assembly-optimized
     # set(MULTIFW_OPL_VARIANT "ym3812") # ymfm ym3812   — OPL2, ymfm quality
-    set(MULTIFW_OPL_VARIANT "ymf262") # ymfm ymf262   — OPL3, true stereo
-    #set(MULTIFW_OPL_VARIANT "dbopl") # DOSBox OPL  — OPL3, true stereo
+    # set(MULTIFW_OPL_VARIANT "ymf262") # ymfm ymf262   — OPL3, true stereo - note not yet fast enough for RP2040
+    set(MULTIFW_OPL_VARIANT "dbopl") # DOSBox OPL  — OPL3, true stereo
     # ---------------------------------------------------------------------------
 
     if(MULTIFW_OPL_VARIANT STREQUAL "ymf262")
@@ -621,19 +620,9 @@ if(PROJECT_TYPE STREQUAL "MULTIFW")
     build_psg(pg-psg FALSE)
     build_psg(pg-psg-multifw TRUE)
     add_dependencies(pg-psg-multifw pg-psg generate_flash_firmware_h)
-    build_sb(pg-sb FALSE)
-    build_sb(pg-sb-multifw TRUE)
+    build_sb_dbopl3(pg-sb FALSE)
+    build_sb_dbopl3(pg-sb-multifw TRUE)
     add_dependencies(pg-sb-multifw pg-sb generate_flash_firmware_h)
-    # Standalone ymf262/ym3812 targets — always built, not in combined picogus.uf2
-    # (skipped if already built above as the selected MULTIFW_OPL_VARIANT)
-    if(NOT MULTIFW_OPL_VARIANT STREQUAL "ymf262")
-        build_sb_ymf262(pg-sb-ymf262 FALSE)
-        build_adlib_ymf262(pg-adlib-ymf262 FALSE)
-    endif()
-    if(NOT MULTIFW_OPL_VARIANT STREQUAL "ym3812")
-        build_sb_ym3812(pg-sb-ym3812 FALSE)
-        build_adlib_ym3812(pg-adlib-ym3812 FALSE)
-    endif()
     build_usb(pg-usb FALSE)
     build_usb(pg-usb-multifw TRUE)
     add_dependencies(pg-usb-multifw pg-usb generate_flash_firmware_h)
@@ -671,12 +660,9 @@ if(PROJECT_TYPE STREQUAL "MULTIFW")
 elseif(PROJECT_TYPE STREQUAL "GUS")
     set(FW_TARGET pg-gus)
     build_gus(pg-gus FALSE)
-elseif(PROJECT_TYPE STREQUAL "SB")
-    set(FW_TARGET pg-sb)
-    build_sb(pg-sb FALSE)
-elseif(PROJECT_TYPE STREQUAL "SB_YMFM")
-    set(FW_TARGET pg-sb-ymf262)
-    build_sb_ymf262(pg-sb-ymf262 FALSE)
+elseif(PROJECT_TYPE STREQUAL "SB_EMU8950")
+    set(FW_TARGET pg-sb-emu8950)
+    build_sb_emu8950(pg-sb-emu8950 FALSE)
 elseif(PROJECT_TYPE STREQUAL "SB_YMF262")
     set(FW_TARGET pg-sb-ymf262)
     build_sb_ymf262(pg-sb-ymf262 FALSE)

@@ -136,9 +136,7 @@ typedef struct cdrom_fifo_t {
 } cdrom_fifo_t;
 
 
-#if USE_CD_AUDIO_FIFO
 #include "audio/audio_fifo.h"
-#endif
 
 typedef struct cdrom {
     uint8_t id;

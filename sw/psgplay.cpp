@@ -174,7 +174,6 @@ void play_psg() {
         while (!(buffer = take_audio_buffer(ap, false))) {
 #ifdef USB_STACK
             tuh_task();
-            usb_hotplug_task();
 #endif
         }
         int16_t *samples = (int16_t *) buffer->buffer->bytes;

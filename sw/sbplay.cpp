@@ -301,8 +301,10 @@ void play_adlib() {
 #endif
 #endif
 
+#if SOUND_SB
         // Process DSP commands
         sbdsp_process();
+#endif
 
         // Generate OPL stereo pairs and add to output FIFO.
         for (uint32_t opl_i = 0;
