@@ -60,7 +60,6 @@ uint LED_PIN;
 M62429* m62429;
 
 
-
 #ifdef SOUND_SB
 #ifdef SOUND_WSS
 #include "ad1848/ad1848.h"
@@ -166,6 +165,13 @@ static bool queueReboot = false;
 
 Settings settings;
 void processSettings(void);
+
+static void wtvol_from_mixer(uint8_t volume) {
+    settings.Global.waveTableVolume = volume;
+    if (BOARD_TYPE == PICOGUS_2) {
+        m62429->setVolume(M62429_BOTH, volume);
+    }
+}
 
 #define IOW_PIO_SM 0
 #define IOR_PIO_SM 1
@@ -346,10 +352,7 @@ __force_inline void write_picogus_high(uint8_t value) {
 #endif
         break;
     case CMD_WTVOL: // Wavetable mixer volume
-        settings.Global.waveTableVolume = value;
-        if (BOARD_TYPE == PICOGUS_2) {
-            m62429->setVolume(M62429_BOTH, settings.Global.waveTableVolume);
-        }
+        wtvol_from_mixer(value);
         break;
     case CMD_MPUDELAY: // MPU SYSEX delay
         settings.MPU.delaySysex = value;
@@ -730,6 +733,9 @@ void processSettings(void) {
     if (BOARD_TYPE == PICOGUS_2) {
         m62429->setVolume(M62429_BOTH, settings.Global.waveTableVolume);
     }
+#ifdef SOUND_SB
+    sbdsp_set_wtvol_passthrough(&settings.Global.waveTableVolume, wtvol_from_mixer);
+#endif
 }
 
 

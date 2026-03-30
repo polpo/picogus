@@ -141,8 +141,14 @@ static inline uint32_t sbdsp_sample_stereo() {
 // PicoGUS configuration interface helpers
 
 void sbdsp_set_type(uint8_t type);
-void sbdsp_set_irq(uint8_t irq); 
-void sbdsp_set_dma(uint8_t dma); 
-void sbdsp_set_options(uint8_t options); 
+void sbdsp_set_irq(uint8_t irq);
+void sbdsp_set_dma(uint8_t dma);
+void sbdsp_set_options(uint8_t options);
+
+// Wavetable volume passthrough: mixer line-in <-> wavetable volume
+// wt_volume points to the source of truth (settings.Global.waveTableVolume)
+// cb is called when mixer line-in is written with the new volume (0-100)
+typedef void (*sbmixer_wtvol_cb_t)(uint8_t volume);
+void sbdsp_set_wtvol_passthrough(uint8_t *wt_volume, sbmixer_wtvol_cb_t cb);
 
 #endif // SBDSP_H

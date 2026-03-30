@@ -160,6 +160,15 @@ sbdsp_t sbdsp;
 static uint8_t mixer_state[256] = { 0 };
 static uint8_t sb_8051_ram[256] = { 0 };
 
+// Wavetable volume pass-through state
+static uint8_t *wt_volume_ptr = NULL;
+static sbmixer_wtvol_cb_t wtvol_cb = NULL;
+
+void sbdsp_set_wtvol_passthrough(uint8_t *wt_volume, sbmixer_wtvol_cb_t cb) {
+    wt_volume_ptr = wt_volume;
+    wtvol_cb = cb;
+}
+
 static __force_inline void sbdsp_dma_disable(bool pause) {
     sbdsp.dma_enabled = false;
     memset(&sbdsp.rsm, 0, sizeof(sbdsp.rsm));
@@ -855,6 +864,10 @@ static void sbmixer_pro_set(uint8_t sbpro_reg, uint8_t value) {
         volreg[0] = sbmixer_voltab[vol_l];
         volreg[1] = sbmixer_voltab[vol_r];
     }
+    if (sbpro_reg == MIXER_VOL_LINE && wtvol_cb) {
+        uint8_t vol5 = (vol_l > vol_r) ? vol_l : vol_r;
+        wtvol_cb(vol5 * 100 / 31);
+    }
 }
 
 // set volume using SB16 mixer registers
@@ -890,6 +903,9 @@ static void sbmixer_16_set(uint8_t sb16_reg, uint8_t value) {
     if (volreg) {
         *volreg = sbmixer_voltab[value >> 3];
     }
+    if ((sb16_reg == MIXER_VOL_LINE_L || sb16_reg == MIXER_VOL_LINE_R) && wtvol_cb) {
+        wtvol_cb((value >> 3) * 100 / 31);
+    }
 }
 
 static void sbmixer_reset(void) {
@@ -912,6 +928,18 @@ static __force_inline uint8_t sbmixer_read(void) {
         case MIXER_IRQ_STATUS:
             // Bits 0-2: IRQ pending flags. Upper bits: ViBRA type identifier.
             return (sbdsp.irq_8_pending ? 0x01 : 0) | (sbdsp.irq_16_pending ? 0x02 : 0) | 0x70;
+        case MIXER_VOL_LINE_L:
+        case MIXER_VOL_LINE_R:
+            if (wt_volume_ptr) {
+                return (uint8_t)((*wt_volume_ptr * 31 / 100) << 3);
+            }
+            return mixer_state[sbdsp.mixer_command];
+        case MIXER_VOL_LINE:
+            if (wt_volume_ptr) {
+                uint8_t nibble = *wt_volume_ptr * 15 / 100;
+                return (nibble << 4) | nibble;
+            }
+            return mixer_state[sbdsp.mixer_command];
         case 0x8E:
             return mixer_state[0x8E] | 0xC0;
         case 0xFF:
