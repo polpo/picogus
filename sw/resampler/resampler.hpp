@@ -130,8 +130,9 @@ public:
 			if(fir_pos>=13)
 				fir_pos=0;
 			resampler_compute_fir(fir, fir_pos, c0, c1, c2, c3);
+			//broken downsampling
+			return resampler_interpolate(c0, c1, c2, c3, phase);
 		};
-		return resampler_interpolate(c0, c1, c2, c3, phase);
 	}
 };
 
@@ -154,6 +155,7 @@ public:
 	sample_pair get_sample()
 	{
 		phase+=ratio;
+		bool recalculate_fir = false;
 		while(phase>=1UL<<31) //0.5
 		{
 			sample_pair in = IN_FN();
@@ -163,6 +165,9 @@ public:
 			phase-=1ULL<<32;
 			if(fir_pos>=13)
 				fir_pos=0;
+			recalculate_fir = true;
+		}
+		if(recalculate_fir){
 			resampler_compute_fir(fir_l, fir_pos, c0_l, c1_l, c2_l, c3_l);
 			resampler_compute_fir(fir_r, fir_pos, c0_r, c1_r, c2_r, c3_r);
 		};
