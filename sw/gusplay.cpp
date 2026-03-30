@@ -72,16 +72,38 @@ static void init_audio(void) {
     audio_i2s_minimal_setup(&config, 44100);
 }
 
-// Setup values for audio sample clock
-// 8390 clock cycles per sample (370MHz / 8390 ~= 44100Hz)
-static constexpr uint32_t clocks_per_sample_minus_one = (RP2_CLOCK_SPEED * 1000u / 44100) - 1;
 static constexpr uint pwm_slice_num = 4; // slices 0-3 are taken by USB joystick support
+// SYS_CLK / GUS_CLOCK (19.7568MHz) reduced by GCD of 3200: 115625 / 6174
+static constexpr uint32_t CLK_RATIO_NUM = RP2_CLOCK_SPEED * 1000u / 3200; // 115625
+static constexpr uint32_t CLK_RATIO_DEN = 19756800u / 3200;               // 6174
+static uint8_t current_gus_channels = 14;
 
 void audio_sample_handler(void) {
     pwm_clear_irq(pwm_slice_num);
 
     uint32_t sample = GUS_sample_stereo();
     audio_pio->txf[PICO_AUDIO_I2S_SM] = sample;
+}
+
+// Clocks per GUS sample = round(SYS_CLK * 32 * channels / GUS_CLOCK)
+static inline uint32_t gus_clocks_per_sample(uint8_t channels) {
+    return (CLK_RATIO_NUM * 32u * channels + CLK_RATIO_DEN / 2) / CLK_RATIO_DEN;
+}
+
+// Update PWM IRQ rate and I2S PIO clock divider for new GUS channel count
+// GUS sample rate = GUS_CLOCK / (32 * channels)
+static void update_gus_timing(uint8_t channels) {
+    current_gus_channels = channels;
+
+    uint32_t cps = gus_clocks_per_sample(channels);
+    pwm_set_wrap(pwm_slice_num, cps - 1);
+    pwm_hw->slice[pwm_slice_num].ctr = 0; // Reset counter to take effect immediately
+
+    // I2S PIO divider (16.8 fixed point) = 4x clocks per sample
+    uint32_t divider = cps * 4;
+    pio_sm_set_clkdiv_int_frac(audio_pio, PICO_AUDIO_I2S_SM, divider >> 8u, divider & 0xffu);
+
+    printf("GUS channels: %u\n", channels);
 }
 
 // void __xip_cache("my_sub_section") (play_gus)(void) {
@@ -135,11 +157,11 @@ void play_gus() {
 
     init_audio();
 
-    printf("GUS IRQ-driven audio started (fixed 44.1kHz output)\n");
+    printf("GUS IRQ-driven audio started\n");
 
-    // Use the PWM peripheral to trigger an IRQ at 44100Hz
+    // Use the PWM peripheral to trigger an IRQ at the GUS sample rate
     pwm_config pwm_c = pwm_get_default_config();
-    pwm_config_set_wrap(&pwm_c, clocks_per_sample_minus_one);
+    pwm_config_set_wrap(&pwm_c, gus_clocks_per_sample(current_gus_channels) - 1);
     pwm_init(pwm_slice_num, &pwm_c, false);
     pwm_set_irq_enabled(pwm_slice_num, true);
     irq_set_exclusive_handler(PWM_IRQ_WRAP, audio_sample_handler);
@@ -148,6 +170,11 @@ void play_gus() {
     pwm_set_enabled(pwm_slice_num, true);
 
     for (;;) {
+        // Check if GUS channel count changed
+        uint8_t channels = GUS_timingChannels();
+        if (channels != current_gus_channels) {
+            update_gus_timing(channels);
+        }
 #ifdef USB_STACK
         // Service TinyUSB events
         tuh_task();

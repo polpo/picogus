@@ -214,6 +214,10 @@ extern uint8_t GUS_activeChannels(void) {
     return myGUS.ActiveChannels;
 }
 
+extern uint8_t GUS_timingChannels(void) {
+    return myGUS.fixed_44k_output ? 14 : myGUS.ActiveChannels;
+}
+
 extern uint32_t GUS_basefreq(void) {
     // Special 28 channel handling to work around PCM510xA DAC issues:
 #if defined(SCALE_22K_TO_44K)
@@ -1809,9 +1813,9 @@ void GUS_SetDMAInterval(const uint16_t newInterval) {
     myGUS.dmaIntervalOverride = newInterval;
 }
 void GUS_SetFixed44k(const bool new_force44k) {
-    // IRQ-driven audio requires fixed 44k output; ignore attempts to disable
-    (void)new_force44k;
-    myGUS.fixed_44k_output = true;
+    myGUS.fixed_44k_output = new_force44k;
+    myGUS.basefreq = new_force44k ? 44100 : sample_rates[myGUS.ActiveChannels - 1];
+    printf("fixed 44k output: %u\n", myGUS.fixed_44k_output);
 }
 
 
@@ -1896,11 +1900,6 @@ static GUS* test = NULL;
 void GUS_OnReset(void) {
     LOG_MSG("Allocating GUS emulation");
     test = new GUS();
-
-    // IRQ-driven audio always outputs at 44.1kHz, so force fixed_44k_output
-    // before any DOS software writes to GUS registers.
-    myGUS.fixed_44k_output = true;
-    myGUS.basefreq = 44100;
 
     critical_section_init(&gus_crit);
 }

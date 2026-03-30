@@ -8,6 +8,7 @@ extern void write_gus(Bitu port, Bitu val);
 extern uint32_t GUS_CallBack(Bitu len, int16_t* play_buffer);
 extern uint32_t GUS_sample_stereo(void);
 extern uint8_t GUS_activeChannels(void);
+extern uint8_t GUS_timingChannels(void);
 extern uint32_t GUS_basefreq(void);
 extern void GUS_Setup(void);
 extern void GUS_SetFixed44k(const bool new_force44k);
