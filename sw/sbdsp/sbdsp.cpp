@@ -692,9 +692,14 @@ void sbdsp_process(void) {
                     sbdsp.dav_dsp = 0;
                 } else if (sbdsp.current_command_index == 2) { // wLength.HighByte
                     sbdsp.dma_sample_count |= (sbdsp.inbox << 8);
-                    // SB16: sample_count counts individual DMA transfers minus 1.
-                    // Each DMA event transfers one complete frame, so for stereo
-                    // we halve the count (2 DMA words per stereo frame).
+                    // HACK: force mono when stereo halving would round the
+                    // count to 0 (e.g. count=0 -> 1 sample -> 0 frames).
+                    // Miles AIL detection triggers this: 16-bit signed
+                    // stereo single-cycle DMA with a 1-sample transfer.
+                    // Same logic as the SBPro hack in sbdsp_start_pcm_dma()
+                    if (sbdsp.dma_stereo && (sbdsp.dma_sample_count + 1) == 1) {
+                        sbdsp.dma_stereo = false;
+                    }
                     sbdsp.dma_bytes_per_frame = 1;
                     if (sbdsp.dma_16bit) {
                         sbdsp.dma_bytes_per_frame <<= 1;
@@ -702,6 +707,9 @@ void sbdsp_process(void) {
                     if (sbdsp.dma_stereo) {
                         sbdsp.dma_bytes_per_frame <<= 1;
                     }
+                    // SB16: sample_count counts individual DMA transfers minus 1.
+                    // Each DMA event transfers one complete frame, so for stereo
+                    // we halve the count (2 DMA words per stereo frame).
                     sbdsp.dma_xfer_count = sbdsp.dma_stereo
                         ? (sbdsp.dma_sample_count + 1) >> 1
                         : sbdsp.dma_sample_count + 1;
