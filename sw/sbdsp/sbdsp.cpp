@@ -352,7 +352,8 @@ void sbdsp_set_type(uint8_t type) {
         case SB_TYPE_SBPRO2MCA: sbdsp.dsp_version.major = 3; sbdsp.dsp_version.minor = 1; break;
         case SB_TYPE_SB16:      sbdsp.dsp_version.major = 4; sbdsp.dsp_version.minor = 5; break;
     }
-    return;
+    // SB16 hardware ignores speaker on/off commands; speaker is always on
+    sbdsp.speaker_on = (sbdsp.dsp_version.major >= 4);
 }
 
 void sbdsp_set_irq(uint8_t irq) {
@@ -594,11 +595,11 @@ void sbdsp_process(void) {
             }
             break;
         case DSP_ENABLE_SPEAKER:
-            sbdsp.speaker_on = true;
+            if (sbdsp.dsp_version.major < 4) sbdsp.speaker_on = true;
             sbdsp.current_command = 0;
             break;
         case DSP_DISABLE_SPEAKER:
-            sbdsp.speaker_on = false;
+            if (sbdsp.dsp_version.major < 4) sbdsp.speaker_on = false;
             sbdsp.current_command = 0;
             break;
         case DSP_SPEAKER_STATUS:
@@ -778,7 +779,7 @@ static uint32_t DSP_Reset_EventHandler(Bitu val) {
     sbdsp.dma_stereo = false;
     sbdsp.dma_stereo_sbpro = false;
     sbdsp.dma_signed = false;
-    sbdsp.speaker_on = false;
+    sbdsp.speaker_on = (sbdsp.dsp_version.major >= 4); // SB16 speaker always on
     sbdsp.dma_done = false;
     sbdsp.dac_resume_pending = false;
 
