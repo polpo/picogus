@@ -78,13 +78,14 @@ static dma_inst_t dma_config;
 #define DSP_DMA_BLOCK_SIZE      0x48    //block size for highspeed/dma
 
 // SB16 DSP commands
-#define DSP_DMA_IO_START        0xB0
-#define DSP_DMA_IO_END          0xCF
-#define DSP_PAUSE_DMA_16        0xD5
-#define DSP_CONTINUE_DMA_16     0x47
-#define DSP_CONTINUE_DMA_8      0x45
-#define DSP_EXIT_DMA_16         0xD9
-#define DSP_EXIT_DMA_8          0xDA
+#define DSP_DMA_IO_START            0xB0
+#define DSP_DMA_IO_END              0xCF
+#define DSP_PAUSE_DMA_16            0xD5
+#define DSP_CONTINUE_DMA_16         0xD6
+#define DSP_CONTINUE_AUTOINIT_8     0x45
+#define DSP_CONTINUE_AUTOINIT_16    0x47
+#define DSP_EXIT_AUTOINIT_16        0xD9
+#define DSP_EXIT_AUTOINIT_8         0xDA
 
 //#define DSP_DMA_DAC 0x14
 #define DSP_DIRECT_DAC          0x10
@@ -93,11 +94,11 @@ static dma_inst_t dma_config;
 #define DSP_MIDI_WRITE_POLL     0x38
 #define DSP_SET_TIME_CONSTANT   0x40
 #define DSP_SET_SAMPLING_RATE   0x41
-#define DSP_DMA_PAUSE           0xD0
+#define DSP_PAUSE_DMA_8         0xD0
 #define DSP_DAC_PAUSE_DURATION  0x80    // Pause DAC for a duration, then generate an interrupt. Used by Tyrian.
 #define DSP_ENABLE_SPEAKER      0xD1
 #define DSP_DISABLE_SPEAKER     0xD3
-#define DSP_DMA_RESUME          0xD4
+#define DSP_CONTINUE_DMA_8      0xD4
 #define DSP_SPEAKER_STATUS      0xD8
 // SB16 ASP commands
 #define DSP_ASP_SET_CODEC_PARAM 0x05
@@ -439,23 +440,24 @@ void sbdsp_process(void) {
     }
 
     switch (sbdsp.current_command) {
-        case DSP_DMA_PAUSE:
+        case DSP_PAUSE_DMA_8:
         case DSP_PAUSE_DMA_16:
             sbdsp.current_command = 0;
             sbdsp_dma_disable(true);
             break;
-        case DSP_DMA_RESUME:
+        case DSP_CONTINUE_DMA_8:
+        case DSP_CONTINUE_DMA_16:
             sbdsp.current_command = 0;
             sbdsp.dma_done = false;
             sbdsp_dma_enable();
             break;
-        case DSP_CONTINUE_DMA_16:
-        case DSP_CONTINUE_DMA_8:
+        case DSP_CONTINUE_AUTOINIT_8:
+        case DSP_CONTINUE_AUTOINIT_16:
             sbdsp.autoinit = 1;
             sbdsp.current_command = 0;
             break;
-        case DSP_EXIT_DMA_16:
-        case DSP_EXIT_DMA_8:
+        case DSP_EXIT_AUTOINIT_8:
+        case DSP_EXIT_AUTOINIT_16:
             sbdsp.autoinit = 0;
             sbdsp.current_command = 0;
             break;
