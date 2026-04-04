@@ -94,6 +94,8 @@ typedef struct sbdsp_t {
         uint8_t b;
     } options;
 
+#define SB_RSM_FRAC 12
+
     volatile uint32_t cur_sample;  // packed stereo pair: L in low 16, R in high 16
 #if 0
     struct {

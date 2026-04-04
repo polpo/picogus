@@ -39,12 +39,13 @@ SPDX-License-Identifier: MIT
 extern uint LED_PIN;
 
 #include "isa/isa_dma.h"
+#ifdef INTERP_SB_LINEAR
+#include "hardware/interp.h"
+#endif
 
 #ifndef MAX
 #define MAX(x, y) (((x) > (y)) ? (x) : (y))
 #endif
-
-#define SB_RSM_FRAC 12
 
 static irq_handler_t SBDSP_DMA_isr_pt;
 static dma_inst_t dma_config;
@@ -225,6 +226,23 @@ uint32_t sbdsp_generate_sample() {
     }
 
     // interpolate sample
+#ifdef INTERP_SB_LINEAR
+    // interp0 blend: BASE0 + alpha * (BASE1 - BASE0) >> 8
+    // base01 packs older sample (low 16) and newer sample (high 16), sign-extended
+    interp0->accum[1] = sbdsp.rs.phase_acc;
+
+    // left channel: older_L in low 16, newer_L in high 16
+    interp0->base01 = (sbdsp.rs.buf[1] & 0xFFFF)
+                     | ((sbdsp.rs.buf[0] & 0xFFFF) << 16);
+    int32_t out_l = interp0->peek[1];
+
+    // right channel: older_R in low 16, newer_R in high 16
+    interp0->base01 = (sbdsp.rs.buf[1] >> 16)
+                     | (sbdsp.rs.buf[0] & 0xFFFF0000);
+    int32_t out_r = interp0->peek[1];
+
+    return (uint32_t)((out_l & 0xFFFF) | (out_r << 16));
+#else
     int32_t l0 = (int16_t)(sbdsp.rs.buf[0] & 0xFFFF);
     int32_t r0 = (int16_t)(sbdsp.rs.buf[0] >> 16);
     int32_t l1 = (int16_t)(sbdsp.rs.buf[1] & 0xFFFF);
@@ -235,6 +253,7 @@ uint32_t sbdsp_generate_sample() {
     int32_t out_r = ((r0 * phase_frac) + (r1 * ((1 << SB_RSM_FRAC) - phase_frac))) >> SB_RSM_FRAC;
 
     return (uint32_t)((out_l & 0xFFFF) | (out_r << 16));
+#endif
 }
 
 static void sbdsp_handle_time_constant(uint8_t tc) {
@@ -394,6 +413,21 @@ void sbdsp_init() {
     
     // Reset mixer
     sbmixer_reset();
+
+#ifdef INTERP_SB_LINEAR
+    // Configure interp0 blend mode for SB DSP PCM linear interpolation.
+    // Lane 0: blend=true. Lane 1: shift maps 12-bit phase fraction to 8-bit alpha.
+    {
+        interp_config cfg = interp_default_config();
+        interp_config_set_blend(&cfg, true);
+        interp_set_config(interp0, 0, &cfg);
+
+        cfg = interp_default_config();
+        interp_config_set_shift(&cfg, SB_RSM_FRAC - 8);
+        interp_config_set_signed(&cfg, true);
+        interp_set_config(interp0, 1, &cfg);
+    }
+#endif
 }
 
 
