@@ -356,6 +356,7 @@ function(build_sb_dbopl3 TARGET_NAME MULTIFW)
         SB_BUFFERLESS=1
         SB_BUFFERLESS_NG=1
         USE_CD_AUDIO_FIFO=1
+        INTERP_VOLCTRL=1
     )
     target_link_libraries(${TARGET_NAME} resampler)
     target_link_libraries(${TARGET_NAME} hardware_interp)
@@ -375,7 +376,7 @@ function(build_adlib TARGET_NAME MULTIFW)
         audio/volctrl.cpp
         sbplay.cpp
         audio/audio_i2s_minimal.c
-    )  
+    )
     target_link_libraries(${TARGET_NAME} resampler)
 endfunction()
 

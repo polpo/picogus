@@ -42,12 +42,23 @@ extern struct volctrl_t volume;
 #define VOLCTRL_FRACT_BITS 12       // leave enough headroom for mixing
 
 extern int32_t set_volume_scale (uint8_t percent);
+// Optional callback invoked when a volume changes, so dependents can update
+// precomputed values (e.g. GUS prescaled channel volumes).
+typedef void (*volctrl_callback_t)(void);
+extern volctrl_callback_t volctrl_gus_callback;
 static inline int32_t scale_sample (int32_t sample, const int32_t scale, const bool clamp) {
+#ifdef INTERP_VOLCTRL
+    if (clamp) {
+        // interp1 does >>VOLCTRL_FRACT_BITS and clamp to int16_t in one shot.
+        // Only interp1 supports clamp mode on RP2040.
+        return clamp16_interp(sample * scale);
+    }
+#endif
     sample = (sample * scale) >> VOLCTRL_FRACT_BITS;
-
+#ifndef INTERP_VOLCTRL
     if (clamp)
         sample = clamp16(sample);
-
+#endif
     return sample;
 }
 

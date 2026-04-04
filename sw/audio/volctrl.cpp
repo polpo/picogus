@@ -34,6 +34,7 @@ struct volctrl_t volume = {
     .psg        =  (1 << VOLCTRL_FRACT_BITS),
 };
 extern struct volctrl_t volume;
+volctrl_callback_t volctrl_gus_callback = NULL;
 
 int32_t set_volume_scale (uint8_t percent) {
      if (percent > 100)
@@ -78,6 +79,7 @@ void set_volume(uint16_t mode) {
             break;
         case CMD_GUSVOL:
             volume.gus = set_volume_scale(settings.Volume.gusVol);
+            if (volctrl_gus_callback) volctrl_gus_callback();
             break;
         case CMD_PSGVOL:
             volume.psg = set_volume_scale(settings.Volume.psgVol);

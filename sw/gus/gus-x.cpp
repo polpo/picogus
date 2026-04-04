@@ -565,8 +565,8 @@ class GUSChannels {
             templeft&=~(templeft >> 31); /* <- NTS: This is a rather elaborate way to clamp negative values to zero using negate and sign extend */
             int32_t tempright=(int32_t)RampVol - (int32_t)PanRight;
             tempright&=~(tempright >> 31); /* <- NTS: This is a rather elaborate way to clamp negative values to zero using negate and sign extend */
-            VolLeft=vol16bit[templeft >> RAMP_FRACT];
-            VolRight=vol16bit[tempright >> RAMP_FRACT];
+            VolLeft=scale_sample(vol16bit[templeft >> RAMP_FRACT], volume.gus, 0);
+            VolRight=scale_sample(vol16bit[tempright >> RAMP_FRACT], volume.gus, 0);
         }
         INLINE void RampUpdate(void) {
             if (RampCtrl & 0x3) return; /* if the ramping is turned off, then don't change the ramp */
@@ -625,7 +625,7 @@ class GUSChannels {
 
             // Output stereo sample if DAC enable on
             // if ((GUS_reset_reg & 0x02/*DAC enable*/) == 0x02) {
-                tmpsamp = scale_sample(tmpsamp, volume.gus, 0);
+                // volume.gus is pre-folded into VolLeft/VolRight by UpdateVolumes
                 stream[0] += tmpsamp * VolLeft;
                 stream[1] += tmpsamp * VolRight;
                 WaveUpdate();
@@ -1917,5 +1917,10 @@ void GUS_Setup() {
         interp_set_config(interp0, 1, &cfg);
 #endif
         clamp_setup(14, 17);
+        // Register callback so prescaled channel volumes update when gus vol changes
+        volctrl_gus_callback = [] {
+            for (int c = 0; c < 32; c++)
+                if (guschan[c]) guschan[c]->UpdateVolumes();
+        };
         set_volume(CMD_GUSVOL);
 }

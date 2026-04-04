@@ -17,21 +17,20 @@
  */
 #pragma once
 
-#ifdef INTERP_CLAMP
+#if defined(INTERP_CLAMP) || defined(INTERP_VOLCTRL)
 #include "hardware/interp.h"
 #endif
 
+// Configure interp1 for clamp mode — the only interpolator that supports it on RP2040.
+// Input is shifted right by 'shift', masked to bits 0..mask_msb,
+// sign-extended, and clamped to [-32768, 32767].
 static void clamp_setup(uint8_t shift, uint8_t mask_msb) {
-#ifdef INTERP_CLAMP
+#if defined(INTERP_CLAMP) || defined(INTERP_VOLCTRL)
     interp_config cfg;
-    // Clamp setup: input is shifted right by 'shift', then masked to bits
-    // 0..mask_msb, sign-extended, and clamped to [-32768, 32767].
     cfg = interp_default_config();
     interp_config_set_clamp(&cfg, true);
     interp_config_set_shift(&cfg, shift);
-    // set mask according to new position of sign bit..
     interp_config_set_mask(&cfg, 0, mask_msb);
-    // ...so that the shifted value is correctly sign extended
     interp_config_set_signed(&cfg, true);
     interp_set_config(interp1, 0, &cfg);
     interp1->base[0] = -32768;
@@ -39,12 +38,21 @@ static void clamp_setup(uint8_t shift, uint8_t mask_msb) {
 #endif
 }
 
+#if defined(INTERP_CLAMP) || defined(INTERP_VOLCTRL)
+static int16_t __force_inline clamp16_interp(int32_t d) {
+    interp1->accum[0] = d;
+    return interp1->peek[0];
+}
+#endif
 
 static int16_t __force_inline clamp16(int32_t d) {
 #ifdef INTERP_CLAMP
-    interp1->accum[0] = d;
-    return interp1->peek[0];
+    return clamp16_interp(d);
 #else
-    return d < -32768 ? -32768 : (d > 32767 ? 32767 : d);
+    // optimized C clamp16: single branch check
+    if (__builtin_expect((uint32_t)(d + 32768) >> 16, 0)) {
+        return d < 0 ? (int16_t)-32768 : (int16_t)32767;
+    }
+    return (int16_t)d;
 #endif // INTERP_CLAMP
 }
