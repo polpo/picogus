@@ -238,7 +238,14 @@ void play_adlib() {
     tuh_init(BOARD_TUH_RHPORT);
 #endif
 
+    // Configure interp1 clamp for the ISR audio path.
+    // INTERP_VOLCTRL: shift=12 folds >>VOLCTRL_FRACT_BITS into the clamp.
+    // INTERP_CLAMP:   shift=0 for plain clamp (no volume scaling folded in).
+#ifdef INTERP_VOLCTRL
+    clamp_setup(VOLCTRL_FRACT_BITS, 31 - VOLCTRL_FRACT_BITS);
+#else
     clamp_setup(0, 31);
+#endif
 
 #ifdef SOUND_MPU
     MPU401_Init(settings.MPU.delaySysex, settings.MPU.fakeAllNotesOff);
