@@ -357,6 +357,7 @@ function(build_sb_dbopl3 TARGET_NAME MULTIFW)
         SB_BUFFERLESS_NG=1
         USE_CD_AUDIO_FIFO=1
         INTERP_VOLCTRL=1
+        INTERP_SB_LINEAR=1
     )
     target_link_libraries(${TARGET_NAME} resampler)
     target_link_libraries(${TARGET_NAME} hardware_interp)
