@@ -545,12 +545,10 @@ if(PROJECT_TYPE STREQUAL "MULTIFW")
     # ---------------------------------------------------------------------------
     # OPL variant for the adlib slot in the multifw bundle.
     # Uncomment exactly one of the lines below:
-    # set(MULTIFW_OPL_VARIANT "emu8950")   # original emu8950 — OPL2, assembly-optimized
+    set(MULTIFW_OPL_VARIANT "emu8950")   # original emu8950 — OPL2, assembly-optimized
     # set(MULTIFW_OPL_VARIANT "ym3812") # ymfm ym3812   — OPL2, ymfm quality
     # set(MULTIFW_OPL_VARIANT "ymf262") # ymfm ymf262   — OPL3, true stereo - note not yet fast enough for RP2040
-    set(MULTIFW_OPL_VARIANT "dbopl") # DOSBox OPL  — OPL3, true stereo
     # ---------------------------------------------------------------------------
-
     if(MULTIFW_OPL_VARIANT STREQUAL "ymf262")
         set(ADLIB_TARGET_NAME "pg-adlib-ymf262")
         set(ADLIB_BUILD_FN build_adlib_ymf262)
