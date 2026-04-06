@@ -19,7 +19,7 @@ set(PICO_COPY_TO_RAM 1)
 include(pico_sdk_import.cmake)
 
 project(picogus
-    VERSION "3.3.0"
+    VERSION "4.0.0-beta"
     LANGUAGES C CXX ASM
 )
 
