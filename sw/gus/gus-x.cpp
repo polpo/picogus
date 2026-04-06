@@ -409,7 +409,7 @@ class GUSChannels {
         __force_inline void WriteWaveFreq(uint16_t val) {
             WaveFreq = val;
 #ifdef FORCE_28CH_27CH
-            if (!myGUS.fixed_44k_output && myGUS.ActiveChannels == 28) { // fudge to the 27 channel rate
+            if (myGUS.ActiveChannels == 28) { // fudge to the 27 channel rate
                 val = (uint16_t)((uint32_t)val * 22050ul / 22866ul);
             }
 #endif
@@ -481,7 +481,12 @@ class GUSChannels {
                 LOG_MSG("RampAdd nonfixed error %ld (%lu != %lu)",error,(unsigned long)checkadd,(unsigned long)RampAdd);
 #endif
             if (myGUS.fixed_44k_output) {
-                RampAdd = ((RampAdd * sample_rates[myGUS.ActiveChannels + 1]) + (44100 >> 1)) / 44100;
+#ifdef FORCE_28CH_27CH
+                if (myGUS.ActiveChannels == 28) {
+                    RampAdd = RampAdd * 22050ul / 22866ul;
+                }
+#endif
+                RampAdd = ((RampAdd * sample_rates[myGUS.ActiveChannels - 1]) + (44100 >> 1)) / 44100;
             }
         }
         INLINE void WaveUpdate(void) {
@@ -565,8 +570,8 @@ class GUSChannels {
             templeft&=~(templeft >> 31); /* <- NTS: This is a rather elaborate way to clamp negative values to zero using negate and sign extend */
             int32_t tempright=(int32_t)RampVol - (int32_t)PanRight;
             tempright&=~(tempright >> 31); /* <- NTS: This is a rather elaborate way to clamp negative values to zero using negate and sign extend */
-            VolLeft=scale_sample(vol16bit[templeft >> RAMP_FRACT], volume.gus, 0);
-            VolRight=scale_sample(vol16bit[tempright >> RAMP_FRACT], volume.gus, 0);
+            VolLeft=scale_sample(vol16bit[templeft >> RAMP_FRACT], volume.gus, false);
+            VolRight=scale_sample(vol16bit[tempright >> RAMP_FRACT], volume.gus, false);
         }
         INLINE void RampUpdate(void) {
             if (RampCtrl & 0x3) return; /* if the ramping is turned off, then don't change the ramp */
