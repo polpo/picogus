@@ -297,15 +297,14 @@ void play_adlib() {
         cdrom_audio_callback(&cdrom, AUDIO_FIFO_SIZE - STEREO_SAMPLES_PER_SECTOR);
 #endif
 
-#if 0
-#if OPL_CMD_BUFFER
-        // Process any pending OPL commands
+#if OPL_CMD_BUFFER && USE_EMU8950_OPL
+        // emu8950 doesn't drain the command buffer internally (unlike dbopl/ymfm
+        // which do it in their refill_prebuf()), so drain it here.
         while (opl_cmd_buffer.tail != opl_cmd_buffer.head) {
             auto cmd = opl_cmd_buffer.cmds[opl_cmd_buffer.tail];
             OPL_Pico_WriteRegister(cmd.addr, cmd.data);
             ++opl_cmd_buffer.tail;
         }
-#endif
 #endif
 
 #if SOUND_SB
