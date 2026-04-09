@@ -97,30 +97,26 @@ typedef struct sbdsp_t {
 #define SB_RSM_FRAC 12
 
     volatile uint32_t cur_sample;  // packed stereo pair: L in low 16, R in high 16
-#if 0
+
+    // ADPCM decode state
     struct {
-        uint32_t old_sample;
-        uint32_t new_sample;
-        volatile uint32_t dma_sample;
-        volatile bool dma_sample_ready;
-        bool dma_pending;        // a DMA transfer is in flight
-        int32_t samplecnt;
-    } rsm;                       // resampling state, memset to zero on start/stop
-#else
+        uint8_t reference; // current output level 0-255
+        uint8_t accum;     // accumulator (1..32 depending on format)
+        uint8_t format;    // 0=PCM, 2=2-bit, 3=2.6-bit, 4=4-bit ADPCM
+        bool    have_ref;  // next DMA byte is reference byte
+    } adpcm;
+
+#define SB_RING_SIZE 8
+
     struct {
         int32_t  phase_acc;
-        uint32_t buf[2];        // sample buffer, used for linear interpolation
+        uint32_t interp[2];        // interpolation buffer [0]=newer [1]=older
 
-        // DMA stuff
-        // TODO: make it a very short (max. 8 samples) ring buffer for Creative ADPCM
-        // and rates slightly higher than 44100Hz (SB16 cap is 45454Hz)
+        uint32_t ring[SB_RING_SIZE]; // decoded sample ring buffer
+        volatile uint8_t ring_head; // ISR writes here
+        uint8_t  ring_tail;         // consumer reads here
+        volatile bool dma_pending;  // a DMA transfer is in flight
     } rs;
-    struct {
-        volatile uint32_t dma_sample;
-        volatile bool dma_sample_ready;
-        bool dma_pending;        // a DMA transfer is in flight
-    } rsm;
-#endif
 
     int32_t rateratio;
 } sbdsp_t;
