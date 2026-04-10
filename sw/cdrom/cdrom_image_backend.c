@@ -24,7 +24,6 @@
 #include <inttypes.h>
 #include <stdarg.h>
 #include <stdint.h>
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
@@ -35,6 +34,7 @@
 #    include <libgen.h>
 #endif
 #define HAVE_STDARG_H
+#include "../include/pg_debug.h"
 #include "cdrom_image_backend.h"
 #include "cdrom_error_msg.h"
 #include "86box_compat.h"
@@ -77,33 +77,8 @@ static inline void frames_to_msf(uint32_t total_frames, uint8_t *pM, uint8_t *pS
 
 static char temp_keyword[64];
 
-#ifdef ENABLE_CDROM_IMAGE_BACKEND_LOG
-int cdrom_image_backend_do_log = ENABLE_CDROM_IMAGE_BACKEND_LOG;
-
-void cdrom_image_backend_log(const char *fmt, ...) {
-    char    temp[1024];
-    va_list ap;
-    char   *sp;
-    va_start(ap, fmt);
-    vsprintf(temp, fmt, ap);
-    printf("%s\n\r",temp);    
-    va_end(ap);
-}
-/*
-cdrom_image_backend_log(const char *fmt, ...)
-{
-    va_list ap;
-
-    if (cdrom_image_backend_do_log) {
-        va_start(ap, fmt);
-        pclog_ex(fmt, ap);
-        va_end(ap);
-    }
-}
-*/
-#else
-#    define cdrom_image_backend_log(fmt, ...)
-#endif
+#define PGDEBUG_CDROM_BACKEND 0
+#define cdrom_image_backend_log(fmt, ...) do { if (PGDEBUG_CDROM_BACKEND) DBG_PRINTF(fmt "\n", ##__VA_ARGS__); } while(0)
 
 /* #include "pico/stdlib.h" */
 /* extern uint LED_PIN; */
@@ -123,17 +98,13 @@ bin_read(void *priv, uint8_t *buffer, uint32_t seek, size_t count)
         return 0;    
     //if (fseeko64(tf->fp, seek, SEEK_SET) == -1) {    
     if (f_lseek(tf->fp, seek) != FR_OK) {
-#ifdef ENABLE_CDROM_IMAGE_BACKEND_LOG
         cdrom_image_backend_log("CDROM: binary_read failed during seek!\n");
-#endif
         return 0;
     }
 
     //if (fread(buffer, count, 1, tf->fp) != 1) {
     if (f_read(tf->fp,buffer, count,&bytes_read) != FR_OK) {
-#ifdef ENABLE_CDROM_IMAGE_BACKEND_LOG
         cdrom_image_backend_log("CDROM: binary_read failed during read!\n");
-#endif
         return 0;
     }
     /* gpio_xor_mask(LED_PIN); */

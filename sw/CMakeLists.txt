@@ -55,6 +55,8 @@ function(set_linker_script TARGET script)
 endfunction()
 
 
+option(PGDEBUG "Enable debug printf framework" OFF)
+
 # Global definitions across all targets
 add_compile_definitions(
     # 370MHz is extremely closely evenly divisible by 44100Hz.
@@ -212,15 +214,37 @@ function(config_target TARGET_NAME MULTIFW)
     )
     pico_add_extra_outputs(${TARGET_NAME})
     
+    # Determine which stdio drivers are available for this firmware type
     if (SOUND_MPU)
         pico_enable_stdio_uart(${TARGET_NAME} 0)
     else()
-        pico_enable_stdio_uart(${TARGET_NAME} 1)
+        set(HAS_STDIO_UART TRUE)
     endif()
     if (USB_STACK)
         pico_enable_stdio_usb(${TARGET_NAME} 0)
     else()
-        pico_enable_stdio_usb(${TARGET_NAME} 1)
+        set(HAS_STDIO_USB TRUE)
+    endif()
+
+    if(PGDEBUG AND (HAS_STDIO_UART OR HAS_STDIO_USB))
+        # Debug output is possible: enable available drivers and printf formatter
+        target_compile_definitions(${TARGET_NAME} PRIVATE PGDEBUG=1)
+        target_compile_definitions(rp2040-psram INTERFACE PSRAM_DEBUG=1)
+        if (HAS_STDIO_UART)
+            pico_enable_stdio_uart(${TARGET_NAME} 1)
+        endif()
+        if (HAS_STDIO_USB)
+            pico_enable_stdio_usb(${TARGET_NAME} 1)
+        endif()
+    else()
+        # No debug output possible or not requested: strip printf entirely
+        if (NOT SOUND_MPU)
+            pico_enable_stdio_uart(${TARGET_NAME} 0)
+        endif()
+        if (NOT USB_STACK)
+            pico_enable_stdio_usb(${TARGET_NAME} 0)
+        endif()
+        pico_set_printf_implementation(${TARGET_NAME} none)
     endif()
     pico_enable_stdio_semihosting(${TARGET_NAME} 0)
 endfunction()
@@ -638,6 +662,9 @@ if(PROJECT_TYPE STREQUAL "MULTIFW")
     pico_enable_stdio_uart(bootloader 0)
     pico_enable_stdio_usb(bootloader 0)
     pico_enable_stdio_semihosting(bootloader 0)
+    if(NOT PGDEBUG)
+        pico_set_printf_implementation(bootloader none)
+    endif()
     add_dependencies(bootloader generate_flash_firmware_h)
 
     if (NOT UF2CREATE_FOUND)

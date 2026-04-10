@@ -25,6 +25,7 @@
  *
  */
 
+#include "../include/pg_debug.h"
 #include "tusb.h"
 #ifdef USB_JOYSTICK
 #include "xinput_host.h"
@@ -208,19 +209,19 @@ static inline void process_sony_ds4(uint8_t const* report, uint16_t len)
 // therefore report_desc = NULL, desc_len = 0
 void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const* desc_report, uint16_t desc_len)
 {
-    printf("HID dev:%d inst:%d mounted\r\n", dev_addr, instance);
+    DBG_PRINTF("HID dev:%d inst:%d mounted\r\n", dev_addr, instance);
 
     // Interface protocol (hid_interface_protocol_enum_t)
     const char* protocol_str[] = { "n/a", "kbd", "mouse" };
     uint8_t const itf_protocol = tuh_hid_interface_protocol(dev_addr, instance);
 
-    printf("HID protocol=%s\r\n", protocol_str[itf_protocol]);
+    DBG_PRINTF("HID protocol=%s\r\n", protocol_str[itf_protocol]);
 
     // By default host stack will use activate boot protocol on supported interface.
     // Therefore for this simple example, we only need to parse generic report descriptor (with built-in parser)
     if (itf_protocol == HID_ITF_PROTOCOL_NONE) {
         hid_info[instance].report_count = tuh_hid_parse_report_descriptor(hid_info[instance].report_info, MAX_REPORT, desc_report, desc_len);
-        printf("HID has %u reports \r\n", hid_info[instance].report_count);
+        DBG_PRINTF("HID has %u reports \r\n", hid_info[instance].report_count);
     } else {
         // force boot protocol
         tuh_hid_set_protocol(dev_addr, instance, HID_PROTOCOL_BOOT);
@@ -229,14 +230,14 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const* desc_re
     // request to receive report
     // tuh_hid_report_received_cb() will be invoked when report is available
     if (!tuh_hid_receive_report(dev_addr, instance)) {
-        printf("err(%d:%d) can't recv HID report\r\n", dev_addr, instance);
+        DBG_PRINTF("err(%d:%d) can't recv HID report\r\n", dev_addr, instance);
     }
 }
 
 // Invoked when device with hid interface is un-mounted
 void tuh_hid_umount_cb(uint8_t dev_addr, uint8_t instance)
 {
-    printf("HID dev:%d inst:%d unmounted\r\n", dev_addr, instance);
+    DBG_PRINTF("HID dev:%d inst:%d unmounted\r\n", dev_addr, instance);
 }
 
 //--------------------------------------------------------------------+
@@ -276,7 +277,7 @@ static inline void process_generic_report(uint8_t dev_addr, uint8_t instance, ui
     }
 
     if (!rpt_info) {
-        printf("Couldn't find the report info for this report !\r\n");
+        DBG_PRINTF("Couldn't find the report info for this report !\r\n");
         return;
     }
 
@@ -332,7 +333,7 @@ void tuh_hid_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t cons
 
     // continue to request to receive report
     if (!tuh_hid_receive_report(dev_addr, instance)) {
-        printf("err(%d:%d) can't recv HID report\r\n", dev_addr, instance);
+        DBG_PRINTF("err(%d:%d) can't recv HID report\r\n", dev_addr, instance);
     }
 }
 
@@ -390,7 +391,7 @@ void tuh_xinput_report_received_cb(uint8_t dev_addr, uint8_t instance, xinputh_i
 
 void tuh_xinput_mount_cb(uint8_t dev_addr, uint8_t instance, const xinputh_interface_t *xinput_itf)
 {
-    printf("XINPUT MOUNTED %02x %d\n", dev_addr, instance);
+    DBG_PRINTF("XINPUT MOUNTED %02x %d\n", dev_addr, instance);
     // If this is a Xbox 360 Wireless controller we need to wait for a connection packet
     // on the in pipe before setting LEDs etc. So just start getting data until a controller is connected.
     if (xinput_itf->type == XBOX360_WIRELESS && xinput_itf->connected == false) {
@@ -434,6 +435,6 @@ void tuh_xinput_mount_cb(uint8_t dev_addr, uint8_t instance, const xinputh_inter
 
 void tuh_xinput_umount_cb(uint8_t dev_addr, uint8_t instance)
 {
-    printf("XINPUT UNMOUNTED %02x %d\n", dev_addr, instance);
+    DBG_PRINTF("XINPUT UNMOUNTED %02x %d\n", dev_addr, instance);
 }
 #endif

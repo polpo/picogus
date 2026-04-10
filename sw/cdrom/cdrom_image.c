@@ -24,36 +24,19 @@
  */
 #include <inttypes.h>
 #include <stdarg.h>
-#include <stdio.h>
 #include <stdint.h>
 #include <string.h>
 #include <stdlib.h>
 #include <wchar.h>
 #define HAVE_STDARG_H
 
+#include "../include/pg_debug.h"
 #include "cdrom_image_backend.h"
 #include "cdrom.h"
 #include "86box_compat.h"
 
-//#define ENABLE_CDROM_IMAGE_LOG 1
-
-#ifdef ENABLE_CDROM_IMAGE_LOG
-int cdrom_image_do_log = ENABLE_CDROM_IMAGE_LOG;
-
-void
-cdrom_image_log(const char *fmt, ...)
-{
-    va_list ap;
-
-    if (cdrom_image_do_log) {
-        va_start(ap, fmt);
-        pclog_ex(fmt, ap);
-        va_end(ap);
-    }
-}
-#else
-#    define cdrom_image_log(fmt, ...)
-#endif
+#define PGDEBUG_CDROM_IMAGE 0
+#define cdrom_image_log(fmt, ...) do { if (PGDEBUG_CDROM_IMAGE) DBG_PRINTF(fmt "\n", ##__VA_ARGS__); } while(0)
 
 /* The addresses sent from the guest are absolute, ie. a LBA of 0 corresponds to a MSF of 00:00:00. Otherwise, the counter displayed by the guest is wrong:
    there is a seeming 2 seconds in which audio plays but counter does not move, while a data track before audio jumps to 2 seconds before the actual start

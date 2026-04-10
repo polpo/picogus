@@ -21,11 +21,11 @@
 #include <inttypes.h>
 #include <stdarg.h>
 #include <stdint.h>
-#include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 #include <wchar.h>
 #define HAVE_STDARG_H
+#include "../include/pg_debug.h"
 #include "86box_compat.h"
 #include "cdrom.h"
 #include "cdrom_image_manager.h"
@@ -93,25 +93,8 @@ static uint8_t extra_buffer[296];
 
 /* int cdrom_interface_current; */
 
-//#define ENABLE_CDROM_LOG 1
-
-#ifdef ENABLE_CDROM_LOG
-int cdrom_do_log = ENABLE_CDROM_LOG;
-
-void
-cdrom_log(const char *fmt, ...)
-{
-    va_list ap;
-
-    if (cdrom_do_log) {
-        va_start(ap, fmt);
-        pclog_ex(fmt, ap);
-        va_end(ap);
-    }
-}
-#else
-#    define cdrom_log(fmt, ...)
-#endif
+#define PGDEBUG_CDROM 0
+#define cdrom_log(fmt, ...) do { if (PGDEBUG_CDROM) DBG_PRINTF(fmt "\n", ##__VA_ARGS__); } while(0)
 
 /*
 static __inline int
@@ -152,17 +135,17 @@ void cdrom_tasks(cdrom_t *dev) {
         cdman_load_image_index(dev, dev->image_data);
         break;
     case CD_COMMAND_IMAGE_LOAD:
-        printf("loading");
+        DBG_PRINTF("loading");
         cdrom_errorstr_clear();
         if (dev->disk_loaded) {
             dev->disk_loaded = 0;
             dev->media_changed = 1;
             cdrom_image_close(dev);
-            printf("Disk Removed.\n");     
+            DBG_PRINTF("Disk Removed.\n");
             cdrom_error(dev, 0x11);   //media changed
         }
         if (dev->image_path[0]) {
-            printf("Opening %s...",dev->image_path);
+            DBG_PRINTF("Opening %s...",dev->image_path);
             if (cdrom_image_open(dev,dev->image_path)) {
                 dev->image_command = CD_COMMAND_NONE;
                 dev->image_status = CD_STATUS_ERROR;
@@ -171,7 +154,7 @@ void cdrom_tasks(cdrom_t *dev) {
             } else {
                 cdman_set_image_index(dev);
             }
-            printf("Done.\n");
+            DBG_PRINTF("Done.\n");
             dev->disk_loaded = 1;
             dev->media_changed = 1;
             cdrom_error(dev, 0x11);   //media changed
@@ -227,7 +210,7 @@ uint16_t __inline cdrom_fifo_level(cdrom_fifo_t *fifo) {
 uint8_t cdrom_fifo_read(cdrom_fifo_t *fifo) {    
     uint8_t x;        
     if(!cdrom_fifo_level(fifo)) {
-        printf("FIFO UNDERRUN(%p)\n",fifo);
+        DBG_PRINTF("FIFO UNDERRUN(%p)\n",fifo);
         return 0;
     }  
 
@@ -238,7 +221,7 @@ uint8_t cdrom_fifo_read(cdrom_fifo_t *fifo) {
 }
 void cdrom_fifo_clear(cdrom_fifo_t *fifo) {
     if(cdrom_fifo_level(fifo)) {    
-        printf("*** DISCARD %u *** (%p)\n",cdrom_fifo_level(fifo),fifo);        
+        DBG_PRINTF("*** DISCARD %u *** (%p)\n",cdrom_fifo_level(fifo),fifo);
         fifo->tail = fifo->head;        
     }
 }
@@ -333,7 +316,7 @@ bool cdrom_audio_callback(cdrom_t *dev, uint32_t len) {
             /* putchar('y'); */
             dev->audio_sector_consumed_pairs += pairs_to_transfer;
         } else {
-            putchar('n');
+            DBG_PUTCHAR('n');
             // This implies fifo_add_samples failed even though we thought there was space.
             // Could be a bug in fifo_free_space or fifo_add_samples, or a race condition in a threaded env (not here).
             cdrom_log("CD-ROM %i: fifo_add_samples failed unexpectedly! Space was %u, tried to add %u.\n",
@@ -501,7 +484,7 @@ uint8_t cdrom_audio_playmsf(cdrom_t *dev, int m,int s, int f, int M, int S, int 
     pos2 = MSFtoLBA(M,S,F) - 150;    
 
     if (!(dev->ops->track_type(dev, pos) & CD_TRACK_AUDIO)) {
-        printf("CD-ROM %i: LBA %08X not on an audio track\n", dev->id, pos);
+        DBG_PRINTF("CD-ROM %i: LBA %08X not on an audio track\n", dev->id, pos);
         cdrom_log("CD-ROM %i: LBA %08X not on an audio track\n", dev->id, pos);
         cdrom_error(dev,0x0E);
         cdrom_error(dev,0x10);

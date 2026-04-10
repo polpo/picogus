@@ -18,8 +18,8 @@
 
 #include "pico_reflash.h"
 
-#include <stdio.h>
 #include <hardware/flash.h>
+#include "../include/pg_debug.h"
 #include "hardware/clocks.h"
 #include "pico/multicore.h"
 #include "pico/stdlib.h"
@@ -61,15 +61,15 @@ static void pico_firmware_process_block(void)
 {
     if (uf2_buf.uf2.magicStart0 != 0x0A324655 || uf2_buf.uf2.magicStart1 != 0x9E5D5157 || uf2_buf.uf2.magicEnd != 0x0AB16F30) {
         // Invalid UF2 file
-        puts("Invalid UF2 data!");
+        ERR_PUTS("Invalid UF2 data!");
         pico_firmware_reset(PICO_FIRMWARE_ERROR);
         return;
     }
     pico_firmware_status = PICO_FIRMWARE_BUSY;
     if (pico_firmware_curBlock == 0) {
-        puts("Starting firmware write...");
+        DBG_PUTS("Starting firmware write...");
         pico_firmware_numBlocks = uf2_buf.uf2.numBlocks;
-        printf("numBlocks: %u\n", pico_firmware_numBlocks);
+        DBG_PRINTF("numBlocks: %u\n", pico_firmware_numBlocks);
         pico_firmware_payloadSize = uf2_buf.uf2.payloadSize;
         uint32_t totalSize = pico_firmware_numBlocks * pico_firmware_payloadSize;
         // Point of no return... erasing the flash!
@@ -81,11 +81,11 @@ static void pico_firmware_process_block(void)
     uint32_t ints = save_and_disable_interrupts();
     flash_range_program(curAddress, uf2_buf.uf2.data, pico_firmware_payloadSize);
     restore_interrupts(ints);
-    printf("curBlock: %u\n", pico_firmware_curBlock);
+    DBG_PRINTF("curBlock: %u\n", pico_firmware_curBlock);
     ++pico_firmware_curBlock;
     if (pico_firmware_curBlock == pico_firmware_numBlocks) {
         // Final block has been written
-        puts("Final block written.");
+        DBG_PUTS("Final block written.");
         pico_firmware_status = PICO_FIRMWARE_DONE;
     } else {
         pico_firmware_status = PICO_FIRMWARE_WRITING;
@@ -99,7 +99,7 @@ void pico_firmware_write(uint8_t data)
 }
 
 void firmware_loop() {
-    puts("starting core 1");
+    DBG_PUTS("starting core 1");
 
     for (;;) {
         if (!multicore_fifo_rvalid()) {
@@ -120,7 +120,7 @@ void firmware_loop() {
 
 static void pico_firmware_reboot()
 {
-    puts("Rebooting!");
+    DBG_PUTS("Rebooting!");
     // Stop second core
     multicore_reset_core1();
     // Go back to stock speed

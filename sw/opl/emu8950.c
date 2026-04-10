@@ -445,7 +445,7 @@ static void initializeTables() {
 #define CAR(o, x) (&(o)->slot[((x) << 1) | 1])
 #define BIT(s, b) (((s) >> (b)) & 1)
 
-#if OPL_DEBUG
+#if PGDEBUG_OPL
 static void _debug_print_patch(OPL_SLOT *slot) {
   OPL_PATCH *p = slot->patch;
   printf("[slot#%d am:%d pm:%d eg:%d kr:%d ml:%d kl:%d tl:%d ws:%d fb:%d A:%d D:%d S:%d R:%d]\n", slot->number, //
@@ -566,7 +566,7 @@ static void commit_slot_update(OPL_SLOT *slot, uint8_t notesel) {
         }
     }
 
-#if OPL_DEBUG
+#if PGDEBUG_OPL
     if (slot->last_eg_state != slot->eg_state) {
       _debug_print_slot_info(slot);
       slot->last_eg_state = slot->eg_state;

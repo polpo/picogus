@@ -1,6 +1,6 @@
 #include <inttypes.h>
 #include <stdbool.h>
-#include <stdio.h>
+#include "../include/pg_debug.h"
 #include <string.h>
 #include "system/pico_pic.h"
 #include "audio/volctrl.h"
@@ -574,7 +574,7 @@ void sbdsp_set_dma(uint8_t dma) {
 
 static void sbmixer_reset(void);
 void sbdsp_init() {
-    puts("Initing ISA DMA PIO...");
+    DBG_PUTS("Initing ISA DMA PIO...");
     SBDSP_DMA_isr_pt = sbdsp_dma_isr;
 
     sbdsp.outbox = 0xAA;
@@ -1397,7 +1397,7 @@ void sbdsp_write(uint8_t address, uint8_t value) {
 #endif
                 break;
             }
-            if (sbdsp.dav_dsp) printf("WARN - DAV_DSP OVERWRITE\n");
+            if (sbdsp.dav_dsp) DBG_PRINTF("WARN - DAV_DSP OVERWRITE\n");
             sbdsp.inbox = value;
             sbdsp.dav_dsp = 1;
             break;

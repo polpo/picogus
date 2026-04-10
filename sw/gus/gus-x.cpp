@@ -67,7 +67,7 @@ using namespace std;
 
 // #define GUS_BASE myGUS.portbase
 #define GUS_RATE myGUS.rate
-#define LOG_GUS 0
+#define PGDEBUG_GUS 0
 
 #define VOL_SHIFT 14
 
@@ -1051,7 +1051,7 @@ __force_inline static uint16_t ExecuteReadRegister(void) {
         critical_section_exit(&gus_crit);
         return (uint16_t)(tmpreg << 8);
     default:
-#if LOG_GUS
+#if PGDEBUG_GUS
         LOG_MSG("Read Register num 0x%x", myGUS.gRegSelect);
 #endif
         return myGUS.gRegData;
@@ -1214,7 +1214,7 @@ __force_inline static void ExecuteGlobRegister(void) {
         // myGUS.basefreq = (uint32_t)(1000000.0/(1.619695497*(float)(myGUS.ActiveChannels)));
         myGUS.basefreq = myGUS.fixed_44k_output ? 44100 : sample_rates[myGUS.ActiveChannels - 1];
 
-#if LOG_GUS
+#if PGDEBUG_GUS
         LOG_MSG("GUS set to %d channels freq=%luHz", myGUS.ActiveChannels,(unsigned long)myGUS.basefreq);
 #endif
         for (i=0;i<myGUS.ActiveChannels;i++) guschan[i]->UpdateWaveRamp();
@@ -1270,7 +1270,7 @@ __force_inline static void ExecuteGlobRegister(void) {
         GUSReset();
         break;
     default:
-#if LOG_GUS
+#if PGDEBUG_GUS
         LOG_MSG("Unimplemented global register %x -- %x", myGUS.gRegSelect, myGUS.gRegData);
 #endif
         break;
@@ -1364,7 +1364,7 @@ __force_inline uint8_t read_gus(Bitu port) {
         }
     case 0x106:
     default:
-#if LOG_GUS
+#if PGDEBUG_GUS
         LOG_MSG("Read GUS at port 0x%x", port);
 #endif
         break;
@@ -1448,7 +1448,7 @@ __force_inline void write_gus(Bitu port, Bitu val) {
         }
         break;
     default:
-#if LOG_GUS
+#if PGDEBUG_GUS
         LOG_MSG("Write GUS at port 0x%x with %x", port, val);
 #endif
         break;

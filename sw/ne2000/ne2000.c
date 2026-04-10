@@ -34,7 +34,7 @@ Modifications for use with Pico by Kevin Moonlight (me@yyzkevin.com)
 */
 
 
-#include <stdio.h>
+#include "../include/pg_debug.h"
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
@@ -142,31 +142,31 @@ void PG_Wifi_Connect(const char* ssid, const char* pass) {
         strlcpy(PG_Wifi_info.WIFI_KEY, pass, 64);
     }
     if (!PG_Wifi_info.WIFI_SSID[0]) {
-        printf("No SSID set\n");
+        DBG_PRINTF("No SSID set\n");
         return;
     }
 
-    printf("Joining SSID: %s\n", PG_Wifi_info.WIFI_SSID);                                                
+    DBG_PRINTF("Joining SSID: %s\n", PG_Wifi_info.WIFI_SSID);                                                
     int ConnectErr=cyw43_arch_wifi_connect_async(
         PG_Wifi_info.WIFI_SSID,
         PG_Wifi_info.WIFI_KEY,
         PG_Wifi_info.WIFI_KEY[0] == 0 ? CYW43_AUTH_OPEN : CYW43_AUTH_WPA2_MIXED_PSK
     );
-    if (ConnectErr==0) printf("Connection started\n");
-    else printf("Connection Error: %d", ConnectErr);
+    if (ConnectErr==0) DBG_PRINTF("Connection started\n");
+    else DBG_PRINTF("Connection Error: %d", ConnectErr);
 }
 
 void PG_Wifi_Reconnect(void)
 {
     int32_t rssi;
     cyw43_ioctl(&cyw43_state, CYW43_IOCTL_GET_RSSI, sizeof(rssi), (uint8_t*)&rssi, CYW43_ITF_STA);
-    printf("rssi %d ", rssi);
+    DBG_PRINTF("rssi %d ", rssi);
     if (rssi == 0) {
         PG_Wifi_Connect(NULL, NULL);
         return;
     }
     int16_t status = cyw43_wifi_link_status(&cyw43_state, CYW43_ITF_STA);
-    printf("status: %d\n", status);
+    DBG_PRINTF("status: %d\n", status);
     switch(status)
     {
         case CYW43_LINK_JOIN :
@@ -180,22 +180,22 @@ void PG_Wifi_Reconnect(void)
 
 uint8_t PG_EnableWifi(void) {
     if (cyw43_arch_init()) {
-        printf("Init failed\n");
+        DBG_PRINTF("Init failed\n");
         return 1;
     }
 
     cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, 1);
 
-    printf("cyw43_wifi_set_up(&cyw43_state,CYW43_ITF_STA,true,CYW43_COUNTRY_WORLDWIDE);\n");        
+    DBG_PRINTF("cyw43_wifi_set_up(&cyw43_state,CYW43_ITF_STA,true,CYW43_COUNTRY_WORLDWIDE);\n");        
     cyw43_wifi_set_up(&cyw43_state, CYW43_ITF_STA, true, CYW43_COUNTRY_WORLDWIDE);   
     cyw43_wifi_get_mac(&cyw43_state, CYW43_ITF_STA, PG_Wifi_info.cyw43_mac);          
-    printf("WIFI Address: %02x:%02x:%02x:%02x:%02x:%02x\n\r",
+    DBG_PRINTF("WIFI Address: %02x:%02x:%02x:%02x:%02x:%02x\n\r",
            PG_Wifi_info.cyw43_mac[0], PG_Wifi_info.cyw43_mac[1], PG_Wifi_info.cyw43_mac[2],
            PG_Wifi_info.cyw43_mac[3], PG_Wifi_info.cyw43_mac[4], PG_Wifi_info.cyw43_mac[5]);    
     cyw43_wifi_pm(&cyw43_state, cyw43_pm_value(CYW43_NO_POWERSAVE_MODE, 20, 1, 1, 1));
 
     nic = ne2000_init();
-    printf("Inited\n");
+    DBG_PRINTF("Inited\n");
     return 0;
 }
 

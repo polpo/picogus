@@ -5,7 +5,7 @@
 #include <stdlib.h>
 #include <ctype.h>
 
-#include <stdio.h>
+#include "../include/pg_debug.h"
 
 #include "cdrom_error_msg.h"
 
@@ -274,7 +274,7 @@ static uint32_t drive_serial;
 static bool autoadvance;
 
 void cdman_set_autoadvance(bool setting) {
-    printf("setting autoadvance to %u\n", setting);
+    DBG_PRINTF("setting autoadvance to %u\n", setting);
     autoadvance = setting;
 }
 
@@ -287,11 +287,11 @@ void cdman_reload_image(cdrom_t *dev) {
 void cdman_set_serial(cdrom_t *dev, uint32_t serial) {
     if (drive_serial == serial) {
         // If we are re-inserting the same drive, maybe advance the disc image
-        printf("Inserting the same drive...\n");
+        DBG_PRINTF("Inserting the same drive...\n");
         cdman_reload_image(dev);
     } else {
         drive_serial = serial;
-        printf("New drive with serial %u inserted", serial);
+        DBG_PRINTF("New drive with serial %u inserted", serial);
         cdman_load_image_index(dev, 1);
     }
 }

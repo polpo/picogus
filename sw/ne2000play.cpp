@@ -17,9 +17,10 @@
  *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
-#include <stdio.h>
 #include <math.h>
 #include <string.h>
+
+#include "include/pg_debug.h"
 
 #if PICO_ON_DEVICE
 
@@ -49,7 +50,7 @@ void play_ne2000() {
     // Init PIC on this core so it handles timers
     PIC_Init();
 
-    puts("starting core 1 ne2000");
+    DBG_PUTS("starting core 1 ne2000");
     PG_EnableWifi();
     PG_Wifi_Connect(settings.WiFi.ssid, settings.WiFi.password);
 
@@ -69,7 +70,7 @@ void play_ne2000() {
         }
         if (((time_us_32() >> 21) & 0x1) == 0x1) { 
             if (flag == false) {
-                putchar('=');
+                DBG_PUTCHAR('=');
                 PG_Wifi_Reconnect();
                 flag = true;
             }
