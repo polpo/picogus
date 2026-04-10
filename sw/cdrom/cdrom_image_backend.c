@@ -746,8 +746,9 @@ cdi_cue_get_number(char **line)
     if (!cdi_cue_get_buffer(temp, line, 0))
         return 0;
 
-    /* if (sscanf(temp, "%" PRIu64, &num) != 1) */
-    if (sscanf(temp, "%" PRIu32, &num) != 1)
+    char *end;
+    num = (uint32_t)strtoul(temp, &end, 10);
+    if (end == temp)
         return 0;
 
     return num;
@@ -767,9 +768,18 @@ cdi_cue_get_frame(uint32_t *frames, char **line)
     if (!success)
         return 0;
 
-    success = sscanf(temp, "%d:%d:%d", &min, &sec, &fr) == 3;
-    if (!success)
-        return 0;
+    {
+        char *p = temp;
+        char *end;
+        min = (int)strtol(p, &end, 10);
+        if (*end != ':') return 0;
+        p = end + 1;
+        sec = (int)strtol(p, &end, 10);
+        if (*end != ':') return 0;
+        p = end + 1;
+        fr = (int)strtol(p, &end, 10);
+        if (end == p) return 0;
+    }
 
     *frames = MSF_TO_FRAMES(min, sec, fr);
 
