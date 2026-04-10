@@ -5,6 +5,9 @@
 #include "system/pico_pic.h"
 #include "audio/volctrl.h"
 #include "sbdsp.h"
+#ifdef SOUND_MPU
+#include "mpu401/export.h"
+#endif
 
 /*
 Title  : SoundBlaster DSP Emulation
@@ -993,6 +996,35 @@ void sbdsp_process(void) {
                 sbdsp.current_command_index++;
             }
             break;
+        // SB MIDI commands
+        case DSP_MIDI_WRITE_POLL: // 0x38: write MIDI byte
+            if (sbdsp.dav_dsp) {
+                if (sbdsp.current_command_index == 1) {
+#ifdef SOUND_MPU
+                    MIDI_RawOutByte(sbdsp.inbox);
+#endif
+                    sbdsp.dav_dsp = 0;
+                    sbdsp.current_command = 0;
+                }
+                sbdsp.current_command_index++;
+            }
+            break;
+        case DSP_MIDI_READ_POLL: // 0x30: read MIDI byte
+            if (sbdsp.current_command_index == 0) {
+                sbdsp.current_command = 0;
+                sbdsp_output(0x00); // no MIDI input
+            }
+            break;
+        case 0x31: // MIDI Read Interrupt - accept and ignore
+            sbdsp.current_command = 0;
+            break;
+        case 0x34: // MIDI UART read+write poll
+        case 0x35: // MIDI UART read interrupt+Write poll
+            sbdsp.midi_uart_mode = true;
+            sbdsp.current_command = 0;
+            break;
+            sbdsp.current_command = 0;
+            break;
         case 0:
             //not in a command
             break;
@@ -1037,6 +1069,7 @@ static __force_inline void sbdsp_reset(uint8_t value) {
             while (sbdsp.dsp_busy) tight_loop_contents();   // TODO timeout!!!!!!
             sbdsp.reset_state = 1;
             sbdsp.autoinit = 0;
+            sbdsp.midi_uart_mode = false;
             sbdsp_dma_disable(false);
             break;
         case 0:
@@ -1282,6 +1315,13 @@ void sbdsp_write(uint8_t address, uint8_t value) {
     switch (address) {
         case DSP_WRITE:   // 0xC
         case DSP_WRITE+1: // 0xD
+            // in MIDI UART mode, all writes to DSP data port are MIDI output
+            if (sbdsp.midi_uart_mode) {
+#ifdef SOUND_MPU
+                MIDI_RawOutByte(value);
+#endif
+                break;
+            }
             if (sbdsp.dav_dsp) printf("WARN - DAV_DSP OVERWRITE\n");
             sbdsp.inbox = value;
             sbdsp.dav_dsp = 1;

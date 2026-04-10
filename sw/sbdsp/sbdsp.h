@@ -119,6 +119,8 @@ typedef struct sbdsp_t {
     } rs;
 
     int32_t rateratio;
+
+    bool midi_uart_mode;  // DSP MIDI UART mode (commands 0x34/0x35)
 } sbdsp_t;
 
 void sbdsp_init();
