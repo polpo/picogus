@@ -887,7 +887,8 @@ void sbdsp_process(void) {
                 } else if (sbdsp.current_command_index == 2) {
                     sbdsp.dac_pause_duration = sbdsp.dac_pause_duration_low + (sbdsp.inbox << 8);
                     sbdsp.dac_resume_pending = true;
-                    PIC_AddEvent(&DSP_DAC_Resume_event, sbdsp.dma_interval * sbdsp.dac_pause_duration, 0);
+                    // length of pause is samples - 1, so add 1
+                    PIC_AddEvent(&DSP_DAC_Resume_event, sbdsp.dma_interval * (sbdsp.dac_pause_duration + 1), 0);
                     sbdsp.dav_dsp = 0;
                     sbdsp.current_command = 0;
                 }
@@ -1016,6 +1017,8 @@ void sbdsp_process(void) {
             }
             break;
         case 0x31: // MIDI Read Interrupt - accept and ignore
+        case 0xA0: // Disable Stereo Input Mode
+        case 0xA8: // Enable Stereo Input Mode
             sbdsp.current_command = 0;
             break;
         case 0x34: // MIDI UART read+write poll
@@ -1190,7 +1193,12 @@ static void sbmixer_16_set(uint8_t sb16_reg, uint8_t value) {
 }
 
 static void sbmixer_reset(void) {
+    // preserve IRQ/DMA select registers across mixer reset
+    uint8_t saved_irq = mixer_state[MIXER_INTERRUPT];
+    uint8_t saved_dma = mixer_state[MIXER_DMA];
     memset(mixer_state, 0, sizeof(mixer_state));
+    mixer_state[MIXER_INTERRUPT] = saved_irq;
+    mixer_state[MIXER_DMA] = saved_dma;
 
     // initialize default values
     sbmixer_pro_set(MIXER_VOL_MASTER, 0xFF);
@@ -1246,6 +1254,10 @@ static __force_inline void sbmixer_write(uint8_t value) {
         case 0x00: // Mixer reset
             sbmixer_reset();
             break;
+        case 0x02: // SBPro Master Volume alias (chains to 0x22)
+            mixer_state[0x02] = value;
+            sbmixer_pro_set(MIXER_VOL_MASTER, value);
+            break;
         case MIXER_VOL_MASTER:
         case MIXER_VOL_MIDI:
         case MIXER_VOL_CD:
@@ -1293,7 +1305,7 @@ uint8_t sbdsp_read(uint8_t address) {
                 PIC_DeActivateIRQ();
             }
             return (sbdsp.dav_pc << 7) | DSP_UNUSED_STATUS_BITS_PULLED_HIGH;
-        case DSP_IRQ_16_STATUS: // +0xD
+        case DSP_IRQ_16_STATUS: // +0xF
             if (sbdsp.irq_16_pending) {
                 sbdsp.irq_16_pending = false;
                 PIC_DeActivateIRQ();
