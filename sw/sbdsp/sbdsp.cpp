@@ -283,7 +283,33 @@ void sbdsp_set_wtvol_passthrough(uint8_t *wt_volume, sbmixer_wtvol_cb_t cb) {
     wtvol_cb = cb;
 }
 
+// Fake ADC (recording) - just fire IRQ after the expected transfer time so
+// programs don't hang, but they will get garbage data
+static uint32_t DSP_ADC_eventHandler(Bitu val);
+static PIC_TimerEvent DSP_ADC_event = {
+    .handler = DSP_ADC_eventHandler,
+};
+static uint32_t DSP_ADC_eventHandler(Bitu val) {
+    if (!sbdsp.adc_active) return 0;
+    if (sbdsp.dma_16bit) {
+        sbdsp.irq_16_pending = true;
+    } else {
+        sbdsp.irq_8_pending = true;
+    }
+    PIC_ActivateIRQ();
+    // for auto-init, reschedule the next block
+    if (sbdsp.autoinit) {
+        PIC_AddEvent(&DSP_ADC_event, sbdsp.dma_interval * (sbdsp.dma_block_size + 1), 0);
+    }
+    return 0;
+}
+
 static __force_inline void sbdsp_dma_disable(bool pause) {
+    if (sbdsp.adc_active) {
+        PIC_RemoveEvent(&DSP_ADC_event);
+        if (!pause) sbdsp.adc_active = false;
+        return;
+    }
     sbdsp.dma_enabled = false;
     sbdsp.rs.dma_pending = false;
     // sbdsp.cur_sample = 0; // hold last sample to prevent pops!
@@ -389,6 +415,11 @@ static __force_inline void sbdsp_set_dma_interval() {
 }
 
 static __force_inline void sbdsp_dma_enable() {
+    if (sbdsp.adc_active) {
+        // resume fake ADC
+        PIC_AddEvent(&DSP_ADC_event, sbdsp.dma_interval * (sbdsp.dma_block_size + 1), 0);
+        return;
+    }
     if (!sbdsp.dma_enabled) {
         sbdsp.dma_enabled = true;
         // Set autopush bits to number of bits per audio frame.
@@ -952,16 +983,23 @@ void sbdsp_process(void) {
                     // SB16: sample_count counts individual DMA transfers minus 1.
                     // Each DMA event transfers one complete frame, so for stereo
                     // we halve the count (2 DMA words per stereo frame).
-                    sbdsp.dma_xfer_count = sbdsp.dma_stereo
-                        ? (sbdsp.dma_sample_count + 1) >> 1
-                        : sbdsp.dma_sample_count + 1;
-                    sbdsp.dma_xfer_count_left = sbdsp.dma_xfer_count;
                     sbdsp.dav_dsp = 0;
-                    sbdsp.current_command = 0;
-                    sbdsp.speaker_on = true;
                     sbdsp_set_dma_interval();
-                    sbdsp.dma_done = false;
-                    sbdsp_dma_enable();
+                    if (sbdsp.current_command & 0x8) {
+                        // ADC (recording) - schedule fake IRQ, no real DMA
+                        sbdsp.adc_active = true;
+                        PIC_AddEvent(&DSP_ADC_event, sbdsp.dma_interval * (sbdsp.dma_sample_count + 1), 0);
+                    } else {
+                        // DAC (playback)
+                        sbdsp.dma_xfer_count = sbdsp.dma_stereo
+                            ? (sbdsp.dma_sample_count + 1) >> 1
+                            : sbdsp.dma_sample_count + 1;
+                        sbdsp.dma_xfer_count_left = sbdsp.dma_xfer_count;
+                        sbdsp.speaker_on = true;
+                        sbdsp.dma_done = false;
+                        sbdsp_dma_enable();
+                    }
+                    sbdsp.current_command = 0;
                 }
                 sbdsp.current_command_index++;
             }
@@ -1026,7 +1064,32 @@ void sbdsp_process(void) {
             sbdsp.midi_uart_mode = true;
             sbdsp.current_command = 0;
             break;
+        // recording commands - fake ADC
+        case 0x24: // DMA ADC, 8-bit single-cycle (2 param bytes: length-1)
+            if (sbdsp.dav_dsp) {
+                if (sbdsp.current_command_index == 1) {
+                    sbdsp.dma_sample_count = sbdsp.inbox;
+                    sbdsp.dav_dsp = 0;
+                } else if (sbdsp.current_command_index == 2) {
+                    sbdsp.dma_sample_count += (sbdsp.inbox << 8);
+                    sbdsp.dav_dsp = 0;
+                    sbdsp.current_command = 0;
+                    sbdsp.autoinit = 0;
+                    sbdsp.dma_16bit = false;
+                    sbdsp.adc_active = true;
+                    sbdsp_set_dma_interval();
+                    PIC_AddEvent(&DSP_ADC_event, sbdsp.dma_interval * (sbdsp.dma_sample_count + 1), 0);
+                }
+                sbdsp.current_command_index++;
+            }
+            break;
+        case 0x2C: // autoinit DMA ADC, 8-bit
             sbdsp.current_command = 0;
+            sbdsp.autoinit = 1;
+            sbdsp.dma_16bit = false;
+            sbdsp.adc_active = true;
+            sbdsp_set_dma_interval();
+            PIC_AddEvent(&DSP_ADC_event, sbdsp.dma_interval * (sbdsp.dma_block_size + 1), 0);
             break;
         case 0:
             //not in a command
