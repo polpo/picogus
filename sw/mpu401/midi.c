@@ -293,23 +293,17 @@ __force_inline static bool send_midi_byte() {
             if (midi.sysex.start) {
                 /* if (midi.sysex.usedbufs == 0 && midi.sysex.buf[5] == 0x7F) { */
                 if (midi.sysex.buf[5] == 0x7F) {
-                    midi.sysex.delay = 290; // PicoGUS // All Parameters reset
-                /* } else if (midi.sysex.usedbufs == 0 && midi.sysex.buf[5] == 0x10 && midi.sysex.buf[6] == 0x00 && midi.sysex.buf[7] == 0x04) { */
+                    midi.sysex.delay = 290000; // All Parameters reset (290 ms)
                 } else if (midi.sysex.buf[5] == 0x10 && midi.sysex.buf[6] == 0x00 && midi.sysex.buf[7] == 0x04) {
-                    midi.sysex.delay = 145;  // PicoGUS // Viking Child
-                /* } else if (midi.sysex.usedbufs == 0 && midi.sysex.buf[5] == 0x10 && midi.sysex.buf[6] == 0x00 && midi.sysex.buf[7] == 0x01) { */
+                    midi.sysex.delay = 145000; // Viking Child (145 ms)
                 } else if (midi.sysex.buf[5] == 0x10 && midi.sysex.buf[6] == 0x00 && midi.sysex.buf[7] == 0x01) {
-                    midi.sysex.delay = 30;  // PicoGUS  // Dark Sun 1
+                    midi.sysex.delay = 30000;  // Dark Sun 1 (30 ms)
                 } else {
-                    // HardMPU:
-                    /* midi.sysex.delay = ((((midi.sysex.usedbufs*SYSEX_SIZE)+midi.sysex.used)/2)+2); */
-                    // DOSBox:
-                    /* midi.sysex.delay = (Bitu)(((float)(midi.sysex.used) * 1.25f) * 1000.0f / 3125.0f) + 2 */
-                    // PicoGUS: 1.25 * 1000.0 / 3125.0 = 0.4
-                    /* midi.sysex.delay = ((midi.sysex.usedbufs*SYSEX_SIZE)+midi.sysex.used) * 0.4f + 2; */
-                    midi.sysex.delay = midi.sysex.used * 0.4f + 2;
-                    if (midi.sysex.extra_delay && midi.sysex.delay < 40) {
-                        midi.sysex.delay = 40;
+                    // DOSBox formula: (used * 1.25 * 1000 / 3125) + 2 ms = (used * 0.4 + 2) ms
+                    // Convert to µs for time_us_32() comparison
+                    midi.sysex.delay = (Bitu)(midi.sysex.used * 400.0f) + 2000;
+                    if (midi.sysex.extra_delay && midi.sysex.delay < 40000) {
+                        midi.sysex.delay = 40000;
                     }
                 }
                 midi.sysex.start = time_us_32();  // PicoGUS
