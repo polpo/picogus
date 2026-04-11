@@ -461,7 +461,7 @@ static int wait_for_cd_load(void)
         print_string(CMD_CDERROR);
         return 98;
     }
-    return 0;
+    return print_cdimage_current();
 }
 
 
