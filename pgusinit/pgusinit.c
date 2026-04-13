@@ -628,7 +628,7 @@ static int write_firmware(const char* fw_filename)
             return 14;
         }
 
-        for (uint16_t b = 0; b < 512; ++b) {
+        for (uint16_t b = 0; b < 511; ++b) {
             // Write firmware byte
             outp(DATA_PORT_HIGH, uf2_buf.buf[b]);
             if (b == 512 && protocol == 1) {
