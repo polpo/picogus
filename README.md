@@ -7,7 +7,7 @@
 ISA sound card and CD-ROM drive emulation on the Raspberry Pi Pico's RP2040 microcontroller. PicoGUS can emulate:
 
 * [Gravis Ultrasound (GUS)](https://en.wikipedia.org/wiki/Gravis_Ultrasound) - the primary focus of PicoGUS, hence the name
-* [Sound Blaster 16](https://en.wikipedia.org/wiki/Sound_Blaster_16) / [Sound Blaster Pro 2](https://en.wikipedia.org/wiki/Sound_Blaster#Sound_Blaster_Pro_2,_CT1600) / [AdLib](https://en.wikipedia.org/wiki/Ad_Lib,_Inc.)
+* [Sound Blaster 16](https://en.wikipedia.org/wiki/Sound_Blaster_16) (OPL3) / [Sound Blaster Pro 2](https://en.wikipedia.org/wiki/Sound_Blaster#Sound_Blaster_Pro_2,_CT1600) (OPL3) / [AdLib](https://en.wikipedia.org/wiki/Ad_Lib,_Inc.) (OPL2)
 * [MPU-401 (with intelligent mode)](https://en.wikipedia.org/wiki/MPU-401) - outputs MIDI data on 3.5mm MIDI TRS connector
 * [Tandy 3-voice](http://www.vgmpf.com/Wiki/index.php?title=Tandy_3_Voice)
 * [CMS/Game Blaster](http://nerdlypleasures.blogspot.com/2012/10/all-you-ever-wanted-to-know-about.html)
