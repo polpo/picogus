@@ -177,6 +177,13 @@ image_read_sector(struct cdrom *dev, int type, uint8_t *b, uint32_t lba)
 }
 
 static int
+image_read_audio_sectors(struct cdrom *dev, uint8_t *b, uint32_t lba, uint32_t count)
+{
+    cd_img_t *img = (cd_img_t *) dev->image;
+    return cdi_read_audio_sectors(img, b, lba, count);
+}
+
+static int
 image_track_type(cdrom_t *dev, uint32_t lba)
 {
     cd_img_t *img = (cd_img_t *) dev->image;
@@ -216,6 +223,7 @@ static const cdrom_ops_t cdrom_image_ops = {
     image_is_track_pre,
     image_sector_size,
     image_read_sector,
+    image_read_audio_sectors,
     image_track_type,
     image_exit
 };

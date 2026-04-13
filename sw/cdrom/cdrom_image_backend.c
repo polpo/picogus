@@ -103,7 +103,7 @@ bin_read(void *priv, uint8_t *buffer, uint32_t seek, size_t count)
     }
 
     //if (fread(buffer, count, 1, tf->fp) != 1) {
-    if (f_read(tf->fp,buffer, count,&bytes_read) != FR_OK) {
+    if (f_read(tf->fp,buffer, count,&bytes_read) != FR_OK || bytes_read != count) {
         cdrom_image_backend_log("CDROM: binary_read failed during read!\n");
         return 0;
     }
@@ -482,6 +482,31 @@ cdi_read_sectors(cd_img_t *cdi, uint8_t *buffer, int raw, uint32_t sector, uint3
     buf = NULL;
 
     return success;
+}
+
+/* Batch read consecutive audio sectors in a single file I/O. Returns the number
+   of sectors read, 0 on error. Clips to track boundary so the caller may get
+   fewer than requested. */
+int
+cdi_read_audio_sectors(cd_img_t *cdi, uint8_t *buffer, uint32_t sector, uint32_t num)
+{
+    int      track = cdi_get_track(cdi, sector) - 1;
+    if (track < 0 || num == 0)
+        return 0;
+
+    track_t *trk = &cdi->tracks[track];
+
+    /* clip to track boundary */
+    uint32_t track_end = trk->start + trk->length;
+    if (sector + num > track_end)
+        num = track_end - sector;
+    if (num == 0)
+        return 0;
+
+    uint32_t seek = trk->skip + ((sector - trk->start) * trk->sector_size);
+    if (!trk->file->read(trk->file, buffer, seek, num * trk->sector_size))
+        return 0;
+    return (int) num;
 }
 
 /* TODO: Do CUE+BIN images with a sector size of 2448 even exist? */

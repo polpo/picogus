@@ -106,6 +106,7 @@ extern int  cdi_get_track(cd_img_t *cdi, uint32_t sector);
 extern int  cdi_get_audio_sub(cd_img_t *cdi, uint32_t sector, uint8_t *attr, uint8_t *track, uint8_t *index, TMSF *rel_pos, TMSF *abs_pos);
 extern int  cdi_read_sector(cd_img_t *cdi, uint8_t *buffer, int raw, uint32_t sector);
 extern int  cdi_read_sectors(cd_img_t *cdi, uint8_t *buffer, int raw, uint32_t sector, uint32_t num);
+extern int  cdi_read_audio_sectors(cd_img_t *cdi, uint8_t *buffer, uint32_t sector, uint32_t count);
 extern int  cdi_read_sector_sub(cd_img_t *cdi, uint8_t *buffer, uint32_t sector);
 extern int  cdi_get_sector_size(cd_img_t *cdi, uint32_t sector);
 extern int  cdi_is_mode2(cd_img_t *cdi, uint32_t sector);

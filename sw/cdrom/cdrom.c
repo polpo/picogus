@@ -232,6 +232,9 @@ cdrom_stop(cdrom_t *dev)
 {
     if (dev->cd_status > CD_STATUS_DATA_ONLY)
         dev->cd_status = CD_STATUS_STOPPED;
+    dev->audio_staging_sectors = 0;
+    dev->audio_staging_index = 0;
+    dev->audio_sector_consumed_pairs = 0;
 #if USE_CD_AUDIO_FIFO
     fifo_reset(&dev->audio_fifo);
 #endif
@@ -264,71 +267,75 @@ bool cdrom_audio_callback(cdrom_t *dev, uint32_t len) {
         return false;
     }
 
-    // --- Fill audio_fifo using data from audio_sector_buffer, reading new sectors as needed ---
-    // Loop until FIFO has 'len' stereo pairs, or is full, or an error/EoT occurs.
+    // --- Fill audio_fifo from staging buffer, batch-reading new sectors as needed ---
     while (fifo_level(&dev->audio_fifo) < len && ret) {
-        uint32_t pairs_remaining_in_sector = STEREO_SAMPLES_PER_SECTOR - dev->audio_sector_consumed_pairs;
+        // Advance to next sector in batch if current one is fully consumed
+        if (dev->audio_sector_consumed_pairs >= STEREO_SAMPLES_PER_SECTOR) {
+            dev->audio_staging_index++;
+            dev->audio_sector_consumed_pairs = 0;
+        }
 
-        if (pairs_remaining_in_sector == 0) { // Need to read a new sector
-            if (dev->seek_pos < dev->cd_end) {
-                bool read_successful;
-                if (dev->audio_muted_soft) {
-                    // Muted: "Fake" a read by filling the sector buffer with silence
-                    cdrom_log("CD-ROM %i: Muted. Faking read of LBA %08X with silence.\n", dev->id, dev->seek_pos);
-                    read_successful = true;
-                    memset(dev->audio_sector_buffer, 0, RAW_SECTOR_SIZE);
-                } else {
-                    read_successful = dev->ops->read_sector(dev, CD_READ_AUDIO, dev->audio_sector_buffer, dev->seek_pos);
-                }
-                if (read_successful) {
-                    /* putchar('r'); */
-                    cdrom_log("CD-ROM %i: Read LBA %08X successful\n", dev->id, dev->seek_pos);
-                    dev->seek_pos++;
-                    dev->audio_sector_consumed_pairs = 0;
-                    pairs_remaining_in_sector = STEREO_SAMPLES_PER_SECTOR; // Update for current iteration
-                } else {
-                    cdrom_log("CD-ROM %i: Read LBA %08X failed\n", dev->id, dev->seek_pos);
-                    dev->cd_status = CD_STATUS_STOPPED;
-                    ret = false; // Mark error
-                    break;   // Exit fill loop: read error
-                }
-            } else { // End of disc
+        // Read a new batch when the staging buffer is exhausted
+        if (dev->audio_staging_index >= dev->audio_staging_sectors) {
+            if (dev->seek_pos >= dev->cd_end) {
                 cdrom_log("CD-ROM %i: Playing completed (reached cd_end)\n", dev->id);
                 dev->cd_status = CD_STATUS_PLAYING_COMPLETED;
-                ret = false; // Mark end of track
-                break;   // Exit fill loop: end of track
+                ret = false;
+                break;
+            }
+
+            uint32_t avail = dev->cd_end - dev->seek_pos;
+            uint32_t batch = (avail < AUDIO_SECTOR_BATCH) ? avail : AUDIO_SECTOR_BATCH;
+            int sectors_read;
+
+            if (dev->audio_muted_soft) {
+                cdrom_log("CD-ROM %i: Muted. Faking batch read of %u sectors with silence.\n", dev->id, batch);
+                memset(dev->audio_sector_buffer, 0, batch * RAW_SECTOR_SIZE);
+                sectors_read = batch;
+            } else {
+                sectors_read = dev->ops->read_audio_sectors(dev, dev->audio_sector_buffer, dev->seek_pos, batch);
+            }
+
+            if (sectors_read > 0) {
+                cdrom_log("CD-ROM %i: Batch read %u sectors at LBA %08X\n", dev->id, sectors_read, dev->seek_pos);
+                dev->seek_pos += sectors_read;
+                dev->audio_staging_sectors = sectors_read;
+                dev->audio_staging_index = 0;
+                dev->audio_sector_consumed_pairs = 0;
+            } else {
+                cdrom_log("CD-ROM %i: Batch read at LBA %08X failed\n", dev->id, dev->seek_pos);
+                dev->cd_status = CD_STATUS_STOPPED;
+                ret = false;
+                break;
             }
         }
 
-        // At this point, if ret is still true, pairs_remaining_in_sector should be > 0.
+        // Point into the current sector within the staging buffer
+        dev->current_sector_samples = (sample_pair *)(dev->audio_sector_buffer
+                                      + dev->audio_staging_index * RAW_SECTOR_SIZE);
+
+        uint32_t pairs_remaining = STEREO_SAMPLES_PER_SECTOR - dev->audio_sector_consumed_pairs;
         uint32_t space_in_fifo = fifo_free_space(&dev->audio_fifo);
+        uint32_t pairs_to_transfer = (pairs_remaining < space_in_fifo) ?
+                                      pairs_remaining : space_in_fifo;
 
-        // Determine how many stereo pairs to transfer from staging to FIFO
-        uint32_t pairs_to_transfer = (pairs_remaining_in_sector < space_in_fifo) ?
-                                      pairs_remaining_in_sector : space_in_fifo;
-
-        /* printf("%u\n", pairs_to_transfer); */
-        // Add stereo pairs from sector buffer to FIFO
         bool added_ok = fifo_add_samples(&dev->audio_fifo,
                                          &dev->current_sector_samples[dev->audio_sector_consumed_pairs],
                                          pairs_to_transfer);
         if (added_ok) {
-            /* putchar('y'); */
             dev->audio_sector_consumed_pairs += pairs_to_transfer;
         } else {
             DBG_PUTCHAR('n');
-            // This implies fifo_add_samples failed even though we thought there was space.
-            // Could be a bug in fifo_free_space or fifo_add_samples, or a race condition in a threaded env (not here).
             cdrom_log("CD-ROM %i: fifo_add_samples failed unexpectedly! Space was %u, tried to add %u.\n",
                       dev->id, space_in_fifo, pairs_to_transfer);
-            ret = false; // Treat as an error
+            ret = false;
             break;
         }
-    } // End while (fifo_level < len && ret)
+    }
 
-    cdrom_log("CD-ROM %i: Audio cb. FIFO level: %u. Staging consumed: %d. Ret %d\n",
+    cdrom_log("CD-ROM %i: Audio cb. FIFO level: %u. Staging consumed: %d/%d. Ret %d\n",
               dev->id, fifo_level(&dev->audio_fifo),
-              dev->audio_sector_consumed_pairs, ret);
+              dev->audio_staging_index, dev->audio_staging_sectors, ret);
     return ret;
 }
 #endif // USE_CD_AUDIO_FIFO
@@ -340,49 +347,56 @@ uint32_t cdrom_audio_callback_simple(cdrom_t *dev, int16_t *buffer, uint32_t len
 
     uint32_t pairs_produced = 0;
     uint32_t pairs_requested = len / 2;
-    // --- Fill buffer using data from audio_sector_buffer, reading new sectors as needed ---
-    // Loop until buffer has 'len' samples, or an error/EoT occurs.
+    // --- Fill buffer from staging buffer, batch-reading new sectors as needed ---
     while (pairs_produced < pairs_requested) {
-        uint32_t pairs_remaining_in_sector = STEREO_SAMPLES_PER_SECTOR - dev->audio_sector_consumed_pairs;
+        // Advance to next sector in batch if current one is fully consumed
+        if (dev->audio_sector_consumed_pairs >= STEREO_SAMPLES_PER_SECTOR) {
+            dev->audio_staging_index++;
+            dev->audio_sector_consumed_pairs = 0;
+        }
 
-        if (pairs_remaining_in_sector == 0) { // Need to read a new sector
-            if (dev->seek_pos < dev->cd_end) {
-                bool read_successful;
-                if (dev->audio_muted_soft) {
-                    // Muted: "Fake" a read by filling the sector buffer with silence
-                    cdrom_log("CD-ROM %i: Muted. Faking read of LBA %08X with silence.\n", dev->id, dev->seek_pos);
-                    read_successful = true;
-                    memset(dev->audio_sector_buffer, 0, RAW_SECTOR_SIZE);
-                } else {
-                    read_successful = dev->ops->read_sector(dev, CD_READ_AUDIO, dev->audio_sector_buffer, dev->seek_pos);
-                }
-                if (read_successful) {
-                    /* putchar('r'); */
-                    cdrom_log("CD-ROM %i: Read LBA %08X successful\n", dev->id, dev->seek_pos);
-                    dev->seek_pos++;
-                    dev->audio_sector_consumed_pairs = 0;
-                    pairs_remaining_in_sector = STEREO_SAMPLES_PER_SECTOR; // Update for current iteration
-                } else {
-                    cdrom_log("CD-ROM %i: Read LBA %08X failed\n", dev->id, dev->seek_pos);
-                    dev->cd_status = CD_STATUS_STOPPED;
-                    break;   // Exit fill loop: read error
-                }
-            } else { // End of disc
+        // Read a new batch when the staging buffer is exhausted
+        if (dev->audio_staging_index >= dev->audio_staging_sectors) {
+            if (dev->seek_pos >= dev->cd_end) {
                 cdrom_log("CD-ROM %i: Playing completed (reached cd_end)\n", dev->id);
                 dev->cd_status = CD_STATUS_PLAYING_COMPLETED;
-                break;   // Exit fill loop: end of track
+                break;
+            }
+
+            uint32_t avail = dev->cd_end - dev->seek_pos;
+            uint32_t batch = (avail < AUDIO_SECTOR_BATCH) ? avail : AUDIO_SECTOR_BATCH;
+            int sectors_read;
+
+            if (dev->audio_muted_soft) {
+                cdrom_log("CD-ROM %i: Muted. Faking batch read of %u sectors with silence.\n", dev->id, batch);
+                memset(dev->audio_sector_buffer, 0, batch * RAW_SECTOR_SIZE);
+                sectors_read = batch;
+            } else {
+                sectors_read = dev->ops->read_audio_sectors(dev, dev->audio_sector_buffer, dev->seek_pos, batch);
+            }
+
+            if (sectors_read > 0) {
+                cdrom_log("CD-ROM %i: Batch read %u sectors at LBA %08X\n", dev->id, sectors_read, dev->seek_pos);
+                dev->seek_pos += sectors_read;
+                dev->audio_staging_sectors = sectors_read;
+                dev->audio_staging_index = 0;
+                dev->audio_sector_consumed_pairs = 0;
+            } else {
+                cdrom_log("CD-ROM %i: Batch read at LBA %08X failed\n", dev->id, dev->seek_pos);
+                dev->cd_status = CD_STATUS_STOPPED;
+                break;
             }
         }
 
-        // At this point, pairs_remaining_in_sector should be > 0.
-        uint32_t space_in_buffer = pairs_requested - pairs_produced;
-        // Determine how many stereo pairs to transfer from staging to buffer
-        uint32_t pairs_to_transfer = (pairs_remaining_in_sector < space_in_buffer) ?
-                                      pairs_remaining_in_sector : space_in_buffer;
+        // Point into the current sector within the staging buffer
+        dev->current_sector_samples = (sample_pair *)(dev->audio_sector_buffer
+                                      + dev->audio_staging_index * RAW_SECTOR_SIZE);
 
-        /* printf("%u\n", pairs_to_transfer); */
-        // Add samples from sector buffer to output buffer
-        //memcpy(buffer + pairs_produced * 2, &dev->current_sector_samples[dev->audio_sector_consumed_pairs], pairs_to_transfer * sizeof(sample_pair));
+        uint32_t pairs_remaining = STEREO_SAMPLES_PER_SECTOR - dev->audio_sector_consumed_pairs;
+        uint32_t space_in_buffer = pairs_requested - pairs_produced;
+        uint32_t pairs_to_transfer = (pairs_remaining < space_in_buffer) ?
+                                      pairs_remaining : space_in_buffer;
+
         for (uint32_t i = 0; i < pairs_to_transfer; i++)
         {
             sample_pair sp = dev->current_sector_samples[dev->audio_sector_consumed_pairs + i];
@@ -499,6 +513,9 @@ uint8_t cdrom_audio_playmsf(cdrom_t *dev, int m,int s, int f, int M, int S, int 
 
     dev->seek_pos  = pos;
     dev->cd_end    = pos2;
+    dev->audio_staging_sectors = 0;
+    dev->audio_staging_index = 0;
+    dev->audio_sector_consumed_pairs = 0;
 #if USE_CD_AUDIO_FIFO
     fifo_reset(&dev->audio_fifo);
 #endif

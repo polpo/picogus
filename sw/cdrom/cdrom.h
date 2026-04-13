@@ -57,6 +57,11 @@
 #define SAMPLES_PER_SECTOR  1176
 #define STEREO_SAMPLES_PER_SECTOR  588
 
+/* number of CD sectors to read at once. Larger values reduce USB command
+ * overhead (one SCSI READ10 instead of N) hopefully helping marginal USB drives
+ * keep up with 44.1 kHz audio. */
+#define AUDIO_SECTOR_BATCH  4
+
 #define STAT_READY	    0x01
 #define STAT_PLAY  	    0x08
 #define STAT_ERROR	    0x10
@@ -123,6 +128,7 @@ typedef struct cdrom_ops_t {
     int (*is_track_pre)(struct cdrom *dev, uint32_t lba);
     int (*sector_size)(struct cdrom *dev, uint32_t lba);
     int (*read_sector)(struct cdrom *dev, int type, uint8_t *b, uint32_t lba);
+    int (*read_audio_sectors)(struct cdrom *dev, uint8_t *b, uint32_t lba, uint32_t count);
     int (*track_type)(struct cdrom *dev, uint32_t lba);
     void (*exit)(struct cdrom *dev);
 } cdrom_ops_t;
@@ -196,9 +202,11 @@ typedef struct cdrom {
     const char *error_str;
 
     // int16_t cd_buffer[BUF_SIZE];
-    uint8_t audio_sector_buffer[RAW_SECTOR_SIZE];
-    sample_pair *current_sector_samples;   // Convenience pointer: (sample_pair*)audio_sector_buffer
-    int audio_sector_consumed_pairs;       // Stereo pairs consumed from current_sector_samples
+    uint8_t audio_sector_buffer[AUDIO_SECTOR_BATCH * RAW_SECTOR_SIZE];
+    sample_pair *current_sector_samples;   // Points to current sector's audio data within staging buffer
+    int audio_sector_consumed_pairs;       // Stereo pairs consumed from current sector (0..588)
+    int audio_staging_sectors;             // Number of sectors loaded in staging buffer
+    int audio_staging_index;               // Which sector in the batch is being consumed
 
 #if USE_CD_AUDIO_FIFO
     audio_fifo_t audio_fifo;
