@@ -313,7 +313,7 @@ static int init_sb(void)
         outp(DATA_PORT_HIGH, irq);
 
         outp(CONTROL_PORT, CMD_SBDMA); // Select DMA register
-        outp(DATA_PORT_HIGH, irq);
+        outp(DATA_PORT_HIGH, dma8);
 
         outp(CONTROL_PORT, CMD_SBTYPE); // Select SB type register
         outp(DATA_PORT_HIGH, sbtype);
