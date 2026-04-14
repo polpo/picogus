@@ -1,3 +1,32 @@
+# v4.1.0
+
+## Fixes/improvements
+
+### SB mode
+
+- Sound Blaster ADPCM playback is now supported (4, 2.6, and 2-bit modes). This allows for sound effects in Duke Nukem 2 without needing to patch the game. Thanks to [Tube Time (@schlae)'s annotated disassembly of the SB DSP firmware](https://github.com/schlae/sb-firmware/tree/master) and [Torsten Stremlau (@TerrySoba)'s VocTool](https://github.com/TerrySoba/VocTool) for an MIT-licensed C implementation to use as a basis.
+- Sample rates >44100Hz are now supported, for example 45454Hz, the fastest supported by SB16.
+- SBMIDI is supported in addition to MPU-401 in SB mode.
+- Fake ADC (recording) is supported. This records garbage data but should help SB16 sound card detection in some OSes.
+- Fixes bug in passing DMA from BLASTER variable when running pgusinit. Thanks @andreacampanella for the fix in PR #134.
+- More helpful error messages when the BLASTER variable does not match the port/IRQ/DMA settings stored on the PicoGUS.
+
+### MPU-401
+
+- Behavior of the MPU-401 emulation is now much more in line with a real MPU-401: it has a 256 byte ring buffer for MIDI out data, and flow control is done via bit 6 of the status port. Previously, MPU support had no flow control and used a pretty enormous buffer to make up for that. The SRAM savings from the smaller buffer will allow for more PicoGUS features in the future.
+- Sysex delay is now accurately calculated (we were using microseconds, not milliseconds).
+- Re-introduces the song change fix for Frederik Pohl's Gateway.
+
+### CD-ROM
+
+- Read multiple sectors at a time during CD audio playback. Should help with pops/distortion on marginal USB drives.
+- Fixes loading .iso images in Win9x w/ MKEPanasonic driver by handling lead-out.
+- The loaded image is printed after a successful `pgusinit /cdload`.
+
+### General
+
+- SRAM usage is saved across the board by completely eliminating debug prints in release builds, as well as eliminating use of sscanf() type functions. These debug prints didn't go anywhere in release builds (since the UART is taken by MIDI out, and USB by joystick), but they still had runtime overhead in calling printf(), etc.
+
 # v4.0.0
 
 ## New features/changes
