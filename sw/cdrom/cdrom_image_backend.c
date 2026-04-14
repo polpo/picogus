@@ -24,7 +24,6 @@
 #include <inttypes.h>
 #include <stdarg.h>
 #include <stdint.h>
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
@@ -35,6 +34,7 @@
 #    include <libgen.h>
 #endif
 #define HAVE_STDARG_H
+#include "../include/pg_debug.h"
 #include "cdrom_image_backend.h"
 #include "cdrom_error_msg.h"
 #include "86box_compat.h"
@@ -77,33 +77,8 @@ static inline void frames_to_msf(uint32_t total_frames, uint8_t *pM, uint8_t *pS
 
 static char temp_keyword[64];
 
-#ifdef ENABLE_CDROM_IMAGE_BACKEND_LOG
-int cdrom_image_backend_do_log = ENABLE_CDROM_IMAGE_BACKEND_LOG;
-
-void cdrom_image_backend_log(const char *fmt, ...) {
-    char    temp[1024];
-    va_list ap;
-    char   *sp;
-    va_start(ap, fmt);
-    vsprintf(temp, fmt, ap);
-    printf("%s\n\r",temp);    
-    va_end(ap);
-}
-/*
-cdrom_image_backend_log(const char *fmt, ...)
-{
-    va_list ap;
-
-    if (cdrom_image_backend_do_log) {
-        va_start(ap, fmt);
-        pclog_ex(fmt, ap);
-        va_end(ap);
-    }
-}
-*/
-#else
-#    define cdrom_image_backend_log(fmt, ...)
-#endif
+#define PGDEBUG_CDROM_BACKEND 0
+#define cdrom_image_backend_log(fmt, ...) do { if (PGDEBUG_CDROM_BACKEND) DBG_PRINTF(fmt "\n", ##__VA_ARGS__); } while(0)
 
 /* #include "pico/stdlib.h" */
 /* extern uint LED_PIN; */
@@ -123,17 +98,13 @@ bin_read(void *priv, uint8_t *buffer, uint32_t seek, size_t count)
         return 0;    
     //if (fseeko64(tf->fp, seek, SEEK_SET) == -1) {    
     if (f_lseek(tf->fp, seek) != FR_OK) {
-#ifdef ENABLE_CDROM_IMAGE_BACKEND_LOG
         cdrom_image_backend_log("CDROM: binary_read failed during seek!\n");
-#endif
         return 0;
     }
 
     //if (fread(buffer, count, 1, tf->fp) != 1) {
-    if (f_read(tf->fp,buffer, count,&bytes_read) != FR_OK) {
-#ifdef ENABLE_CDROM_IMAGE_BACKEND_LOG
+    if (f_read(tf->fp,buffer, count,&bytes_read) != FR_OK || bytes_read != count) {
         cdrom_image_backend_log("CDROM: binary_read failed during read!\n");
-#endif
         return 0;
     }
     /* gpio_xor_mask(LED_PIN); */
@@ -513,6 +484,31 @@ cdi_read_sectors(cd_img_t *cdi, uint8_t *buffer, int raw, uint32_t sector, uint3
     return success;
 }
 
+/* Batch read consecutive audio sectors in a single file I/O. Returns the number
+   of sectors read, 0 on error. Clips to track boundary so the caller may get
+   fewer than requested. */
+int
+cdi_read_audio_sectors(cd_img_t *cdi, uint8_t *buffer, uint32_t sector, uint32_t num)
+{
+    int      track = cdi_get_track(cdi, sector) - 1;
+    if (track < 0 || num == 0)
+        return 0;
+
+    track_t *trk = &cdi->tracks[track];
+
+    /* clip to track boundary */
+    uint32_t track_end = trk->start + trk->length;
+    if (sector + num > track_end)
+        num = track_end - sector;
+    if (num == 0)
+        return 0;
+
+    uint32_t seek = trk->skip + ((sector - trk->start) * trk->sector_size);
+    if (!trk->file->read(trk->file, buffer, seek, num * trk->sector_size))
+        return 0;
+    return (int) num;
+}
+
 /* TODO: Do CUE+BIN images with a sector size of 2448 even exist? */
 int
 cdi_read_sector_sub(cd_img_t *cdi, uint8_t *buffer, uint32_t sector)
@@ -746,8 +742,9 @@ cdi_cue_get_number(char **line)
     if (!cdi_cue_get_buffer(temp, line, 0))
         return 0;
 
-    /* if (sscanf(temp, "%" PRIu64, &num) != 1) */
-    if (sscanf(temp, "%" PRIu32, &num) != 1)
+    char *end;
+    num = (uint32_t)strtoul(temp, &end, 10);
+    if (end == temp)
         return 0;
 
     return num;
@@ -767,9 +764,18 @@ cdi_cue_get_frame(uint32_t *frames, char **line)
     if (!success)
         return 0;
 
-    success = sscanf(temp, "%d:%d:%d", &min, &sec, &fr) == 3;
-    if (!success)
-        return 0;
+    {
+        char *p = temp;
+        char *end;
+        min = (int)strtol(p, &end, 10);
+        if (*end != ':') return 0;
+        p = end + 1;
+        sec = (int)strtol(p, &end, 10);
+        if (*end != ':') return 0;
+        p = end + 1;
+        fr = (int)strtol(p, &end, 10);
+        if (end == p) return 0;
+    }
 
     *frames = MSF_TO_FRAMES(min, sec, fr);
 

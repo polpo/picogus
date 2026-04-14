@@ -16,8 +16,9 @@
  *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
-#include <stdio.h>
 #include <math.h>
+
+#include "include/pg_debug.h"
 
 #if PICO_ON_DEVICE
 
@@ -223,7 +224,7 @@ void audio_sample_handler(void) {
 }
 
 void play_adlib() {
-    puts("starting core 1");
+    DBG_PUTS("starting core 1");
     // flash_safe_execute_core_init();
     uint32_t start, end;
     set_volume(CMD_OPLVOL);
@@ -274,7 +275,7 @@ void play_adlib() {
     set_volume(CMD_SBVOL);
 #endif
 
-    printf("OPL stereo pipeline started\n");
+    DBG_PRINTF("OPL stereo pipeline started\n");
 
 #ifdef CDROM
     cd_fifo = cdrom_audio_fifo_peek(&cdrom);

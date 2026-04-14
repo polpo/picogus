@@ -16,8 +16,8 @@
  *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
-#include <stdio.h>
 #include <string.h>
+#include "include/pg_debug.h"
 #include "pico/stdlib.h"
 #include "pico/multicore.h"
 #include "hardware/adc.h"
@@ -426,7 +426,7 @@ __force_inline void write_picogus_high(uint8_t value) {
         /* printf("%s\n", settings.WiFi.password); */
         break;
     case CMD_WIFIAPPLY:
-        printf("Applying wifi settings: %s %s\n", settings.WiFi.ssid, settings.WiFi.password);
+        DBG_PRINTF("Applying wifi settings: %s %s\n", settings.WiFi.ssid, settings.WiFi.password);
 #ifdef PICOW
         PG_Wifi_Connect(settings.WiFi.ssid, settings.WiFi.password);
 #endif
@@ -507,14 +507,14 @@ __force_inline void write_picogus_high(uint8_t value) {
     // For multifw
     case CMD_BOOTMODE:
         settings.startupMode = value;
-        printf("requesting startup mode: %u\n", value);
+        DBG_PRINTF("requesting startup mode: %u\n", value);
         break;
     case CMD_SAVE:
         queueSaveSettings = true;
         break;
     case CMD_REBOOT:
         watchdog_hw->scratch[3] = settings.startupMode;
-        printf("rebooting into mode: %u\n", settings.startupMode);
+        DBG_PRINTF("rebooting into mode: %u\n", settings.startupMode);
         watchdog_reboot(0, 0, 0);
         break;
     case CMD_DEFAULTS:
@@ -642,7 +642,7 @@ __force_inline uint8_t read_picogus_high(void) {
             return 0x04; // EOT
         }
         ret = cdrom.image_list[cur_read_idx][cur_read++];
-        putchar(ret);
+        DBG_PUTCHAR(ret);
         if (ret == 0) { // Null terminated
             ++cur_read_idx;
             cur_read = 0;
@@ -727,7 +727,7 @@ void processSettings(void) {
 #endif
 #ifdef CDROM
     cdrom_port_test = settings.CD.basePort >> 4;
-    printf("cdrom base port: %x\n", settings.CD.basePort);
+    DBG_PRINTF("cdrom base port: %x\n", settings.CD.basePort);
     cdman_set_autoadvance(settings.CD.autoAdvance);
 #endif
     if (BOARD_TYPE == PICOGUS_2) {
@@ -1228,14 +1228,14 @@ int main()
 #else
     stdio_init_all();
 #endif
-    puts(firmware_string);
+    DBG_PUTS(firmware_string);
     io_rw_32 *reset_reason = (io_rw_32 *) (VREG_AND_CHIP_RESET_BASE + VREG_AND_CHIP_RESET_CHIP_RESET_OFFSET);
     if (*reset_reason & VREG_AND_CHIP_RESET_CHIP_RESET_HAD_POR_BITS) {
-        puts("I was reset due to power on reset or brownout detection.");
+        DBG_PUTS("I was reset due to power on reset or brownout detection.");
     } else if (*reset_reason & VREG_AND_CHIP_RESET_CHIP_RESET_HAD_RUN_BITS) {
-        puts("I was reset due to the RUN pin (either manually or due to ISA RESET signal)");
+        DBG_PUTS("I was reset due to the RUN pin (either manually or due to ISA RESET signal)");
     } else if(*reset_reason & VREG_AND_CHIP_RESET_CHIP_RESET_HAD_PSM_RESTART_BITS) {
-        puts("I was reset due the debug port");
+        DBG_PUTS("I was reset due the debug port");
     }
 
     // Load settings from flash
@@ -1254,12 +1254,12 @@ int main()
     // Read several times to let ADC stabilize
     adc_read(); adc_read(); adc_read(); adc_read(); adc_read();
     uint16_t result = adc_read();
-    printf("ADC value: 0x%03x... ", result);
+    DBG_PRINTF("ADC value: 0x%03x... ", result);
     gpio_put(25, 0);
     gpio_deinit(25);
 
     if (result > 0x100) {
-        puts("Running on Pico-based board (PicoGUS v1.1+, PicoGUS Femto)");
+        DBG_PUTS("Running on Pico-based board (PicoGUS v1.1+, PicoGUS Femto)");
         // On Pico-based board (PicoGUS v1.1+, PicoGUS Femto)
 #ifndef PICOW        
         LED_PIN = 1 << PICO_DEFAULT_LED_PIN;
@@ -1269,7 +1269,7 @@ int main()
         BOARD_TYPE = PICO_BASED;
     } else {
         // On chipdown board (PicoGUS v2.0)
-        puts("Running on PicoGUS v2.0");
+        DBG_PUTS("Running on PicoGUS v2.0");
         LED_PIN = 1 << 23;
         gpio_init(23);
         gpio_set_dir(23, GPIO_OUT);
@@ -1294,7 +1294,7 @@ int main()
     gpio_set_drive_strength(IRQ_PIN, GPIO_DRIVE_STRENGTH_12MA);
 
 #ifdef SOUND_MPU
-    puts("Initing MIDI UART...");
+    DBG_PUTS("Initing MIDI UART...");
     uart_init(UART_ID, 31250);
     uart_set_translate_crlf(UART_ID, false);
     uart_set_format(UART_ID, 8, 1, UART_PARITY_NONE);
@@ -1308,18 +1308,18 @@ int main()
 
 #ifdef PSRAM_CORE0
 #ifdef PSRAM
-    puts("Initing PSRAM...");
+    DBG_PUTS("Initing PSRAM...");
     // Try different PSRAM strategies
     if (BOARD_TYPE == PICOGUS_2) {
         psram_spi = psram_spi_init_clkdiv(pio1, -1, psram_clkdiv /* clkdiv */, false /* fudge */);
 #if TEST_PSRAM
         // Only bother to test every 97th address
         if (test_psram(&psram_spi, 97) == 1) {
-            printf("Default PSRAM strategy of no fudge not working, switching to fudge\n");
+            DBG_PRINTF("Default PSRAM strategy of no fudge not working, switching to fudge\n");
             psram_spi_uninit(psram_spi, false /* fudge */);
             psram_spi = psram_spi_init_clkdiv(pio1, -1, psram_clkdiv /* clkdiv */, true /* fudge */);
             if (test_psram(&psram_spi, 97) == 1) { 
-                printf("Error: No PSRAM strategies found to work!\n");
+                ERR_PUTS("Error: No PSRAM strategies found to work!");
                 err_blink();
             }
         }
@@ -1331,7 +1331,7 @@ int main()
             psram_spi_uninit(psram_spi, true /* fudge */);
             psram_spi = psram_spi_init_clkdiv(pio1, -1, psram_clkdiv /* clkdiv */, false /* fudge */);
             if (test_psram(&psram_spi, 97) == 1) { 
-                printf("Error: No PSRAM strategies found to work!\n");
+                ERR_PUTS("Error: No PSRAM strategies found to work!");
                 err_blink();
             }
         }
@@ -1343,14 +1343,14 @@ int main()
 
 #ifdef SOUND_SB
 #ifdef SOUND_WSS
-    puts("Initializing WSS AD1848");
+    DBG_PUTS("Initializing WSS AD1848");
 #else
-    puts("Initializing SoundBlaster DSP");
+    DBG_PUTS("Initializing SoundBlaster DSP");
 #endif
     // init actually happens on core 1 in play_adlib()
 #endif // SOUND_SB
 #ifdef SOUND_OPL
-    puts("Creating OPL");
+    DBG_PUTS("Creating OPL");
     OPL_Pico_Init(0);
     multicore_launch_core1(&play_adlib);
 #endif
@@ -1361,7 +1361,7 @@ int main()
 #endif
 
 #ifdef SOUND_GUS
-    puts("Creating GUS");
+    DBG_PUTS("Creating GUS");
     GUS_OnReset();
     multicore_launch_core1(&play_gus);
 #endif // SOUND_GUS
@@ -1373,7 +1373,7 @@ int main()
 #endif // SOUND_MPU
 
 #if (SOUND_TANDY || SOUND_CMS)
-    puts("Creating psgsound");
+    DBG_PUTS("Creating psgsound");
     multicore_launch_core1(&play_psg);
 #endif // (SOUND_TANDY || SOUND_CMS)
 
@@ -1381,14 +1381,14 @@ int main()
 extern void PIC_ActivateIRQ(void);
 extern void PIC_DeActivateIRQ(void);
 
-    puts("Creating NE2000");    
+    DBG_PUTS("Creating NE2000");
     multicore_launch_core1(&play_ne2000);
 #endif
 
 #ifdef USB_JOYSTICK
     // Init joystick as centered with no buttons pressed
     joystate_struct = {127, 127, 127, 127, 0xf};
-    puts("Config joystick PWM");
+    DBG_PUTS("Config joystick PWM");
     pwm_config pwm_c = pwm_get_default_config();
     // TODO better calibrate this
     pwm_config_set_clkdiv(&pwm_c, pwm_clkdiv);
@@ -1400,7 +1400,7 @@ extern void PIC_DeActivateIRQ(void);
     pwm_init(3, &pwm_c, true);
 #endif // USB_JOYSTICK
 #ifdef USB_MOUSE
-    puts("Config USB Mouse emulation");
+    DBG_PUTS("Config USB Mouse emulation");
     uartemu_init(0);
     sermouse_init(settings.Mouse.protocol, settings.Mouse.reportRate, settings.Mouse.sensitivity);
     sermouse_attach_uart();
@@ -1417,7 +1417,7 @@ extern void PIC_DeActivateIRQ(void);
     gpio_pull_down(IOCHRDY_PIN);
     gpio_set_dir(IOCHRDY_PIN, GPIO_OUT);
 
-    puts("Enabling bus transceivers...");
+    DBG_PUTS("Enabling bus transceivers...");
     // waggle ADS to set BUSOE latch
     gpio_init(ADS_PIN);
     gpio_set_dir(ADS_PIN, GPIO_OUT);
@@ -1425,23 +1425,23 @@ extern void PIC_DeActivateIRQ(void);
     busy_wait_ms(10);
     gpio_put(ADS_PIN, 0);
 
-    puts("Starting ISA bus PIO...");
+    DBG_PUTS("Starting ISA bus PIO...");
     // gpio_set_drive_strength(ADS_PIN, GPIO_DRIVE_STRENGTH_12MA);
     gpio_set_slew_rate(ADS_PIN, GPIO_SLEW_RATE_FAST);
 
     uint iow_offset = pio_add_program(pio0, &iow_program);
     pio_sm_claim(pio0, IOW_PIO_SM);
-    printf("iow sm: %u\n", IOW_PIO_SM);
+    DBG_PRINTF("iow sm: %u\n", IOW_PIO_SM);
 
     uint ior_offset = pio_add_program(pio0, &ior_program);
     pio_sm_claim(pio0, IOR_PIO_SM);
-    printf("ior sm: %u\n", IOR_PIO_SM);
+    DBG_PRINTF("ior sm: %u\n", IOR_PIO_SM);
 
     iow_program_init(pio0, IOW_PIO_SM, iow_offset, iow_clkdiv);
     ior_program_init(pio0, IOR_PIO_SM, ior_offset);
 
 #ifdef USE_IRQ
-    puts("Enabling IRQ on ISA IOR/IOW events");
+    DBG_PUTS("Enabling IRQ on ISA IOR/IOW events");
     irq_set_enabled(PIO0_IRQ_1, false);
     pio_set_irq1_source_enabled(pio0, pio_get_rx_fifo_not_empty_interrupt_source(IOW_PIO_SM), true);
     pio_set_irq1_source_enabled(pio0, pio_get_rx_fifo_not_empty_interrupt_source(IOR_PIO_SM), true);

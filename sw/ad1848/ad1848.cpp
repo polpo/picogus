@@ -18,7 +18,7 @@
 
 #include <inttypes.h>
 #include <stdbool.h>
-#include <stdio.h>
+#include "../include/pg_debug.h"
 #include <string.h>
 #include "system/pico_pic.h"
 #include "audio/volctrl.h"
@@ -191,7 +191,7 @@ static void ad1848_apply_iface(uint8_t iface) {
     if (!ad1848.play && (iface & 1)) { // start playback
         ad1848.ppio = (iface & 0x40);
         ad1848.play = true;
-        printf("start sr %u intvl %u 16b %u st %u bpf %u ct %u ppio %u\n",
+        DBG_PRINTF("start sr %u intvl %u 16b %u st %u bpf %u ct %u ppio %u\n",
                ad1848.sample_rate, ad1848.frame_interval,
                ad1848.playback_16bit, ad1848.playback_stereo,
                ad1848.frame_bytes, ad1848.current_count, ad1848.ppio);
@@ -344,8 +344,8 @@ uint32_t ad1848_sample_stereo() {
 
 
 void ad1848_init() {
-    puts("Initing AD1848...");
-    puts("Initing ISA DMA PIO...");
+    DBG_PUTS("Initing AD1848...");
+    DBG_PUTS("Initing ISA DMA PIO...");
     AD1848_DMA_isr_pt = ad1848_dma_isr;
     dma_config = DMA_multi_init(pio0, DMA_PIO_SM, AD1848_DMA_isr_pt);
 

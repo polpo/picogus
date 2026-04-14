@@ -45,19 +45,12 @@ static critical_section_t midi_crit;
 typedef uint32_t Bit32u;
 typedef int32_t Bits;
 
-/* RAWBUF: This is the buffer for outgoing MIDI data. The larger the buffer,
-    the less likely it is to overrun when SysEx delay is enabled and large SysEx
-    transfers are occurring. */
-//#define RAWBUF  14336
-#ifdef MPU_ONLY
-#define SYSEX_SIZE 8192     // sysex buffer for delay calculation
-#define RAWBUF  65536
-#define RAWBUF_BITS  65535
-#else
-#define SYSEX_SIZE 2048     // sysex buffer for delay calculation
-#define RAWBUF  8192
-#define RAWBUF_BITS  8191
-#endif // MPU_ONLY
+/* RAWBUF: Ring buffer for outgoing MIDI data. Flow control via the status
+    register (bit 6/DRR) throttles the host to MIDI wire speed. Matches
+    the 256 byte size of a real MPU-401 */
+#define SYSEX_SIZE 32       // sysex buffer for header inspection
+#define RAWBUF     256
+#define RAWBUF_BITS 255
 
 typedef struct ring_buffer {
     uint8_t buffer[RAWBUF];
@@ -66,6 +59,13 @@ typedef struct ring_buffer {
 } ring_buffer;
 
 static ring_buffer midi_out_buff = { {0}, 0, 0 };
+
+volatile bool midi_output_busy = false;
+
+uint32_t MIDI_BufferFree(void) {
+    uint32_t used = (midi_out_buff.head - midi_out_buff.tail) & RAWBUF_BITS;
+    return (RAWBUF - 1) - used;
+}
 
 /* SOFTMPU: Note tracking for RA-50 */
 #define MAX_TRACKED_CHANNELS 16
@@ -162,6 +162,8 @@ __force_inline static void PlayMsg(Bit8u* msg, Bitu len)
         }
         critical_section_exit(&midi_crit);
     }
+    uint32_t used = (midi_out_buff.head - midi_out_buff.tail) & RAWBUF_BITS;
+    midi_output_busy = used >= (RAWBUF - 2);
 }
 
 __force_inline static void send_midi_byte_now(Bit8u byte) {
@@ -252,14 +254,11 @@ void MIDI_RawOutByte(Bit8u data) {
     }
 }
 
-__force_inline static bool send_midi_byte() { 
+__force_inline static bool send_midi_byte() {
     if (uart_tx_status()) return false;   // can't send yet
+    if (midi_out_buff.head == midi_out_buff.tail) return false; // nothing to send
     /* putchar('s'); */
     critical_section_enter_blocking(&midi_crit);
-    if (midi_out_buff.head == midi_out_buff.tail) {
-        critical_section_exit(&midi_crit);
-        return false;   // nothing to send
-    }
     if (midi.sysex.start) {
         Bit32u passed_ticks = time_us_32() - midi.sysex.start;
         if (passed_ticks < midi.sysex.delay) { // still waiting for sysex delay
@@ -268,10 +267,12 @@ __force_inline static bool send_midi_byte() {
         }
     }
     Bit8u data = midi_out_buff.buffer[midi_out_buff.tail];
-    midi_out_buff.tail = (midi_out_buff.tail + 1) & RAWBUF_BITS;   // increment tail, wrap to 0 if we're at the end
+    midi_out_buff.tail = (midi_out_buff.tail + 1) & RAWBUF_BITS;
+    uint32_t used = (midi_out_buff.head - midi_out_buff.tail) & RAWBUF_BITS;
+    midi_output_busy = used >= (RAWBUF - 2);
     critical_section_exit(&midi_crit);
 
-    if (midi.sysex.status==0xf0) { // Start 
+    if (midi.sysex.status==0xf0) { // Start
         /* putchar('s'); */
         if (!(data&0x80)) {
             /*
@@ -282,34 +283,30 @@ __force_inline static bool send_midi_byte() {
             */
             
             output_to_uart(data);
-            if (midi.sysex.used<(SYSEX_SIZE-1)) midi.sysex.buf[midi.sysex.used++] = data;
+            if (midi.sysex.used < SYSEX_SIZE) midi.sysex.buf[midi.sysex.used] = data;
+            midi.sysex.used++;
             /* midi.sysex.buf[midi.sysex.used++] = data; */
             return true;
         } else {
             output_to_uart(0xf7);
-            midi.sysex.buf[midi.sysex.used++] = 0xf7;
+            if (midi.sysex.used < SYSEX_SIZE) midi.sysex.buf[midi.sysex.used] = 0xf7;
+            midi.sysex.used++;
             midi.sysex.status = 0xf7;
                 /*LOG(LOG_ALL,LOG_NORMAL)("Play sysex; address:%02X %02X %02X, length:%4d, delay:%3d", midi.sysex.buf[5], midi.sysex.buf[6], midi.sysex.buf[7], midi.sysex.used, midi.sysex.delay);*/
             if (midi.sysex.start) {
                 /* if (midi.sysex.usedbufs == 0 && midi.sysex.buf[5] == 0x7F) { */
                 if (midi.sysex.buf[5] == 0x7F) {
-                    midi.sysex.delay = 290; // PicoGUS // All Parameters reset
-                /* } else if (midi.sysex.usedbufs == 0 && midi.sysex.buf[5] == 0x10 && midi.sysex.buf[6] == 0x00 && midi.sysex.buf[7] == 0x04) { */
+                    midi.sysex.delay = 290000; // All Parameters reset (290 ms)
                 } else if (midi.sysex.buf[5] == 0x10 && midi.sysex.buf[6] == 0x00 && midi.sysex.buf[7] == 0x04) {
-                    midi.sysex.delay = 145;  // PicoGUS // Viking Child
-                /* } else if (midi.sysex.usedbufs == 0 && midi.sysex.buf[5] == 0x10 && midi.sysex.buf[6] == 0x00 && midi.sysex.buf[7] == 0x01) { */
+                    midi.sysex.delay = 145000; // Viking Child (145 ms)
                 } else if (midi.sysex.buf[5] == 0x10 && midi.sysex.buf[6] == 0x00 && midi.sysex.buf[7] == 0x01) {
-                    midi.sysex.delay = 30;  // PicoGUS  // Dark Sun 1
+                    midi.sysex.delay = 30000;  // Dark Sun 1 (30 ms)
                 } else {
-                    // HardMPU:
-                    /* midi.sysex.delay = ((((midi.sysex.usedbufs*SYSEX_SIZE)+midi.sysex.used)/2)+2); */
-                    // DOSBox:
-                    /* midi.sysex.delay = (Bitu)(((float)(midi.sysex.used) * 1.25f) * 1000.0f / 3125.0f) + 2 */
-                    // PicoGUS: 1.25 * 1000.0 / 3125.0 = 0.4
-                    /* midi.sysex.delay = ((midi.sysex.usedbufs*SYSEX_SIZE)+midi.sysex.used) * 0.4f + 2; */
-                    midi.sysex.delay = midi.sysex.used * 0.4f + 2;
-                    if (midi.sysex.extra_delay && midi.sysex.delay < 40) {
-                        midi.sysex.delay = 40;
+                    // DOSBox formula: (used * 1.25 * 1000 / 3125) + 2 ms = (used * 0.4 + 2) ms
+                    // Convert to µs for time_us_32() comparison
+                    midi.sysex.delay = (Bitu)(midi.sysex.used * 400.0f) + 2000;
+                    if (midi.sysex.extra_delay && midi.sysex.delay < 40000) {
+                        midi.sysex.delay = 40000;
                     }
                 }
                 midi.sysex.start = time_us_32();  // PicoGUS

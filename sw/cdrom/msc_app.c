@@ -27,6 +27,7 @@
 #include "tusb.h"
 /* #include "bsp/board_api.h" */
 #include "pico/stdlib.h"
+#include "../include/pg_debug.h"
 
 #include "ff.h"
 #include "diskio.h"
@@ -75,7 +76,7 @@ static bool inquiry_complete_cb(uint8_t dev_addr, tuh_msc_complete_data_t const 
 
     // For simplicity: we only mount 1 device
     if (f_mount(&fatfs, "", 1) != FR_OK) {
-        puts("mount failed");
+        ERR_PUTS("mount failed");
         return false;
     }
 
@@ -132,7 +133,7 @@ static void wait_for_disk_io(void)
     while (_disk_busy) {
         tuh_task();
         if ((int32_t)(time_us_32() - deadline) >= 0) {
-            printf("disk_io: timeout waiting for USB transfer\n");
+            DBG_PRINTF("disk_io: timeout waiting for USB transfer\n");
             _disk_busy = false;
             _disk_error = true;
             return;
@@ -147,7 +148,7 @@ static bool disk_io_complete(uint8_t dev_addr, tuh_msc_complete_data_t const * c
      * reported an error (e.g. medium error, illegal request). */
     _disk_error = (cb_data->csw->status != 0);
     if (_disk_error)
-        printf("disk_io: SCSI error status %u\n", cb_data->csw->status);
+        DBG_PRINTF("disk_io: SCSI error status %u\n", cb_data->csw->status);
     _disk_busy = false;
     return true;
 }

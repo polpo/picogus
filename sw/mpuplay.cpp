@@ -16,7 +16,7 @@
  *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
-#include <stdio.h>
+#include "include/pg_debug.h"
 
 #include "system/flash_settings.h"
 extern Settings settings;
@@ -30,7 +30,7 @@ extern Settings settings;
 #include "mpu401/export.h"
 
 void play_mpu() {
-    puts("starting core 1 MPU");
+    DBG_PUTS("starting core 1 MPU");
     // flash_safe_execute_core_init();
 
 #ifdef USB_STACK
@@ -40,7 +40,7 @@ void play_mpu() {
 
     // Init PIC on this core so it handles timers
     PIC_Init();
-    puts("pic inited on core 1");
+    DBG_PUTS("pic inited on core 1");
     MPU401_Init(settings.MPU.delaySysex, settings.MPU.fakeAllNotesOff);
 
     for (;;) {

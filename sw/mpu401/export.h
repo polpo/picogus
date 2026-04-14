@@ -44,6 +44,8 @@ Bit8u MPU401_ReadStatus(void);
 void MPU401_WriteData(Bit8u val, bool crit);
 Bit8u QueueUsed();
 void send_midi_bytes(int maxbytes);
+uint32_t MIDI_BufferFree(void);
+void MIDI_RawOutByte(Bit8u data);
 
 #ifdef __cplusplus
 }

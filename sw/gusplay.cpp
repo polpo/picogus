@@ -16,7 +16,7 @@
  *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
-#include <stdio.h>
+#include "include/pg_debug.h"
 // #include "stdio_async_uart.h"
 #include <math.h>
 
@@ -103,12 +103,12 @@ static void update_gus_timing(uint8_t channels) {
     uint32_t divider = cps * 4;
     pio_sm_set_clkdiv_int_frac(audio_pio, PICO_AUDIO_I2S_SM, divider >> 8u, divider & 0xffu);
 
-    printf("GUS channels: %u\n", channels);
+    DBG_PRINTF("GUS channels: %u\n", channels);
 }
 
 // void __xip_cache("my_sub_section") (play_gus)(void) {
 void play_gus() {
-    puts("starting core 1");
+    DBG_PUTS("starting core 1");
     // flash_safe_execute_core_init();
     uint32_t start, end;
 
@@ -116,31 +116,31 @@ void play_gus() {
     PIC_Init();
 
     // Init ISA DMA on this core so it handles the ISR
-    puts("Initing ISA DMA PIO...");
+    DBG_PUTS("Initing ISA DMA PIO...");
     dma_config = DMA_init(pio0, DMA_PIO_SM, GUS_DMA_isr_pt);
 
 #ifdef PSRAM_CORE1
 #ifdef PSRAM
-    puts("Initing PSRAM...");
+    DBG_PUTS("Initing PSRAM...");
     psram_spi = psram_spi_init_clkdiv(pio1, -1, 1.6);
 #if TEST_PSRAM
-    puts("Writing PSRAM...");
+    DBG_PUTS("Writing PSRAM...");
     uint8_t deadbeef[8] = {0xd, 0xe, 0xa, 0xd, 0xb, 0xe, 0xe, 0xf};
     for (uint32_t addr = 0; addr < (1024 * 1024); ++addr) {
         psram_write8_async(&psram_spi, addr, (addr & 0xFF));
     }
-    puts("Reading PSRAM...");
+    DBG_PUTS("Reading PSRAM...");
     uint32_t psram_begin = time_us_32();
     for (uint32_t addr = 0; addr < (1024 * 1024); ++addr) {
         uint8_t result = psram_read8(&psram_spi, addr);
         if (static_cast<uint8_t>((addr & 0xFF)) != result) {
-            printf("\nPSRAM failure at address %x (%x != %x)\n", addr, addr & 0xFF, result);
+            DBG_PRINTF("\nPSRAM failure at address %x (%x != %x)\n", addr, addr & 0xFF, result);
             return;
         }
     }
     uint32_t psram_elapsed = time_us_32() - psram_begin;
     float psram_speed = 1000000.0 * 1024.0 * 1024 / psram_elapsed;
-    printf("8 bit: PSRAM read 1MB in %d us, %d B/s (target 705600 B/s)\n", psram_elapsed, (uint32_t)psram_speed);
+    DBG_PRINTF("8 bit: PSRAM read 1MB in %d us, %d B/s (target 705600 B/s)\n", psram_elapsed, (uint32_t)psram_speed);
 #endif
 #endif
 #endif
@@ -157,7 +157,7 @@ void play_gus() {
 
     init_audio();
 
-    printf("GUS IRQ-driven audio started\n");
+    DBG_PRINTF("GUS IRQ-driven audio started\n");
 
     // Use the PWM peripheral to trigger an IRQ at the GUS sample rate
     pwm_config pwm_c = pwm_get_default_config();

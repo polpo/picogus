@@ -6,7 +6,7 @@
 #include <hardware/flash.h>
 #include "flash_firmware.h"
 #include "system/flash_settings.h"
-#include <stdio.h>
+#include "../include/pg_debug.h"
 
 static uint32_t sStart = 0;
 static const uint32_t offset[NR_OF_FIRMWARES] = {FLASH_FIRMWARE1, FLASH_FIRMWARE2, FLASH_FIRMWARE3, FLASH_FIRMWARE4, FLASH_FIRMWARE5, FLASH_FIRMWARE6};
@@ -27,7 +27,7 @@ uint8_t read_permMode(void)
 int main(void)
 {
     stdio_init_all();
-    printf("picogus bootloader\n");
+    DBG_PUTS("picogus bootloader");
     stdio_flush();
     uint8_t firmware_nr = (uint8_t) (0x000000FF & watchdog_hw->scratch[3]);
 

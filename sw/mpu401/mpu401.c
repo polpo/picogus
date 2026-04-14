@@ -47,11 +47,17 @@ typedef uint16_t Bit16u;
 typedef int32_t Bits;
 typedef int8_t Bit8s;
 
+// autodetect when Gateway runs by watching for it setting this message on the MT-32's LCD
+static const char* gateway_msg = "\xf0\x41\x10\x16\x12\x20\x00\x00       Gateway";
+static uint8_t gateway_pos = 0;
+static uint8_t gateway_len = 22;
+
 #include "system/pico_pic.h"
 
 void MIDI_Init(bool delaysysex,bool fakeallnotesoff);
 void MIDI_RawOutByte(Bit8u data);
 bool MIDI_Available(void);
+extern volatile bool midi_output_busy;
 
 static uint32_t MPU401_EventHandler(Bitu val);
 static PIC_TimerEvent MPU401_Event = {
@@ -95,6 +101,7 @@ typedef enum MpuDataType MpuDataType; /* SOFTMPU */
 #define MSG_MPU_CLOCK           0xfd
 #define MSG_MPU_ACK             0xfe
 
+static bool config_versionfix = false;
 static bool config_delaysysex = false;
 static bool config_fakeallnotesoff = false;
 
@@ -160,7 +167,7 @@ __force_inline static void ClrQueue(void) {
 __force_inline Bit8u MPU401_ReadStatus(void) { /* SOFTMPU */
     critical_section_enter_blocking(&mpu_crit);
     uint8_t ret=0x3f;   /* Bits 6 and 7 clear */
-    if (mpu.state.cmd_pending) ret|=0x40;
+    if (mpu.state.cmd_pending || midi_output_busy) ret|=0x40;
     if (!mpu.queue_used) ret|=0x80;
     critical_section_exit(&mpu_crit);
     return ret;
@@ -272,8 +279,14 @@ __force_inline void MPU401_WriteCommand(Bit8u val, bool crit) { /* SOFTMPU */
             QueueByte(0);
             goto write_command_return;
         case 0xac:      /* Request version */
-            QueueByte(MSG_MPU_ACK);
-            QueueByte(MPU401_VERSION);
+            if (config_versionfix) {
+                // Hack for Gateway
+                QueueByte(MPU401_VERSION);
+                QueueByte(MSG_MPU_ACK);
+            } else {
+                QueueByte(MSG_MPU_ACK);
+                QueueByte(MPU401_VERSION);
+            }
             goto write_command_return;
         case 0xad:      /* Request revision */
             QueueByte(MSG_MPU_ACK);
@@ -376,6 +389,16 @@ __force_inline void MPU401_WriteData(Bit8u val, bool crit) { /* SOFTMPU */
     static Bit8u length,cnt,posd; /* SOFTMPU */
     if (mpu.mode==M_UART) {
         MIDI_RawOutByte(val);
+        // autodetect when Gateway runs
+        if (val == gateway_msg[gateway_pos]) {
+            ++gateway_pos;
+            if (gateway_pos == gateway_len) {
+                config_versionfix = true;
+                gateway_pos = 0;
+            }
+        } else {
+            gateway_pos = 0;
+        }
         goto write_return;
     }
     switch (mpu.state.command_byte) {       /* 0xe# command data */
@@ -581,6 +604,14 @@ __force_inline static void MPU401_IntelligentOut(Bit8u chan) {
 }
 
 __force_inline static void UpdateTrack(Bit8u chan) {
+  /* block until MIDI output buffer has room, matching real MPU-401 (busy-wait
+     with SCI TX interrupt draining), checks for >= 4 free bytes before writing
+     a message. */
+    if (mpu.playbuf[chan].type != T_OVERFLOW) {
+        while (MIDI_BufferFree() < 4) {
+            send_midi_bytes(1);
+        }
+    }
     MPU401_IntelligentOut(chan);
     if (mpu.state.amask&(1<<chan)) {
         mpu.playbuf[chan].vlength=0;
@@ -733,6 +764,7 @@ __force_inline static void MPU401_Reset(void) {
 /* HardMPU: Initialisation */
 void MPU401_Init(bool delaysysex, bool fakeallnotesoff)
 {
+    config_versionfix = false;
     config_delaysysex = delaysysex;
     config_fakeallnotesoff = fakeallnotesoff;
     if (!critical_section_is_initialized(&mpu_crit)) {

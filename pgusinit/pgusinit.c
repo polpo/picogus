@@ -71,7 +71,7 @@ static void pageprintf(char *format, ...)
 
 static void banner(void)
 {
-    printf("PicoGUSinit v3.8.0 (c) 2025 Ian Scott - licensed under the GNU GPL v2\n");
+    printf("PicoGUSinit v3.9.0 (c) 2025 Ian Scott - licensed under the GNU GPL v2\n");
 }
 
 
@@ -182,23 +182,48 @@ static void err_ultrasnd(void)
 }
 
 
-static void err_blaster(void)
+typedef enum {
+    BLASTER_UNSET,
+    BLASTER_MALFORMED,
+    BLASTER_DMA16_MISMATCH,
+    BLASTER_MISMATCH,
+} blaster_err_t;
+
+static void err_blaster_format_help(void)
 {
     //              "................................................................................\n"
-    fprintf(stderr, "ERROR: In SB mode but no BLASTER variable set or is malformed!\n");
     fprintf(stderr, "The BLASTER environment variable must be set in the following format:\n");
     fprintf(stderr, "\tset BLASTER=Axxx Iy Dz Hz Tw\n");
     fprintf(stderr, "Where xxx = port, y = IRQ, z = DMA. w = SB type:\n");
     fprintf(stderr, "    1 - SB 1.x,          2 - SB Pro 1 (dual OPL2), 3 - SB 2.0,\n");
     fprintf(stderr, "    4 - SB Pro 2 (OPL3), 6 - SB 16\n");
-    fprintf(stderr, "Port is set via /sbport xxx option; DMA and IRQ configued via jumper then also\n");
-    fprintf(stderr, "set via /sbirq y and /sbdma y options.\n");
 }
 
-static void err_blaster16_dma_mismatch(void)
+static void err_blaster(blaster_err_t reason)
 {
-    //              "................................................................................\n"
-    fprintf(stderr, "ERROR: In SB 16 mode, low (Dx) and high (Hx) DMA in BLASTER variable must match!\n");
+    //                      "................................................................................\n"
+    switch (reason) {
+        case BLASTER_UNSET:
+            fprintf(stderr, "ERROR: In SB mode but BLASTER environment variable is not set!\n");
+            err_blaster_format_help();
+            fprintf(stderr, "Then run pgusinit /sbenv to apply the BLASTER settings to the card.\n");
+            break;
+        case BLASTER_MALFORMED:
+            fprintf(stderr, "ERROR: BLASTER environment variable is malformed!\n");
+            fprintf(stderr, "Current value: BLASTER=%s\n", getenv("BLASTER"));
+            err_blaster_format_help();
+            break;
+        case BLASTER_DMA16_MISMATCH:
+            fprintf(stderr, "ERROR: In SB 16 mode, low (Dx) and high (Hx) DMA in BLASTER variable must match!\n");
+            fprintf(stderr, "Current value: BLASTER=%s\n", getenv("BLASTER"));
+            break;
+        case BLASTER_MISMATCH:
+            fprintf(stderr, "ERROR: SB settings on card don't match the BLASTER environment variable!\n");
+            fprintf(stderr, "Double-check that PicoGUS is jumpered correctly for the desired IRQ and DMA,\n");
+            fprintf(stderr, "then run pgusinit /sbenv to set card resources from the BLASTER variable.\n");
+            fprintf(stderr, "Alternatively, use /sbport, /sbirq, /sbdma, /sbtype to set values directly.\n");
+            break;
+    }
 }
 
 static void err_pigus(void)
@@ -278,7 +303,7 @@ static int init_sb(void)
 
     char* blaster = getenv("BLASTER");
     if (blaster == NULL) {
-        err_blaster();
+        err_blaster(BLASTER_UNSET);
         return 1;
     }
     char blasterTemp[256];
@@ -299,8 +324,12 @@ static int init_sb(void)
         p = strtok(NULL, " ");
     }
 
-    if ((port == -1) || (irq == -1) || (dma8 == -1) || (sbtype > 6) || (dspver[sbtype] == 0) || ((sbtype == 6) && (dma8 != dma16))) {
-        err_blaster();
+    if ((port == -1) || (irq == -1) || (dma8 == -1) || (sbtype > 6) || (dspver[sbtype] == 0)) {
+        err_blaster(BLASTER_MALFORMED);
+        return 2;
+    }
+    if ((sbtype == 6) && (dma8 != dma16)) {
+        err_blaster(BLASTER_DMA16_MISMATCH);
         return 2;
     }
 
@@ -322,28 +351,28 @@ static int init_sb(void)
         outp(CONTROL_PORT, CMD_SBPORT); // Select port register
         uint16_t tmp_port = inpw(DATA_PORT_LOW);
         if (port != tmp_port) {
-            err_blaster();
+            err_blaster(BLASTER_MISMATCH);
             return 2;
         }
 
         outp(CONTROL_PORT, CMD_SBIRQ); // Select IRQ register
         uint8_t tmp_irq = inp(DATA_PORT_HIGH);
         if (irq != tmp_irq) {
-            err_blaster();
+            err_blaster(BLASTER_MISMATCH);
             return 2;
         }
 
         outp(CONTROL_PORT, CMD_SBDMA); // Select DMA register
         uint8_t tmp_dma = inp(DATA_PORT_HIGH);
         if (dma8 != tmp_dma) {
-            err_blaster();
+            err_blaster(BLASTER_MISMATCH);
             return 2;
         }
 
         outp(CONTROL_PORT, CMD_SBTYPE); // Select SB type register
         uint8_t tmp_type = inp(DATA_PORT_HIGH);
         if (sbtype != tmp_type) {
-            err_blaster();
+            err_blaster(BLASTER_MISMATCH);
             return 2;
         }
     }
@@ -461,6 +490,7 @@ static int wait_for_cd_load(void)
         print_string(CMD_CDERROR);
         return 98;
     }
+    return print_cdimage_current();
 }
 
 
@@ -631,7 +661,7 @@ static int write_firmware(const char* fw_filename)
         for (uint16_t b = 0; b < 512; ++b) {
             // Write firmware byte
             outp(DATA_PORT_HIGH, uf2_buf.buf[b]);
-            if (b == 512 && protocol == 1) {
+            if (b == 511 && protocol == 1) {
                 // Protocol 1 abuses IOCHRDY to pause during flash erase/write. Some chipsets give
                 // up waiting on IOCHRDY and release the ISA bus after a certain amount of time before
                 // the flash operation is finished. This is an extra delay to work around this issue.
@@ -682,7 +712,7 @@ static void wifi_printStatus(void)
     uint16_t try = 0;
     char c;
     while (c = inp(DATA_PORT_HIGH)) {
-        if (c == 255) {
+        if ((unsigned char)c == 255) {
             if (++try == 10000) {
                 printf("Error getting WiFI status\n");
                 break;
@@ -772,7 +802,7 @@ static bool cmdSetMode(const char* arg, const int cmd, const int cmd2, const int
             return true;
         }
     }
-    fprintf(stderr, "Invalid mode %s. Valid modes: gus, sb, mpu, psg, adlib, usb\n");
+    fprintf(stderr, "Invalid mode %s. Valid modes: gus, sb, mpu, psg, adlib, usb\n", arg);
     return false;
 }
 
@@ -859,7 +889,9 @@ static bool cmdSendPort(const char* arg, const int cmd, const int cmd2, const in
 
 static bool cmdDefaults(const char* arg, const int cmd, const int cmd2, const int cmd3)
 {
-    return cmdSendUint8(CMD_DEFAULTS, 0xff, 0, 0);
+    outp(CONTROL_PORT, CMD_DEFAULTS);
+    outp(DATA_PORT_HIGH, 0xff);
+    return true;
 }
 
 static bool cmdSetVol(const char* arg, const int cmd, const int cmd2, const int cmd3)
@@ -1081,16 +1113,15 @@ int parseCommand(int argc, char* argv[], int* i, ParseCommand commands[])
                 } else {
                     printf("\n");
                 }
-                return retVal;  
+                return retVal;
             }
             arg = argv[++(*i)];
-        }
-
-        if (!stricmp(argv[idx + 1], "default")) {
-            if (command->def) {
-                argv[idx + 1] = command->def;
-            } else {
-                return retVal;
+            if (!stricmp(arg, "default")) {
+                if (command->def) {
+                    arg = command->def;
+                } else {
+                    return retVal;
+                }
             }
         }
         return command->routine(arg, command->cmd, command->cmd2, command->cmd3);

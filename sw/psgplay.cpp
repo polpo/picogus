@@ -16,8 +16,9 @@
  *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
-#include <stdio.h>
 #include <math.h>
+
+#include "include/pg_debug.h"
 
 #if PICO_ON_DEVICE
 
@@ -107,13 +108,13 @@ struct audio_buffer_pool *init_audio() {
 }
 
 void play_psg() {
-    puts("starting core 1 psg");
+    DBG_PUTS("starting core 1 psg");
     // flash_safe_execute_core_init();
 
 #if defined(USB_MOUSE) || defined(SOUND_MPU)
     // Init PIC on this core so it handles timers
     PIC_Init();
-    puts("pic inited on core 1");
+    DBG_PUTS("pic inited on core 1");
 #endif
 #ifdef USB_STACK
     // Init TinyUSB for joystick support

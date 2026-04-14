@@ -20,7 +20,7 @@ typedef enum { NE2000_NE2000, NE2000_RTL8029AS } ne2000_type;
 
 #define NETBLOCKING 0 // we won't block our pcap
 
-//#define NE2000_DEBUG
+#define PGDEBUG_NE2000 0
 
 #define BX_RESET_HARDWARE 0
 #define BX_RESET_SOFTWARE 1
