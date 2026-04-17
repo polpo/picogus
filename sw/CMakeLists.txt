@@ -56,6 +56,7 @@ endfunction()
 
 
 option(PGDEBUG "Enable debug printf framework" OFF)
+find_package(Python3 COMPONENTS Interpreter QUIET)
 
 # Global definitions across all targets
 add_compile_definitions(
@@ -245,6 +246,18 @@ function(config_target TARGET_NAME MULTIFW)
             pico_enable_stdio_usb(${TARGET_NAME} 0)
         endif()
         pico_set_printf_implementation(${TARGET_NAME} none)
+    endif()
+    if(NOT PGDEBUG AND Python3_FOUND)
+        # With printf stripped, __wrap_snprintf is the panic stub, so any
+        # stray printf call dead-loops the firmware. Fail the build if we
+        # find one.
+        add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
+            COMMAND ${Python3_EXECUTABLE}
+                ${CMAKE_SOURCE_DIR}/scripts/check_printf_leak.py
+                ${CMAKE_OBJDUMP} ${CMAKE_ADDR2LINE}
+                $<TARGET_FILE:${TARGET_NAME}>
+            VERBATIM
+        )
     endif()
     pico_enable_stdio_semihosting(${TARGET_NAME} 0)
 endfunction()
@@ -518,6 +531,7 @@ function(build_psg TARGET_NAME MULTIFW)
     )
     target_sources(${TARGET_NAME} PRIVATE
         audio/volctrl.cpp
+        audio/audio_i2s_minimal.c
         square/square.cpp
     )
     target_sources(${TARGET_NAME} PRIVATE psgplay.cpp)
@@ -534,9 +548,12 @@ function(build_usb TARGET_NAME MULTIFW)
     pico_set_program_name(${TARGET_NAME} "picogus-usb")
     target_compile_definitions(${TARGET_NAME} PRIVATE
         USB_ONLY=1
+        USE_CD_AUDIO_FIFO=1
     )
-    target_sources(${TARGET_NAME} PRIVATE 
+    target_sources(${TARGET_NAME} PRIVATE
         audio/volctrl.cpp
+        audio/audio_fifo.c
+        audio/audio_i2s_minimal.c
         usbplay.cpp
     )
 endfunction()
@@ -664,6 +681,15 @@ if(PROJECT_TYPE STREQUAL "MULTIFW")
     pico_enable_stdio_semihosting(bootloader 0)
     if(NOT PGDEBUG)
         pico_set_printf_implementation(bootloader none)
+    endif()
+    if(NOT PGDEBUG AND Python3_FOUND)
+        add_custom_command(TARGET bootloader POST_BUILD
+            COMMAND ${Python3_EXECUTABLE}
+                ${CMAKE_SOURCE_DIR}/scripts/check_printf_leak.py
+                ${CMAKE_OBJDUMP} ${CMAKE_ADDR2LINE}
+                $<TARGET_FILE:bootloader>
+            VERBATIM
+        )
     endif()
     add_dependencies(bootloader generate_flash_firmware_h)
 

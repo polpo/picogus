@@ -136,12 +136,28 @@ jobs:
         run: |
           mkdir -p $STAGING_DIR
           cp pgusinit/README.md $STAGING_DIR/README.md
-      - name: Get Tags
-        id: tag
-        uses: ildug/get-tag-action@v1
-      - name: Generate release body
+      - name: Classify release
+        id: relinfo
+        shell: bash
         run: |
-          awk '/^# v${{ steps.tag.outputs.version }}/{a=1;next}/^# /{a=0}a' sw/CHANGELOG.md > release-body.md
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          if [[ "$VERSION" == *-* ]]; then
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+            echo "base_version=${VERSION%%-*}" >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+            echo "base_version=$VERSION" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Generate release body
+        shell: bash
+        run: |
+          VERSION="${{ steps.relinfo.outputs.version }}"
+          BASE="${{ steps.relinfo.outputs.base_version }}"
+          awk -v ver="$VERSION" '$0 ~ "^# v" ver "$" {a=1;next} /^# /{a=0} a' sw/CHANGELOG.md > release-body.md
+          if [ ! -s release-body.md ] && [ "$VERSION" != "$BASE" ]; then
+            awk -v ver="$BASE" '$0 ~ "^# v" ver "$" {a=1;next} /^# /{a=0} a' sw/CHANGELOG.md > release-body.md
+          fi
       - name: Download firmware artifact
         uses: actions/download-artifact@v4
         with:
@@ -156,11 +172,12 @@ jobs:
         uses: montudor/action-zip@v1
       - name: Zip release
         run: |
-          zip -9 -r ../picogus-v${{ steps.tag.outputs.version }}.zip .
+          zip -9 -r ../picogus-v${{ steps.relinfo.outputs.version }}.zip .
         working-directory: ${{env.STAGING_DIR}}
       - name: Release
         uses: softprops/action-gh-release@v1
         with:
           body_path: release-body.md
-          files: picogus-v${{ steps.tag.outputs.version }}.zip
+          files: picogus-v${{ steps.relinfo.outputs.version }}.zip
           draft: true
+          prerelease: ${{ steps.relinfo.outputs.prerelease }}
