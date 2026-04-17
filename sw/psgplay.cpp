@@ -16,24 +16,23 @@
  *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
-#include <math.h>
-
 #include "include/pg_debug.h"
 
 #if PICO_ON_DEVICE
-
 #include "hardware/clocks.h"
 #include "hardware/structs/clocks.h"
-
+#include "hardware/pwm.h"
+#include "hardware/pio.h"
 #endif
 
 #include "pico/stdlib.h"
-#include "pico/audio_i2s.h"
+#include "audio/audio_i2s_minimal.h"
+#include "audio/volctrl.h"
+#include "audio/clamp.h"
 
 #include "square/square.h"
 
 #include "include/cmd_buffers.h"
-#include "audio/volctrl.h"
 
 #if SOUND_TANDY
 extern tandy_buffer_t tandy_buffer;
@@ -56,8 +55,6 @@ extern uint LED_PIN;
 #include "mouse/sermouse.h"
 #endif
 
-#include <string.h>
-
 #if PICO_ON_DEVICE
 #include "pico/binary_info.h"
 bi_decl(bi_3pins_with_names(PICO_AUDIO_I2S_DATA_PIN, "I2S DIN", PICO_AUDIO_I2S_CLOCK_PIN_BASE, "I2S BCK", PICO_AUDIO_I2S_CLOCK_PIN_BASE+1, "I2S LRCK"));
@@ -69,42 +66,48 @@ extern Settings settings;
 #include "mpu401/export.h"
 #endif
 
-#define SAMPLES_PER_BUFFER 8
+#define audio_pio __CONCAT(pio, PICO_AUDIO_I2S_PIO)
 
-struct audio_buffer_pool *init_audio() {
-
-    static audio_format_t audio_format = {
-            .sample_freq = 44100,
-            .format = AUDIO_BUFFER_FORMAT_PCM_S16,
-            .channel_count = 2,
-    };
-
-    static struct audio_buffer_format producer_format = {
-            .format = &audio_format,
-            .sample_stride = 4
-    };
-
-    struct audio_buffer_pool *producer_pool = audio_new_producer_pool(&producer_format, 2,
-                                                                      SAMPLES_PER_BUFFER); // todo correct size
-    bool __unused ok;
-    const struct audio_format *output_format;
-    struct audio_i2s_config config = {
+static void init_audio(void) {
+    const audio_i2s_config_t config = {
             .data_pin = PICO_AUDIO_I2S_DATA_PIN,
             .clock_pin_base = PICO_AUDIO_I2S_CLOCK_PIN_BASE,
             .dma_channel = 6,
-            .pio_sm = 3,
+            .pio_sm = PICO_AUDIO_I2S_SM,
     };
+    audio_i2s_minimal_setup(&config, 44100);
+}
 
-    output_format = audio_i2s_setup(&audio_format, &config);
-    if (!output_format) {
-        panic("PicoAudio: Unable to open audio device.\n");
-    }
+#if SOUND_TANDY
+static tandysound_t tandysound;
+#endif
+#if SOUND_CMS
+static cms_t cms;
+#endif
 
-    ok = audio_i2s_connect_extra(producer_pool, false, 0, 0, NULL);
-    assert(ok);
-    audio_i2s_set_enabled(true);
-    set_volume(CMD_PSGVOL);
-    return producer_pool;
+// Setup values for audio sample clock
+static constexpr uint32_t clocks_per_sample_minus_one = (RP2_CLOCK_SPEED * 1000u / 44100) - 1;
+static constexpr uint pwm_slice_num = 4; // slices 0-3 are taken by USB joystick support
+
+// PSG generation is cheap (phase accumulators + volume lookups per voice), so
+// synthesize directly in the ISR — no intermediate FIFO needed.
+void audio_sample_handler(void) {
+    pwm_clear_irq(pwm_slice_num);
+
+    int32_t buf[2] = {0, 0};
+#if SOUND_TANDY
+    tandysound.generator().generate_frames(buf, 1);
+#endif
+#if SOUND_CMS
+    cms.generator(0).generate_frames(buf, 1);
+    cms.generator(1).generate_frames(buf, 1);
+#endif
+    int32_t sample_l = scale_sample(clamp16(buf[0]), volume.psg, 0);
+    int32_t sample_r = scale_sample(clamp16(buf[1]), volume.psg, 0);
+    sample_l = clamp16(sample_l);
+    sample_r = clamp16(sample_r);
+
+    audio_pio->txf[PICO_AUDIO_I2S_SM] = ((sample_l & 0xFFFF) | (sample_r << 16));
 }
 
 void play_psg() {
@@ -131,15 +134,19 @@ void play_psg() {
     MPU401_Init(settings.MPU.delaySysex, settings.MPU.fakeAllNotesOff);
 #endif
 
-#if SOUND_TANDY
-    tandysound_t tandysound;
-#endif
-#if SOUND_CMS
-    cms_t cms;
-#endif
+    init_audio();
+    set_volume(CMD_PSGVOL);
 
-    struct audio_buffer_pool *ap = init_audio();
-    int32_t buf[SAMPLES_PER_BUFFER * 2];
+    // Use the PWM peripheral to trigger an IRQ at 44100Hz
+    pwm_config pwm_c = pwm_get_default_config();
+    pwm_config_set_wrap(&pwm_c, clocks_per_sample_minus_one);
+    pwm_init(pwm_slice_num, &pwm_c, false);
+    pwm_set_irq_enabled(pwm_slice_num, true);
+    irq_set_exclusive_handler(PWM_IRQ_WRAP, audio_sample_handler);
+    irq_set_priority(PWM_IRQ_WRAP, PICO_LOWEST_IRQ_PRIORITY);
+    irq_set_enabled(PWM_IRQ_WRAP, true);
+    pwm_set_enabled(pwm_slice_num, true);
+
     for (;;) {
         bool notfirst = false;
 #if SOUND_TANDY
@@ -168,31 +175,6 @@ void play_psg() {
         }
 #endif
 
-        memset(buf, 0, sizeof(buf));
-        // Non-blocking poll: keep servicing USB while waiting for a free
-        // audio buffer so TinyUSB transactions don't time out.
-        struct audio_buffer *buffer;
-        while (!(buffer = take_audio_buffer(ap, false))) {
-#ifdef USB_STACK
-            tuh_task();
-#endif
-        }
-        int16_t *samples = (int16_t *) buffer->buffer->bytes;
-      
-#if SOUND_TANDY
-        tandysound.generator().generate_frames(buf, SAMPLES_PER_BUFFER);
-#endif
-#if SOUND_CMS
-        cms.generator(0).generate_frames(buf, SAMPLES_PER_BUFFER);
-        cms.generator(1).generate_frames(buf, SAMPLES_PER_BUFFER);
-#endif
-        for (int i = 0; i < SAMPLES_PER_BUFFER; ++i) {          
-            samples[i << 1]       = scale_sample(buf[i << 1],       volume.psg, 0);
-            samples[(i << 1) + 1] = scale_sample(buf[(i << 1) + 1], volume.psg, 0);
-        }
-        buffer->sample_count = SAMPLES_PER_BUFFER;
-
-        give_audio_buffer(ap, buffer);
 #ifdef USB_STACK
         // Service TinyUSB events
         tuh_task();

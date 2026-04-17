@@ -22,10 +22,14 @@
 #include "mouse/8250uart.h"
 #include "mouse/sermouse.h"
 
-// #include <string.h>
 #ifdef CDROM
+#include "hardware/pwm.h"
+#include "hardware/pio.h"
 #include "cdrom/cdrom.h"
-#include "pico/audio_i2s.h"
+#include "audio/audio_i2s_minimal.h"
+#include "audio/audio_fifo.h"
+#include "audio/volctrl.h"
+#include "audio/clamp.h"
 #endif
 
 #ifdef SOUND_MPU
@@ -37,50 +41,44 @@ extern Settings settings;
 #include "system/pico_pic.h"
 
 #ifdef CDROM
-#define SAMPLES_PER_BUFFER 256
+#define audio_pio __CONCAT(pio, PICO_AUDIO_I2S_PIO)
 
-struct audio_buffer_pool *init_audio() {
-
-    static audio_format_t audio_format = {
-            .sample_freq = 44100,
-            .format = AUDIO_BUFFER_FORMAT_PCM_S16,
-            .channel_count = 2,
-    };
-
-    static struct audio_buffer_format producer_format = {
-            .format = &audio_format,
-            .sample_stride = 4
-    };
-
-    struct audio_buffer_pool *producer_pool = audio_new_producer_pool(&producer_format, 2,
-                                                                      SAMPLES_PER_BUFFER); // todo correct size
-    bool __unused ok;
-    const struct audio_format *output_format;
-    struct audio_i2s_config config = {
+static void init_audio(void) {
+    const audio_i2s_config_t config = {
             .data_pin = PICO_AUDIO_I2S_DATA_PIN,
             .clock_pin_base = PICO_AUDIO_I2S_CLOCK_PIN_BASE,
             .dma_channel = 6,
-            .pio_sm = 3,
+            .pio_sm = PICO_AUDIO_I2S_SM,
     };
+    audio_i2s_minimal_setup(&config, 44100);
+}
 
-    output_format = audio_i2s_setup(&audio_format, &config);
-    if (!output_format) {
-        panic("PicoAudio: Unable to open audio device.\n");
+static audio_fifo_t* cd_fifo;
+
+// Setup values for audio sample clock. (RP2_CLOCK_SPEED / 44100) clocks per sample.
+static constexpr uint32_t clocks_per_sample_minus_one = (RP2_CLOCK_SPEED * 1000u / 44100) - 1;
+static constexpr uint pwm_slice_num = 4; // slices 0-3 are taken by USB joystick support
+
+void audio_sample_handler(void) {
+    pwm_clear_irq(pwm_slice_num);
+
+    int32_t sample_l = 0, sample_r = 0;
+    if (cd_fifo->state != FIFO_STATE_STOPPED && cd_fifo->write_idx - cd_fifo->read_idx >= 1) {
+        sample_pair cd = cd_fifo->buffer[cd_fifo->read_idx & AUDIO_FIFO_BITS];
+        cd_fifo->read_idx++;
+        if (cd_fifo->write_idx == cd_fifo->read_idx) cd_fifo->state = FIFO_STATE_STOPPED;
+        sample_l = scale_sample(cd.data16[0], volume.cd_audio[0], 0);
+        sample_r = scale_sample(cd.data16[1], volume.cd_audio[1], 0);
     }
+    sample_l = clamp16(sample_l);
+    sample_r = clamp16(sample_r);
 
-    //ok = audio_i2s_connect(producer_pool);
-    ok = audio_i2s_connect_extra(producer_pool, false, 0, 0, NULL);
-    assert(ok);
-    audio_i2s_set_enabled(true);
-    return producer_pool;
+    audio_pio->txf[PICO_AUDIO_I2S_SM] = ((sample_l & 0xFFFF) | (sample_r << 16));
 }
 #endif // CDROM
 
 void play_usb() {
     DBG_PUTS("starting core 1 USB");
-    // flash_safe_execute_core_init();
-
-    // board_init();
 
     // Init PIC on this core so it handles timers
     PIC_Init();
@@ -100,46 +98,32 @@ void play_usb() {
 #endif
 
 #ifdef CDROM
-    struct audio_buffer_pool *ap = init_audio();
+    init_audio();
+    cd_fifo = cdrom_audio_fifo_peek(&cdrom);
+    set_volume(CMD_CDVOL);
+
+    // Use the PWM peripheral to trigger an IRQ at 44100Hz
+    pwm_config pwm_c = pwm_get_default_config();
+    pwm_config_set_wrap(&pwm_c, clocks_per_sample_minus_one);
+    pwm_init(pwm_slice_num, &pwm_c, false);
+    pwm_set_irq_enabled(pwm_slice_num, true);
+    irq_set_exclusive_handler(PWM_IRQ_WRAP, audio_sample_handler);
+    irq_set_priority(PWM_IRQ_WRAP, PICO_LOWEST_IRQ_PRIORITY);
+    irq_set_enabled(PWM_IRQ_WRAP, true);
+    pwm_set_enabled(pwm_slice_num, true);
 #endif
+
     for (;;) {
 #ifdef CDROM
-        if (cdrom.cd_status == CD_STATUS_PLAYING) {
-            // Non-blocking poll: keep servicing USB while waiting for a free
-            // audio buffer so TinyUSB transactions don't time out during the
-            // ~5.8 ms buffer period (256 samples @ 44100 Hz).
-            struct audio_buffer *buffer;
-            while (!(buffer = take_audio_buffer(ap, false))) {
-                tuh_task();
-            }
-            int16_t *samples = (int16_t *) buffer->buffer->bytes;
-            buffer->sample_count = cdrom_audio_callback_simple(&cdrom, samples, SAMPLES_PER_BUFFER << 1, false) >> 1;
-            if (buffer->sample_count == 0) {
-                // If we got no samples back, playback stopped so output a sample of silence
-                // (give_audio_buffer does not tolerate 0 samples, so we have to emit 1)
-                samples[0] = samples[1] = 0;
-                buffer->sample_count = 1;
-            }
-            give_audio_buffer(ap, buffer);
-#ifdef SOUND_MPU
-            send_midi_bytes(32);
-        } else {
-            send_midi_bytes(8);
-#endif // SOUND_MPU
-        }
+        // Fill the CD audio FIFO from the active track; ISR drains it.
+        cdrom_audio_callback(&cdrom, AUDIO_FIFO_SIZE - STEREO_SAMPLES_PER_SECTOR);
         cdrom_tasks(&cdrom);
-#else // CDROM
+#endif
 #ifdef SOUND_MPU
         send_midi_bytes(8);
-#endif // SOUND_MPU
-#endif // CDROM
-        // tinyusb host task
+#endif
         tuh_task();
-
-        // mouse task
         sermouse_core1_task();
-
-        // uart emulation task
         uartemu_core1_task();
     }
 }
