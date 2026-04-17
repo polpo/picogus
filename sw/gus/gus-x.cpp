@@ -1814,13 +1814,13 @@ void GUS_SetAudioBuffer(const uint16_t new_buffer_size) {
 }
 void GUS_SetDMAInterval(const uint16_t newInterval) {
     // PICOGUS special port to set DMA interval
-    printf("setting dma interval to %u\n", newInterval);
+    DBG_PRINTF("setting dma interval to %u\n", newInterval);
     myGUS.dmaIntervalOverride = newInterval;
 }
 void GUS_SetFixed44k(const bool new_force44k) {
     myGUS.fixed_44k_output = new_force44k;
     myGUS.basefreq = new_force44k ? 44100 : sample_rates[myGUS.ActiveChannels - 1];
-    printf("fixed 44k output: %u\n", myGUS.fixed_44k_output);
+    DBG_PRINTF("fixed 44k output: %u\n", myGUS.fixed_44k_output);
 }
 
 
