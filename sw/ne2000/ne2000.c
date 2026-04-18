@@ -100,20 +100,28 @@ void PG_Wifi_GetStatus(void)
 
     switch(status)
     {
-        case CYW43_LINK_DOWN : sprintf(StatusStr, "Err: Link Down");
+        case CYW43_LINK_DOWN : strcpy(StatusStr, "Err: Link Down");
                                break;
         case CYW43_LINK_JOIN :
         case CYW43_LINK_NOIP :
         case CYW43_LINK_UP   :
-                               sprintf(StatusStr, "Connected to SSID %s, Signal %d dB, Rate %d", tmp_ssid + 4, rssi, rate);
+                               {
+                               char numbuf[12];
+                               strcpy(StatusStr, "Connected to SSID ");
+                               strcat(StatusStr, tmp_ssid + 4);
+                               strcat(StatusStr, ", Signal ");
+                               strcat(StatusStr, itoa(rssi, numbuf, 10));
+                               strcat(StatusStr, " dB, Rate ");
+                               strcat(StatusStr, itoa(rate, numbuf, 10));
+                               }
                                break;
-        case CYW43_LINK_FAIL : sprintf(StatusStr, "Err: Connection failed");
+        case CYW43_LINK_FAIL : strcpy(StatusStr, "Err: Connection failed");
                                break;
-        case CYW43_LINK_NONET : sprintf(StatusStr, "Err: SSID not found");
+        case CYW43_LINK_NONET : strcpy(StatusStr, "Err: SSID not found");
                                 break;
-        case CYW43_LINK_BADAUTH : sprintf(StatusStr, "Err: Authentication failure");
+        case CYW43_LINK_BADAUTH : strcpy(StatusStr, "Err: Authentication failure");
                                   break;
-        default : sprintf(StatusStr, "Err: Unknown status");
+        default : strcpy(StatusStr, "Err: Unknown status");
     } 
 }
 
