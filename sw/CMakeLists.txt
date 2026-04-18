@@ -19,9 +19,13 @@ set(PICO_COPY_TO_RAM 1)
 include(pico_sdk_import.cmake)
 
 project(picogus
-    VERSION "4.1.1-beta.0"
+    VERSION "4.1.1"
     LANGUAGES C CXX ASM
 )
+
+# Full version string including pre-release suffix (if any).
+# CMake's project(VERSION) only allows numeric components, so the suffix lives here.
+set(PICOGUS_VERSION "${CMAKE_PROJECT_VERSION}-beta.0")
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
@@ -76,7 +80,7 @@ add_compile_definitions(
 function(config_target TARGET_NAME MULTIFW)
     # Add executable. Default name is the project name, version 0.1
     add_executable(${TARGET_NAME} picogus.cpp)
-    pico_set_program_version(${TARGET_NAME} ${CMAKE_PROJECT_VERSION})
+    pico_set_program_version(${TARGET_NAME} ${PICOGUS_VERSION})
 
     # Add include directory for the new structure
     target_include_directories(${TARGET_NAME} PRIVATE
@@ -755,7 +759,7 @@ elseif(PROJECT_TYPE STREQUAL "ANALYZER")
     set(FW_TARGET pg-analyzer)
     add_executable(pg-analyzer isa_analyzer.cpp)
     pico_set_program_name(pg-analyzer "picogus-analyzer")
-    pico_set_program_version(pg-analyzer ${CMAKE_PROJECT_VERSION})
+    pico_set_program_version(pg-analyzer ${PICOGUS_VERSION})
 
     target_compile_definitions(pg-analyzer PRIVATE
         PICO_MALLOC_PANIC=0
