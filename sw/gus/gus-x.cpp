@@ -1245,9 +1245,9 @@ __force_inline static void ExecuteGlobRegister(void) {
         if (!myGUS.timers[0].raiseirq) myGUS.IRQStatus&=~0x04;
         myGUS.timers[1].raiseirq=(myGUS.TimerControl & 0x08)>0;
         if (!myGUS.timers[1].raiseirq) myGUS.IRQStatus&=~0x08;
-        if (!myGUS.timers[0].raiseirq && !myGUS.timers[1].raiseirq) {
-            GUS_CheckIRQ();
-        }
+        // Always re-evaluate IRQ line: flipping either TimerControl bit changes
+        // the effective status even when raiseirq is still set on the other timer
+        GUS_CheckIRQ();
         critical_section_exit(&gus_crit);
         break;
     case 0x46:  // Timer 1 control
