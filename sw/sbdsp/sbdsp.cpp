@@ -442,14 +442,36 @@ static void sbdsp_dma_isr(void) {
     const uint32_t dma_data = DMA_Complete_Write(&dma_config);
     sbdsp.rs.dma_pending = false;
 
-    // Decode and push to ring buffer.
-    // Reference byte case: consumes a DMA byte but pushes no samples.
-    if (sbdsp.adpcm.have_ref) {
-        sbdsp.adpcm.reference = dma_data >> 24;
-        sbdsp.adpcm.accum = 1;  // accumulator starts at 1 in SB DSP firmware
-        sbdsp.adpcm.have_ref = false;
-    } else if (sbdsp.adpcm.format == 0) {
-        // PCM decode (existing logic), push 1 sample
+    if (sbdsp.adpcm.format) {
+        // If in ADPCM mode
+        uint8_t byte = dma_data >> 24;  // ADPCM is always 1-byte mono
+        if (sbdsp.adpcm.have_ref) {
+            // Reference byte: consumes a DMA byte but pushes no samples.
+            sbdsp.adpcm.reference = byte;
+            sbdsp.adpcm.accum = 1;  // accumulator starts at 1 in SB DSP firmware
+            sbdsp.adpcm.have_ref = false;
+        } else {
+            // ADPCM decode: extract samples from byte, push each
+            switch (sbdsp.adpcm.format) {
+                case 4:  // 4-bit: 2 samples per byte
+                    ring_push(adpcm_to_stereo(decode_ADPCM_4_sample(byte >> 4)));
+                    ring_push(adpcm_to_stereo(decode_ADPCM_4_sample(byte & 0xf)));
+                    break;
+                case 3:  // 2.6-bit: 3 samples per byte (3 bits, 3 bits, 2 bits)
+                    ring_push(adpcm_to_stereo(decode_ADPCM_3_sample((byte >> 5) & 3, byte & 0x80)));
+                    ring_push(adpcm_to_stereo(decode_ADPCM_3_sample((byte >> 2) & 3, byte & 0x10)));
+                    ring_push(adpcm_to_stereo(decode_ADPCM_3_sample(byte & 1, byte & 0x02)));
+                    break;
+                case 2:  // 2-bit: 4 samples per byte
+                    ring_push(adpcm_to_stereo(decode_ADPCM_2_sample((byte >> 6) & 3)));
+                    ring_push(adpcm_to_stereo(decode_ADPCM_2_sample((byte >> 4) & 3)));
+                    ring_push(adpcm_to_stereo(decode_ADPCM_2_sample((byte >> 2) & 3)));
+                    ring_push(adpcm_to_stereo(decode_ADPCM_2_sample(byte & 3)));
+                    break;
+            }
+        }
+    } else {
+        // PCM decode, push 1 sample
         uint32_t sample;
         if (sbdsp.dma_stereo) {
             if (sbdsp.dma_16bit) {
@@ -469,26 +491,6 @@ static void sbdsp_dma_isr(void) {
         }
         if (!sbdsp.dma_signed) sample ^= 0x80008000;
         ring_push(sample);
-    } else {
-        // ADPCM decode: extract samples from byte, push each
-        uint8_t byte = dma_data >> 24;  // ADPCM is always 1-byte mono
-        switch (sbdsp.adpcm.format) {
-            case 4:  // 4-bit: 2 samples per byte
-                ring_push(adpcm_to_stereo(decode_ADPCM_4_sample(byte >> 4)));
-                ring_push(adpcm_to_stereo(decode_ADPCM_4_sample(byte & 0xf)));
-                break;
-            case 3:  // 2.6-bit: 3 samples per byte (3 bits, 3 bits, 2 bits)
-                ring_push(adpcm_to_stereo(decode_ADPCM_3_sample((byte >> 5) & 3, byte & 0x80)));
-                ring_push(adpcm_to_stereo(decode_ADPCM_3_sample((byte >> 2) & 3, byte & 0x10)));
-                ring_push(adpcm_to_stereo(decode_ADPCM_3_sample( byte       & 1, byte & 0x02)));
-                break;
-            case 2:  // 2-bit: 4 samples per byte
-                ring_push(adpcm_to_stereo(decode_ADPCM_2_sample((byte >> 6) & 3)));
-                ring_push(adpcm_to_stereo(decode_ADPCM_2_sample((byte >> 4) & 3)));
-                ring_push(adpcm_to_stereo(decode_ADPCM_2_sample((byte >> 2) & 3)));
-                ring_push(adpcm_to_stereo(decode_ADPCM_2_sample(byte & 3)));
-                break;
-        }
     }
 
     // Transfer counting (runs for all cases including reference byte)

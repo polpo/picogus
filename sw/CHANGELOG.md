@@ -6,7 +6,7 @@ Fixes major issues in v4.1.0 where stale printf code in modes would cause the fi
 
 ### SB mode
 
-- Fixes clicks during cycle-cycle DMA audio playback.
+- Fixes clicks during single-cycle DMA audio playback.
 
 ### GUS mode
 
