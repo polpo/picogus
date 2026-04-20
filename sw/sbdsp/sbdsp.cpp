@@ -312,9 +312,8 @@ static __force_inline void sbdsp_dma_disable(bool pause) {
     }
     sbdsp.dma_enabled = false;
     sbdsp.rs.dma_pending = false;
-    // sbdsp.cur_sample = 0; // hold last sample to prevent pops!
+    // let ring drain naturally
     if (!pause) {
-        sbdsp.rs.ring_head = sbdsp.rs.ring_tail = 0;
         sbdsp.adpcm.format = 0;
         sbdsp.dma_16bit = false;
         sbdsp.dma_signed = false;
@@ -424,7 +423,14 @@ static __force_inline void sbdsp_dma_enable() {
         sbdsp.dma_enabled = true;
         // Set autopush bits to number of bits per audio frame.
         // 32 will get masked to 0 by this operation which is correct behavior.
-        DMA_Multi_Set_Push_Threshold(&dma_config, sbdsp.dma_bytes_per_frame << 3);
+        // Only change threshold if the frame size actually changed as rewriting
+        // shiftctrl on every single-cycle re-arm seems to disturb the PIO state
+        // enough to produce clicks every block
+        static uint8_t last_bytes_per_frame = 0;
+        if (sbdsp.dma_bytes_per_frame != last_bytes_per_frame) {
+            DMA_Multi_Set_Push_Threshold(&dma_config, sbdsp.dma_bytes_per_frame << 3);
+            last_bytes_per_frame = sbdsp.dma_bytes_per_frame;
+        }
         sbdsp.rs.dma_pending = true;
         DMA_Multi_Start_Write(&dma_config, sbdsp.dma_bytes_per_frame);
     }

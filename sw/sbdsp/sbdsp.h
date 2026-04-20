@@ -134,7 +134,10 @@ int16_t sbdsp_muted();
 uint32_t sbdsp_generate_sample();
 static inline uint32_t sbdsp_sample_stereo() {
     extern sbdsp_t sbdsp;
-    if (sbdsp.dma_enabled && !sbdsp.dac_resume_pending) sbdsp.cur_sample = sbdsp_generate_sample();
+    // resample while the ring has decoded samples and DAC resume not pending
+    if (sbdsp.rs.ring_head != sbdsp.rs.ring_tail && !sbdsp.dac_resume_pending) {
+        sbdsp.cur_sample = sbdsp_generate_sample();
+    }
     return sbdsp.speaker_on ? sbdsp.cur_sample : 0;
 }
 
