@@ -25,7 +25,7 @@ project(picogus
 
 # Full version string including pre-release suffix (if any).
 # CMake's project(VERSION) only allows numeric components, so the suffix lives here.
-set(PICOGUS_VERSION "${CMAKE_PROJECT_VERSION}-beta.0")
+set(PICOGUS_VERSION "${CMAKE_PROJECT_VERSION}-beta.1")
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)

@@ -4,9 +4,13 @@
 
 Fixes major issues in v4.1.0 where stale printf code in modes would cause the firmware to panic.
 
+### SB mode
+
+- Fixes clicks during cycle-cycle DMA audio playback.
+
 ### GUS mode
 
-Fixes one of the longest-lived bugs in GUS mode: playmidi in the GUS DOS software package now works!
+- Fixes one of the longest-lived bugs in GUS mode: playmidi in the GUS DOS software package now works!
 
 # v4.1.0
 
