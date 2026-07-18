@@ -517,10 +517,11 @@ class GUSChannels {
                 }
 
                 if (endcondition) {
+                    // Hold gus_crit across the whole endcondition block, as its WaveCtrl RMW
+                    // can conflict with core 0's WriteWaveCtrl.
+                    critical_section_enter_blocking(&gus_crit);
                     if (WaveCtrl & WCTRL_IRQENABLED) /* generate an IRQ if requested */ {
-                        critical_section_enter_blocking(&gus_crit);
                         myGUS.WaveIRQ |= irqmask;
-                        critical_section_exit(&gus_crit);
                     }
 
                     if ((RampCtrl & WCTRL_16BIT/*roll over*/) && !(WaveCtrl & WCTRL_LOOP)) {
@@ -548,6 +549,7 @@ class GUSChannels {
                             WaveAddr = (WaveCtrl & WCTRL_DECREASING) ? WaveStart : WaveEnd;
                         }
                     }
+                    critical_section_exit(&gus_crit);
                 }
             }
             else if (WaveCtrl & WCTRL_IRQENABLED) {
@@ -590,11 +592,12 @@ class GUSChannels {
                 UpdateVolumes();
                 return;
             }
+            // Hold gus_crit across this section as RampCtrl is RMWed here and can conflict with
+            // core 0's WriteRampCtrl
+            critical_section_enter_blocking(&gus_crit);
             /* Generate an IRQ if needed */
             if (RampCtrl & 0x20) {
-                critical_section_enter_blocking(&gus_crit);
                 myGUS.RampIRQ|=irqmask;
-                critical_section_exit(&gus_crit);
             }
             /* Check for looping */
             if (RampCtrl & 0x08) {
@@ -607,6 +610,7 @@ class GUSChannels {
             }
             if ((int32_t)RampVol < (int32_t)0) RampVol=0;
             if (RampVol > ((4096 << RAMP_FRACT)-1)) RampVol=((4096 << RAMP_FRACT)-1);
+            critical_section_exit(&gus_crit);
             UpdateVolumes();
         }
 
