@@ -817,7 +817,9 @@ static void GUSReset(void) {
         // Stop DMA
         GUS_StopDMA();
 
-        // Reset
+        // Reset, holding gus_crit as the render loop and timer callbacks can modify this
+        // state
+        critical_section_enter_blocking(&gus_crit);
         adlib_commandreg = 85;
         myGUS.IRQStatus = 0;
         myGUS.RampIRQ = 0;
@@ -861,8 +863,10 @@ static void GUSReset(void) {
         myGUS.gRegControl = 0;
         myGUS.gDramAddr = 0;
         myGUS.gRegData = 0;
+        critical_section_exit(&gus_crit);
     }
 
+    critical_section_enter_blocking(&gus_crit);
     /* if the card was just put into reset, or the card WAS in reset, bits 1-2 are cleared */
     if ((GUS_reset_reg & 1) == 0 || (p_GUS_reset_reg & 1) == 0) {
         /* GUS classic observed behavior: resetting the card, or even coming out of reset, clears bits 1-2.
@@ -889,6 +893,7 @@ static void GUSReset(void) {
     }
 
     GUS_CheckIRQ();
+    critical_section_exit(&gus_crit);
 }
 
 __force_inline static uint8_t GUS_EffectiveIRQStatus(void) {
