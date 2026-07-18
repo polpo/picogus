@@ -1537,6 +1537,7 @@ GUS_DMA_isr() {
             psram_write32_async(&psram_spi, myGUS.dmaAddr - dmaOffset, dma_data_union.data32);
         }
 #endif
+        ++myGUS.dmaAddr;
         critical_section_enter_blocking(&gus_crit);
         /* Raise the TC irq, and stop DMA */
         myGUS.DMAControl |= 0x100u; /* NTS: DOSBox SVN approach: Use bit 8 for DMA TC IRQ */
