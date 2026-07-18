@@ -1925,9 +1925,9 @@ public:
 static GUS* test = NULL;
 void GUS_OnReset(void) {
     LOG_MSG("Allocating GUS emulation");
-    test = new GUS();
-
+    // Initialize gus_crit before the GUS constructor's reset takes it
     critical_section_init(&gus_crit);
+    test = new GUS();
 }
 
 void GUS_Setup() {
