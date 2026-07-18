@@ -171,6 +171,7 @@ struct GFGus {
     uint8_t SampControl;
     uint8_t mixControl;
     uint8_t ActiveChannels;
+    uint8_t ActiveChannelsUser; // unclamped value read back from reg 0x8E
     uint8_t gRegControl;
     uint32_t basefreq;
 
@@ -856,6 +857,7 @@ static void GUSReset(void) {
         myGUS.TimerControl = 0x00;
         myGUS.SampControl = 0x00;
         myGUS.ActiveChannels = 14;
+        myGUS.ActiveChannelsUser = 14;
         myGUS.ActiveMask=0xffffffffU >> (32-myGUS.ActiveChannels);
         myGUS.basefreq = myGUS.fixed_44k_output ? 44100 : sample_rates[myGUS.ActiveChannels - 1];
 
@@ -990,7 +992,7 @@ __force_inline static uint16_t ExecuteReadRegister(void) {
     switch (myGUS.gRegSelect) {
     case 0x8E:  // read active channel register
         // NTS: The GUS SDK documents the active channel count as bits 5-0, which is wrong. it's bits 4-0. bits 7-5 are always 1 on real hardware.
-        return ((uint16_t)(0xE0 | (myGUS.ActiveChannels - 1))) << 8;
+        return ((uint16_t)(0xE0 | (myGUS.ActiveChannelsUser - 1))) << 8;
     case 0x41: // Dma control register - read acknowledges DMA IRQ
         critical_section_enter_blocking(&gus_crit);
         tmpreg = myGUS.DMAControl & 0xbf;
@@ -1201,6 +1203,7 @@ __force_inline static void ExecuteGlobRegister(void) {
         // gus_chan->FillUp();
         myGUS.gRegSelect = myGUS.gRegData>>8;       //JAZZ Jackrabbit seems to assume this?
         myGUS.ActiveChannels = 1+((myGUS.gRegData>>8) & 31); // NTS: The GUS SDK documents this field as bits 5-0, which is wrong, it's bits 4-0. 5-0 would imply 64 channels.
+        myGUS.ActiveChannelsUser = myGUS.ActiveChannels; // unclamped value for reads of 0x8E
 
         /* The GUS SDK claims that if a channel count less than 14 is written, then it caps to 14.
          * That's not true. Perhaps what the SDK is doing, but the actual hardware acts differently.
