@@ -256,6 +256,9 @@ class GUSChannels {
         int32_t VolLeft;
         int32_t VolRight;
 
+        // Note that this cache is only invalidated in GUSReset, not by writes to DRAM. However
+        // in real world, even during streaming the head is much further away than tail than
+        // this tiny cache
         struct sample_cache_t {
             uint8_t data[32];
             // Signed so it can hold -1 for invalid address
