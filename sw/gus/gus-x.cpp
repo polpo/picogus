@@ -1251,11 +1251,11 @@ __force_inline static void ExecuteGlobRegister(void) {
         break;
     case 0x46:  // Timer 1 control
         myGUS.timers[0].value = (uint8_t)(myGUS.gRegData>>8);
-        myGUS.timers[0].delay = ((0x100 - myGUS.timers[0].value) * 80) - 5;
+        myGUS.timers[0].delay = (0x100 - myGUS.timers[0].value) * 80;
         break;
     case 0x47:  // Timer 2 control
         myGUS.timers[1].value = (uint8_t)(myGUS.gRegData>>8);
-        myGUS.timers[1].delay = ((0x100 - myGUS.timers[1].value) * 320) - 5;
+        myGUS.timers[1].delay = (0x100 - myGUS.timers[1].value) * 320;
         break;
     case 0x49:  // DMA sampling control register
         /*
