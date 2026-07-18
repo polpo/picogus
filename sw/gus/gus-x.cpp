@@ -931,6 +931,10 @@ static INLINE void GUS_CheckIRQ(void) {
         }
 
         gus_prev_effective_irqstat = irqstat;
+    } else if (gus_prev_effective_irqstat != 0) {
+        // If latches are disabled and there's an IRQ, release it
+        PIC_DeActivateIRQ();
+        gus_prev_effective_irqstat = 0;
     }
 }
 
@@ -1379,7 +1383,11 @@ __force_inline void write_gus(Bitu port, Bitu val) {
     switch(port) {
     case 0x0:
         myGUS.gRegControl = 0;
+        critical_section_enter_blocking(&gus_crit);
         myGUS.mixControl = (uint8_t)val;
+        // Re-evaluate the IRQ line if IRQ latches are enabled or disabled
+        GUS_CheckIRQ();
+        critical_section_exit(&gus_crit);
         // return;
         break;
     case 0x8:
