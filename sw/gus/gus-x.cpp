@@ -1474,6 +1474,19 @@ GUS_DMA_EventHandler(Bitu val) {
         return 0;
     }
 
+    if (myGUS.DMAControl & 0x02 /* direction: read from GUS DRAM to host*/) {
+        // We don't support GUS->host transfers, so terminate it early with TC.
+        // Not doing so would get the PIO SM stuck
+        DEBUG_LOG_MSG("GUS DMA event: GUS->host DMA not supported, terminating transfer with TC");
+        critical_section_enter_blocking(&gus_crit);
+        myGUS.DMAControl |= 0x100u;
+        myGUS.IRQStatus |= 0x80;
+        GUS_StopDMA();
+        GUS_CheckIRQ();
+        critical_section_exit(&gus_crit);
+        return 0;
+    }
+
     myGUS.dmaWaiting = true;
     bool invert_msb = false;
     if (myGUS.DMAControl & 0x80) {
