@@ -1948,9 +1948,11 @@ void GUS_Setup() {
         cfg = interp_default_config();
         // Linear interpolation setup
         interp_config_set_blend(&cfg, true);
+        interp_config_set_signed(&cfg, true);
         interp_set_config(interp0, 0, &cfg);
         cfg = interp_default_config();
-        interp_config_set_shift(&cfg, 1); // Shift WaveAddr by 1
+        // shift WaveAddr right by 2 so it is the top 8 of the WAVE_FRACT=10 fraction bits
+        interp_config_set_shift(&cfg, 2);
         interp_config_set_signed(&cfg, true);
         interp_set_config(interp0, 1, &cfg);
 #endif
