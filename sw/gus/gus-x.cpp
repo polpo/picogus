@@ -855,7 +855,6 @@ static void GUSReset(void) {
 
         myGUS.dmaAddr = 0;
         myGUS.dmaInterval = 0;
-        myGUS.dmaIntervalOverride = 0;
         myGUS.dmaWaiting = false;
 
         myGUS.irqenabled = 0;
