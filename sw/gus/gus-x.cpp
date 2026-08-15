@@ -1241,7 +1241,7 @@ __force_inline static void ExecuteGlobRegister(void) {
         break;
     case 0x41:  // Dma control register
         critical_section_enter_blocking(&gus_crit);
-        myGUS.DMAControl &= ~0xFFu; // FIXME: Does writing DMA Control clear the DMA TC IRQ?
+        myGUS.DMAControl &= ~0xFFu; // keeps bit 8: writing DMA control does not clear the TC IRQ (gf1.v clears dram_dma_tc only on reset or a 0x41 read)
         myGUS.DMAControl |= (uint8_t)(myGUS.gRegData>>8);
         if (myGUS.DMAControl & 1) GUS_StartDMA();
         else GUS_StopDMA();
@@ -1597,6 +1597,7 @@ __force_inline void GUS_StopDMA() {
     // Setting GUS_DMA_Active to false will cancel the next DMA event if it happens
     GUS_DMA_Active = false;
     // Clear DMA enable bit (from Interwave Programmer's Guide: "The hardware resets this bit when the TC line is asserted.")
+    // Also verified in gf1.v, the dram_dma_en flop is cleared
     myGUS.DMAControl &= 0x1FEu;
 #ifdef POLLING_DMA
     next_event = 0;
