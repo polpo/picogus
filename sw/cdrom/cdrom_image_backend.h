@@ -29,6 +29,7 @@
 #include <stddef.h>
 
 #include "ff.h"
+#include "cdrom_path.h"
 
 #define RAW_SECTOR_SIZE    2352
 #define COOKED_SECTOR_SIZE 2048
@@ -66,7 +67,7 @@ typedef struct track_file_t {
     uint32_t (*get_length)(void *priv);
     void (*close)(void *priv);
 
-    char  fn[128];
+    char  fn[CD_IMAGE_PATH_BUF];
     FIL *fp;
     void *priv;
     // fast seek cluster link map table

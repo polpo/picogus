@@ -11,6 +11,7 @@ void cdman_list_images_free(char **fileList, int fileCount);
 
 uint8_t cdman_current_image_index(void);
 void cdman_load_image_index(cdrom_t *dev, int imageIndex);
+int cdman_resolve_image_path(cdrom_t *dev);
 void cdman_set_image_index(cdrom_t *dev);
 void cdman_unload_image(cdrom_t *dev);
 void cdman_clear_image(void);

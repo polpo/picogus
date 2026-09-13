@@ -23,6 +23,14 @@ typedef enum {
     CD_STATUS_READY,
 } cdrom_image_status_t;
 
+// CD image names. A single file name is at most CD_IMAGE_NAME_MAX characters
+// (FatFs FF_MAX_LFN). Images may also live in a "CDROM" folder on the USB
+// drive, in which case the name sent/received through CMD_CDNAME and listed
+// by CMD_CDLIST is "CDROM/" + file name, at most CD_IMAGE_PATH_MAX characters
+// (not counting the terminating 0).
+#define CD_IMAGE_NAME_MAX 127
+#define CD_IMAGE_PATH_MAX (6 + CD_IMAGE_NAME_MAX)
+
 typedef enum { PICO_BASED = 0, PICOGUS_2 = 1 } board_type_t;
 
 typedef enum {

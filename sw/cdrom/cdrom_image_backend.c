@@ -26,13 +26,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/stat.h>
-#ifdef _WIN32
-#    include <string.h>
-#    include <sys/types.h>
-#else
-#    include <libgen.h>
-#endif
+#include <sys/types.h>
 #define HAVE_STDARG_H
 #include "../include/pg_debug.h"
 #include "cdrom_image_backend.h"
@@ -73,7 +67,6 @@ static inline void frames_to_msf(uint32_t total_frames, uint8_t *pM, uint8_t *pS
 }
 
 #define MAX_LINE_LENGTH     256
-#define MAX_FILENAME_LENGTH 127
 
 static char temp_keyword[64];
 
@@ -119,7 +112,6 @@ bin_get_length(void *priv)
     /* off64_t       len; */
     /* uint64_t flen; */
     off_t       len;
-    uint32_t flen;
     track_file_t *tf = (track_file_t *) priv;
 
     cdrom_image_backend_log("CDROM: binary_length(%08lx)\n", tf->fp);
@@ -161,8 +153,7 @@ static track_file_t *
 bin_init(const char *filename, int *error)
 {
     track_file_t *tf = (track_file_t *) malloc(sizeof(track_file_t));
-    struct stat   stats;
-    
+
     if (tf == NULL) {
         *error = 2;
         cdrom_image_backend_log("can't malloc\n");
@@ -171,13 +162,19 @@ bin_init(const char *filename, int *error)
 
     memset(tf->fn, 0x00, sizeof(tf->fn));
     strncpy(tf->fn, filename, sizeof(tf->fn) - 1);
+    tf->fn[sizeof(tf->fn) - 1] = '\0';
     //tf->fp = plat_fopen64(tf->fn, "rb");    
     
     tf->fp = (FIL *) malloc(sizeof(FIL));
+    if (tf->fp == NULL) {
+        free(tf);
+        *error = 2;
+        cdrom_image_backend_log("can't malloc FIL\n");
+        return NULL;
+    }
     FRESULT result = f_open(tf->fp, tf->fn, FA_READ);
     cdrom_image_backend_log("CDROM: binary_open(%s) = %08lx, result %d\n", tf->fn, tf->fp, result);
-    FSIZE_t len = f_size(tf->fp);
-    cdrom_image_backend_log("file size: %u", len);
+    cdrom_image_backend_log("file size: %u", (unsigned) f_size(tf->fp));
 
     if (result == FR_OK) {
         cdrom_image_backend_log("all good\n");
@@ -192,6 +189,7 @@ bin_init(const char *filename, int *error)
         tf->get_length = bin_get_length;
         tf->close      = bin_close;
     } else {
+        free(tf->fp);           /* a cue whose .bin is missing must not leak the FIL */
         free(tf);
         tf = NULL;
         *error = 3;
@@ -665,11 +663,15 @@ cdi_load_iso(cd_img_t *cdi, const char *filename)
     return ret;
 }
 
+/* Copy the next token of *line (quotes group words and are removed) into
+   str, which holds size bytes including the terminator. Returns 0 on an
+   unterminated quote or when the token does not fit. */
 static int
-cdi_cue_get_buffer(char *str, char **line, int up)
+cdi_cue_get_buffer(char *str, size_t size, char **line, int up)
 {
     char *s     = *line;
     char *p     = str;
+    char *end   = str + size - 1;
     int   quote = 0;
     int   done  = 0;
     int   space = 1;
@@ -701,6 +703,11 @@ cdi_cue_get_buffer(char *str, char **line, int up)
                 fallthrough;
 
             default:
+                if (p >= end) {
+                    /* Token too long for the caller's buffer. */
+                    *str = '\0';
+                    return 0;
+                }
                 if (up && islower((int) *s))
                     *p++ = toupper((int) *s);
                 else
@@ -724,7 +731,7 @@ cdi_cue_get_keyword(char **dest, char **line)
 {
     int success;
 
-    success = cdi_cue_get_buffer(temp_keyword, line, 1);
+    success = cdi_cue_get_buffer(temp_keyword, sizeof(temp_keyword), line, 1);
     if (success)
         *dest = temp_keyword;
 
@@ -739,7 +746,7 @@ cdi_cue_get_number(char **line)
     char     temp[11];
     uint32_t num;
 
-    if (!cdi_cue_get_buffer(temp, line, 0))
+    if (!cdi_cue_get_buffer(temp, sizeof(temp), line, 0))
         return 0;
 
     char *end;
@@ -760,7 +767,7 @@ cdi_cue_get_frame(uint32_t *frames, char **line)
     int  fr;
     int  success;
 
-    success = cdi_cue_get_buffer(temp, line, 0);
+    success = cdi_cue_get_buffer(temp, sizeof(temp), line, 0);
     if (!success)
         return 0;
 
@@ -859,7 +866,10 @@ int
 cdi_load_cue(cd_img_t *cdi, const char *cuefile)
 {
     track_t  trk = {0};
-    char     filename[MAX_FILENAME_LENGTH];
+    /* The big buffers are static: cdi_load_cue() only ever runs on core 1 from
+     * cdrom_tasks(), one load at a time, and core 1's stack is small. */
+    /* Path of a FILE entry resolved against the cue sheet's directory */
+    static char filename[CD_IMAGE_PATH_BUF];
     /* uint64_t shift = 0ULL; */
     /* uint64_t prestart = 0ULL; */
     /* uint64_t cur_pregap = 0ULL; */
@@ -876,13 +886,13 @@ cdi_load_cue(cd_img_t *cdi, const char *cuefile)
     int      error;
     int      can_add_track = 0;
     int      has_prestart = 0; /* true only when INDEX 00 was seen for current track */
-    FIL      fp;
-    char     buf[MAX_LINE_LENGTH];
-    char     ansi[MAX_FILENAME_LENGTH];
+    static FIL  fp;
+    static char buf[MAX_LINE_LENGTH];
+    /* FILE entry as written in the cue sheet */
+    static char ansi[CD_IMAGE_PATH_BUF];
     char    *line;
-    char    *command;
-    char    *type;
-    unsigned int bytes_read;
+    char    *command = (char *) "";  /* never left dangling: every keyword read is checked */
+    char    *type    = (char *) "";
 
     cdi->tracks     = NULL;
     cdi->tracks_num = 0;
@@ -896,8 +906,7 @@ cdi_load_cue(cd_img_t *cdi, const char *cuefile)
         return 0;
     }
 
-    FSIZE_t len = f_size(&fp);
-    cdrom_image_backend_log("file size: %u", len);
+    cdrom_image_backend_log("file size: %u", (unsigned) f_size(&fp));
 
     success = 0;
     /* while (f_gets(buf, sizeof buf, &fp)) { */
@@ -935,6 +944,12 @@ cdi_load_cue(cd_img_t *cdi, const char *cuefile)
         }
 
         success = cdi_cue_get_keyword(&command, &line);
+        if (!success) {
+            /* a token that does not fit temp_keyword (64+ characters: a renamed
+             * .bin, a glued FILE"..." token) must not leave command unset */
+            cdrom_errorstr_set("Bad keyword in cue sheet '%s'", cuefile);
+            break;
+        }
         cdrom_image_backend_log("command: %s\n", command);
 
         if (!strcmp(command, "TRACK")) {            
@@ -1055,13 +1070,16 @@ cdi_load_cue(cd_img_t *cdi, const char *cuefile)
             has_prestart = 0;
 
             // putchar('2');
-            memset(ansi, 0, MAX_FILENAME_LENGTH * sizeof(char));
-            memset(filename, 0, MAX_FILENAME_LENGTH * sizeof(char));
+            memset(ansi, 0, sizeof(ansi));
+            memset(filename, 0, sizeof(filename));
 
             // putchar('3');
-            success = cdi_cue_get_buffer(ansi, &line, 0);
-            if (!success)
+            success = cdi_cue_get_buffer(ansi, sizeof(ansi), &line, 0);
+            if (!success) {
+                /* Unterminated quote, or a name longer than any image path */
+                cdrom_errorstr_set("Bad or too long file name in cue sheet '%s'", cuefile);
                 break;
+            }
             // putchar('4');
             success = cdi_cue_get_keyword(&type, &line);
             if (!success)
@@ -1073,10 +1091,16 @@ cdi_load_cue(cd_img_t *cdi, const char *cuefile)
 
             // putchar('6');
             if (!strcmp(type, "BINARY")) {
-                strncpy(filename,ansi,MAX_FILENAME_LENGTH);
-                trk.file = track_file_init(filename, &error);
-                if (trk.file) {
-                    error = 0;
+                /* A bare file name refers to the cue sheet's own directory
+                   (so a cue in CDROM/ finds its bin there); a name with a
+                   path is used as written, relative to the drive root. */
+                if (!cdpath_resolve_ref(filename, sizeof(filename), cuefile, ansi)) {
+                    error = 4;
+                } else {
+                    trk.file = track_file_init(filename, &error);
+                    if (trk.file) {
+                        error = 0;
+                    }
                 }
             }
             // putchar('7');
@@ -1087,6 +1111,9 @@ cdi_load_cue(cd_img_t *cdi, const char *cuefile)
                     break;
                 case 2:
                     cdrom_errorstr_set("Error allocating memory for file '%s' in cue sheet '%s'", filename, cuefile);
+                    break;
+                case 4:
+                    cdrom_errorstr_set("File name '%s' too long in cue sheet '%s'", ansi, cuefile);
                     break;
                 default:
                     cdrom_errorstr_set("Cannot open file '%s' in cue sheet '%s'", filename, cuefile);

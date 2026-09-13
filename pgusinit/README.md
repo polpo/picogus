@@ -145,10 +145,21 @@ that do not require an IRQ: AdLib, CMS, Tandy, and USB.
 
 ### CD-ROM emulation options
 
+CD images (`.iso`, or `.cue` with its `.bin` next to it) are read from the root
+of the USB drive and, if it exists, from a folder named `CDROM` (any letter
+case). `/cdlist` shows the root images first, numbered as before, followed by
+the folder's images as `CDROM/NAME.EXT`. Auto-advance cycles through the whole
+list.
+
 * `/cdport x` - set base port of CD interface. Default: 250, 0 to disable
-* `/cdlist` - list CD images on the inserted USB drive
+* `/cdlist` - list CD images in the root and CDROM folder of the USB drive
 * `/cdload n` - load image n in the list given by /cdlist. 0 to unload image
-* `/cdloadname x` - load CD image by name. Names with spaces can be quoted
+* `/cdloadname x` - load CD image by name. Names with spaces can be quoted.
+  A bare name (`NAME.CUE`) is looked for in the root first, then in the CDROM
+  folder; `CDROM\NAME.CUE` or `CDROM/NAME.CUE` names the folder's image
+  directly. Do not start the name with a forward slash, pgusinit reads that as
+  an option. At most 127 characters are sent; use `/cdload n` for longer names
+  (or names too long for the DOS command line)
 * `/cdauto 1|0` - auto-advance loaded image when same USB drive is reinserted
 * `/cdvol x` - sets the volume of the CD audio output to x percent.
 

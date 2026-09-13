@@ -452,7 +452,10 @@ __force_inline void write_picogus_high(uint8_t value) {
         if (!cur_write) {
             memset(cdrom.image_path, 0, sizeof(cdrom.image_path));
         }
-        cdrom.image_path[cur_write++] = value;
+        // Keep the last byte as terminator; bytes past the end are dropped
+        if (cur_write < sizeof(cdrom.image_path) - 1) {
+            cdrom.image_path[cur_write++] = value;
+        }
         if (!value) {
             cur_write = 0;
             cdrom.image_status = CD_STATUS_BUSY;
@@ -635,10 +638,12 @@ __force_inline uint8_t read_picogus_high(void) {
         // printf("cdstatus %x\n", cdrom.image_status);
         return cdrom.image_status;
     case CMD_CDLIST:
-        if (cur_read_idx == cdrom.image_count) { // If end of the images
+        if (!cdrom.image_list || cur_read_idx >= cdrom.image_count) { // If end of the images
             cur_read_idx = cur_read = 0;
             cdrom.image_status = CD_STATUS_IDLE;
             cdman_list_images_free(cdrom.image_list, cdrom.image_count);
+            cdrom.image_list = NULL;
+            cdrom.image_count = 0;
             return 0x04; // EOT
         }
         ret = cdrom.image_list[cur_read_idx][cur_read++];

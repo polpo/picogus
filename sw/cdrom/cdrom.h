@@ -175,7 +175,9 @@ typedef struct cdrom {
 
     char **image_list;
     int image_count;
-    char image_path[128];
+    /* Path of the loaded image relative to the USB volume root, either a
+       bare file name or "CDROM/" + file name (see CD_IMAGE_PATH_MAX). */
+    char image_path[CD_IMAGE_PATH_MAX + 1];
 
     uint32_t sound_on;
     uint32_t cdrom_capacity;

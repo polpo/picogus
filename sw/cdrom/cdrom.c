@@ -125,12 +125,20 @@ void cdrom_tasks(cdrom_t *dev) {
     case CD_COMMAND_NONE:
         cdrom_read_data(dev);
         break;
-    case CD_COMMAND_IMAGE_LIST:
+    case CD_COMMAND_IMAGE_LIST: {
         cdrom_errorstr_clear();
-        dev->image_list = cdman_list_images(&dev->image_count);
+        // A list DOS never read to the end (interrupted /cdlist) is still ours to free
+        cdman_list_images_free(dev->image_list, dev->image_count);
+        dev->image_list = NULL;
+        dev->image_count = 0;
+        int n = 0;
+        char **l = cdman_list_images(&n);
+        dev->image_list = l;                   // core 0 reads the pointer before the count
+        dev->image_count = l ? n : 0;
         dev->image_command = CD_COMMAND_NONE;
-        dev->image_status = dev->image_list ? CD_STATUS_READY : CD_STATUS_ERROR;
+        dev->image_status = l ? CD_STATUS_READY : CD_STATUS_ERROR;
         break;
+    }
     case CD_COMMAND_IMAGE_LOAD_INDEX:
         cdman_load_image_index(dev, dev->image_data);
         break;
@@ -145,6 +153,15 @@ void cdrom_tasks(cdrom_t *dev) {
             cdrom_error(dev, 0x11);   //media changed
         }
         if (dev->image_path[0]) {
+            // Map a typed name ("\CDROM\X.CUE", bare "X.CUE" living in the
+            // CDROM folder, ...) onto the list entry it refers to
+            if (cdman_resolve_image_path(dev) < 0) {
+                // not an image /cdlist would show: refused, error string already set
+                dev->image_command = CD_COMMAND_NONE;
+                dev->image_status = CD_STATUS_ERROR;
+                cdman_clear_image();
+                break;
+            }
             DBG_PRINTF("Opening %s...",dev->image_path);
             if (cdrom_image_open(dev,dev->image_path)) {
                 dev->image_command = CD_COMMAND_NONE;

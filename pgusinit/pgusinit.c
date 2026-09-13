@@ -130,9 +130,10 @@ static void usage(card_mode_t mode, bool print_all)
     if (mode == SB_MODE || mode == USB_MODE || print_all) {
         pageprintf("CD-ROM settings:\n");
         pageprintf("   /cdport x     - set base port of CD interface. Default: 250, 0 to disable\n");
-        pageprintf("   /cdlist       - list CD images on the inserted USB drive\n");
+        pageprintf("   /cdlist       - list CD images in the root and CDROM folder of the USB drive\n");
         pageprintf("   /cdload n     - load image n in the list given by /cdlist. 0 to unload image\n");
         pageprintf("   /cdloadname x - load CD image by name. Names with spaces can be quoted\n");
+        pageprintf("                   (x is NAME.CUE, or CDROM\\NAME.CUE for the CDROM folder)\n");
         pageprintf("   /cdvol n      - set the CD audio volume: 0 - 100\n");
         pageprintf("   /cdauto 1|0   - auto-advance loaded image when same USB drive is reinserted\n");
     }
@@ -974,6 +975,9 @@ static bool cmdWifiNoPass(const char* arg, const int cmd, const int cmd2, const 
 
 static bool cmdCDLoadName(const char* arg, const int cmd, const int cmd2, const int cmd3)
 {
+    // Stays at 127 so that this pgusinit can never overrun the 128-byte name
+    // buffer of firmware before v4.2 (same protocol number); longer names in
+    // the CDROM folder load by index.
     send_string(cmd, arg, 127);
     exit(wait_for_cd_load());
 }
