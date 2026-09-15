@@ -46,6 +46,12 @@ extern uint LED_PIN;
 #ifdef USB_STACK
 #include "tusb.h"
 #endif
+#ifdef PGDFS
+#include "dfs/dfs.h"
+#endif
+#ifdef USB_MSC
+#include "usb_msc/msc_app.h"
+#endif // USB_MSC
 #if defined(USB_MOUSE) || defined(SOUND_MPU)
 #include "system/pico_pic.h"
 #endif
@@ -178,6 +184,12 @@ void play_psg() {
 #ifdef USB_STACK
         // Service TinyUSB events
         tuh_task();
+#endif
+#ifdef USB_MSC
+        msc_app_task();   // mount/unmount the USB drive outside of FatFs calls
+#endif // USB_MSC
+#ifdef PGDFS
+        dfs_tasks();
 #endif
 #ifdef USB_MOUSE
         // mouse task

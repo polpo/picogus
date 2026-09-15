@@ -13,6 +13,7 @@ ISA sound card and CD-ROM drive emulation on the Raspberry Pi Pico's RP2040 micr
 * [CMS/Game Blaster](http://nerdlypleasures.blogspot.com/2012/10/all-you-ever-wanted-to-know-about.html)
 * [Game port joystick](https://en.wikipedia.org/wiki/Game_port)
 * [Panasonic/MKE CD-ROM](https://en.wikipedia.org/wiki/Panasonic_CD_interface)
+* USB drive access from DOS: the drive plugged into the PicoGUS mapped to a DOS drive letter with `PGUSDFS.EXE` (see [pgusdfs/README.md](pgusdfs/README.md))
 
 Current status: perpetual beta! See the [main wiki page](https://github.com/polpo/picogus/wiki) for current status and the [compatibility list](https://github.com/polpo/picogus/wiki/Compatibility-list) for support status of various DOS programs and other system compatibility notes. This project has a heavy demoscene focus due to the GUS's history so that's what I've concentrated on, but GUS support in games is very good to excellent.
 

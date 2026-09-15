@@ -152,6 +152,30 @@ that do not require an IRQ: AdLib, CMS, Tandy, and USB.
 * `/cdauto 1|0` - auto-advance loaded image when same USB drive is reinserted
 * `/cdvol x` - sets the volume of the CD audio output to x percent.
 
+### PGDFS options
+
+* `/dfsport x` - set the PGDFS data port (hex). Default: 1D4, 0 to disable
+  PGDFS. The port must be even (the data window is two consecutive ports,
+  1D4-1D5 by default), between 100 and 3FE, and clear of the PicoGUS control
+  ports 1D0-1D3; the card keeps its old value otherwise. The PGDFS driver
+  reads this setting from the card once, at install, so after changing the
+  port (or `/defaults`) unload and reload the driver: `PGUSDFS /U`, then
+  `PGUSDFS E:`. Keep the window clear of the ports of the emulated devices
+  active in your mode (220h Sound Blaster, 250h CD-ROM, 330h MPU-401, 388h
+  AdLib, ...); pgusinit warns when it overlaps one. Use `/save` to keep the
+  setting across reboots.
+
+## PGDFS (USB drive as a DOS drive letter)
+
+Firmware with PGDFS support serves the FAT-formatted USB drive plugged into
+the PicoGUS to DOS as a network drive letter. pgusinit shows the state of
+PGDFS on a `PGDFS data port 1D4, USB drive: ...` line in its normal status
+output (data port, then the drive's label, file system and size, or `none
+inserted`), or `PGDFS disabled (pgusinit /dfsport 1D4 to enable)` when the
+data port has been set to 0, when the firmware supports it. The DOS driver
+itself is a separate TSR, `PGUSDFS.EXE`, which comes with its own test tool
+`DFSDIAG.EXE`; see `pgusdfs/README.md` for usage and requirements.
+
 ## Compiling
 
 PicoGUSinit can be compiled with OpenWatcom 1.9 or 2.0. Run `wmake` to compile.

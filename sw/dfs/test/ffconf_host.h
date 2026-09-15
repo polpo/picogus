@@ -1,5 +1,6 @@
 /*---------------------------------------------------------------------------/
-/  Configurations of FatFs Module
+/  Configurations of FatFs Module -- PGDFS host test copy of
+/  sw/fatfs/source/ffconf.h with FF_USE_MKFS 1 (f_mkfs for the RAM disk)
 /---------------------------------------------------------------------------*/
 
 #define FFCONF_DEF	5380	/* Revision ID */
@@ -30,7 +31,7 @@
 /  f_findnext(). (0:Disable, 1:Enable 2:Enable with matching altname[] too) */
 
 
-#define FF_USE_MKFS		0
+#define FF_USE_MKFS		1
 /* This option switches f_mkfs(). (0:Disable or 1:Enable) */
 
 

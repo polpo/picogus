@@ -1,3 +1,17 @@
+# Unreleased
+
+## New features
+
+### PGDFS: the USB drive as a DOS drive letter (all modes with the USB stack)
+
+- The USB drive plugged into the PicoGUS can now be mapped to a DOS drive letter with the new `PGUSDFS.EXE` TSR, in the same spirit as PicoMEM's PMDFS: `PGUSDFS E:` gives you `E:` backed by the FAT32 drive, with read and write access, from plain DOS 5.0+. Copy files to and from the drive, run programs from it, edit files on it, in any firmware mode that carries the USB host stack (GUS, AdLib, SB, MPU-401, PSG, USB). CD-ROM emulation keeps working alongside it; both share the card's FatFs volume.
+- PGDFS is a DOS network redirector derived from [EtherDFS](https://mateusz.fr/etherdfs/) (MIT) and speaks the same EDF5 request format, so the card-side server is the ethersrv code on FatFs. The transport is new: request/answer frames stream through a two-port I/O data window with 16-bit transfers (`rep insw`/`rep outsw`: the motherboard splits each word into two 8-bit cycles for the card, so this roughly halves the CPU cost per byte), driven by eight new control-port registers (see `sw/dfs/PROTOCOL.md`). `DFSDIAG.EXE` exercises the transport and protocol for diagnostics and throughput measurement.
+- The data window base is configurable like the other emulated devices' ports: `pgusinit /dfsport <port>` (even; default 1D4h; 0 disables PGDFS), stored with `pgusinit /save`.
+- Long file names: the DOS redirector interface is 8.3-only, so files with long names show up as `LONGNA~1.EXT`, but the new `LONGNAME` lookup returns the long name behind an 8.3 path and `DFSDIAG /LDIR` lists a directory with long names. The OEM code page used for file names is a firmware build option, `-DFATFS_CODE_PAGE=<n>` (437 US by default; 850 Western Europe, 865 Nordic, ...), for drives written on non-US Windows machines.
+- The control-port protocol version is now 5. `pgusinit` shows the mounted USB drive (label, filesystem, size) in its status output.
+- Diagnostics: the new `DIAG` request returns the card's disk and FatFs telemetry (USB read/write counters, refused, failed and timed-out transfers, the last SCSI status, the last failing FatFs call and the free-cluster count FatFs is working with). `DFSDIAG /INFO` prints it and `DFSDIAG` prints it after any failed command; `DFSDIAG /WRTEST` and `/MKDIR` reproduce a write round trip without the TSR. A failing sector transfer underneath a mounted drive is now reported to DOS as a write fault (1Dh) or read fault (1Eh) instead of "drive not ready" (15h). FatFs no longer trusts the FAT32 FSInfo free count written by other operating systems (`FF_FS_NOFSINFO`), a stale count of which makes every allocation fail with "Access denied"; the FAT is counted on the first free-space query after a mount instead.
+- Firmware built with `-DPGDFS=OFF` omits all of this and keeps the previous behaviour.
+
 # v4.1.1
 
 ## Fixes/improvements

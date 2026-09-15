@@ -123,10 +123,43 @@ jobs:
           name: pgusinit
           path: ${{env.OUTPUT_DIR}}/pgusinit.exe
 
+    build-pgusdfs:
+      runs-on: ubuntu-22.04
+      env: 
+        BUILD_TYPE: "Release"
+        OUTPUT_DIR: ${{github.workspace}}/binaries
+      steps:
+      - name: Checkout repo with submodules
+        uses: actions/checkout@v4
+        with:
+            submodules: recursive
+
+      - name: Install OpenWatcom 2.0
+        uses: open-watcom/setup-watcom@v0
+        with:
+          version: "2.0-64"
+          tag: "2025-07-01-Build"
+
+      - name: Build pgdfs
+        working-directory: ${{github.workspace}}/pgusdfs
+        run: |
+          mkdir -p $OUTPUT_DIR
+          make INCLUDE="$WATCOM"/h
+          cp pgusdfs.exe dfsdiag.exe $OUTPUT_DIR
+
+      # will generate pgusdfs.zip as downloadable artifact with pgusdfs.exe and dfsdiag.exe
+      - name: Upload pgdfs
+        uses: actions/upload-artifact@v4
+        with:
+          name: pgusdfs
+          path: |
+            ${{env.OUTPUT_DIR}}/pgusdfs.exe
+            ${{env.OUTPUT_DIR}}/dfsdiag.exe
+
     create-release:
       if: github.ref_type == 'tag' && startsWith(github.ref_name, 'v')
       runs-on: ubuntu-22.04
-      needs: [build-firmware, build-pgusinit]
+      needs: [build-firmware, build-pgusinit, build-pgusdfs]
       env: 
         STAGING_DIR: ${{github.workspace}}/release-staging-dir
       steps:
@@ -167,6 +200,11 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: pgusinit
+          path: ${{env.STAGING_DIR}}
+      - name: Download pgdfs artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: pgusdfs
           path: ${{env.STAGING_DIR}}
       - name: Install zip
         uses: montudor/action-zip@v1

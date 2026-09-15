@@ -25,7 +25,7 @@ extern "C" {
 #include <stdbool.h>
 
 #define SETTINGS_MAGIC 0x70677573  // "pgus" in ascii
-#define SETTINGS_VERSION 5
+#define SETTINGS_VERSION 6
 
 // When adding new fields to Settings struct:
 // 1. Increment SETTINGS_VERSION
@@ -107,6 +107,9 @@ typedef struct Settings {
             uint8_t  options;
         };
     } SB16; // TEMPORARY - may be changed!
+    struct {
+        uint16_t basePort;  // PGDFS data port window (2 ports at an even base); 0 = PGDFS disabled
+    } DFS;
 } Settings;
 
 

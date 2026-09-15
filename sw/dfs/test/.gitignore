@@ -1,0 +1,4 @@
+build/
+*.o
+test_server
+test_transport

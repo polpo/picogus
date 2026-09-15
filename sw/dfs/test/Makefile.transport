@@ -1,0 +1,34 @@
+# Host test for sw/dfs/dfs_transport.c (no Pico SDK needed).
+#
+#   make -f Makefile.transport            # build build/test-transport
+#   make -f Makefile.transport check      # build and run
+#   make -f Makefile.transport clean
+#
+# DFS_MAX_PAYLOAD can be overridden to test other buffer sizes:
+#   make -f Makefile.transport check DFS_MAX_PAYLOAD=512
+
+CC        ?= cc
+BUILD_DIR ?= build
+DFS_MAX_PAYLOAD ?= 4096
+
+CFLAGS ?= -O1 -g -std=c11 -Wall -Wextra -Wno-unused-const-variable
+CPPFLAGS += -DDFS_HOST_TEST -DDFS_MAX_PAYLOAD=$(DFS_MAX_PAYLOAD) -I..
+
+SRCS := test_transport.c ../dfs_transport.c
+DEPS := ../dfs.h ../dfs_server.h ../../../common/picogus.h
+
+.PHONY: all check clean test-transport
+
+all: test-transport
+
+test-transport: $(BUILD_DIR)/test-transport
+
+$(BUILD_DIR)/test-transport: $(SRCS) $(DEPS) Makefile.transport
+	@mkdir -p $(BUILD_DIR)
+	$(CC) $(CFLAGS) $(CPPFLAGS) -o $@ $(SRCS)
+
+check: $(BUILD_DIR)/test-transport
+	$(BUILD_DIR)/test-transport
+
+clean:
+	rm -rf $(BUILD_DIR)

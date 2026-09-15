@@ -60,6 +60,11 @@ endfunction()
 
 
 option(PGDEBUG "Enable debug printf framework" OFF)
+option(PGDFS "Build the PGDFS USB-drive file service into USB-capable firmwares" ON)
+set(FATFS_CODE_PAGE 437 CACHE STRING "FatFs OEM code page for file names (437 US, 850 Western Europe, 865 Nordic, ...)")
+if(NOT FATFS_CODE_PAGE MATCHES "^(437|720|737|771|775|850|852|855|857|860|861|862|863|864|865|866|869|932|936|949|950)$")
+    message(FATAL_ERROR "FATFS_CODE_PAGE must be one FatFs OEM code page (437, 850, 865, ...); 0 (runtime f_setcp) is not supported")
+endif()
 find_package(Python3 COMPONENTS Interpreter QUIET)
 
 # Global definitions across all targets
@@ -73,6 +78,10 @@ add_compile_definitions(
     PICO_DEFAULT_UART_RX_PIN=-1
     PICO_DEFAULT_UART_BAUD_RATE=230400
     PICO_STDIO_USB_CONNECT_WAIT_TIMEOUT_MS=250
+    # Core 1 runs FatFs and the USB host stack (CD-ROM images, PGDFS); the SDK's
+    # default 2 KB core 1 stack leaves little margin under a CUE load or a
+    # PGDFS request. Nothing else uses SCRATCH_X, so give it the whole 4 KB bank.
+    PICO_CORE1_STACK_SIZE=0x1000
 )
 
 ################################################################################
@@ -117,6 +126,11 @@ function(config_target TARGET_NAME MULTIFW)
         target_link_libraries(${TARGET_NAME} tinyusb_host)
         target_compile_definitions(${TARGET_NAME} PRIVATE USB_STACK=1)
         target_sources(${TARGET_NAME} PRIVATE usb_hid/hid_app.c)
+        # Mount the USB drive only when something uses it (CD-ROM images or
+        # PGDFS), so -DPGDFS=OFF builds the same firmware set as before.
+        if(CDROM OR PGDFS)
+            set(USB_MSC TRUE)
+        endif()
     endif()
     if(USB_JOYSTICK)
         # Joystick stuff
@@ -134,21 +148,42 @@ function(config_target TARGET_NAME MULTIFW)
             mouse/sermouse.cpp
         )
     endif()
-    if(CDROM)
-        target_link_libraries(${TARGET_NAME} cdrom)
-        target_sources(${TARGET_NAME} PRIVATE
-            mke/mke.c
-            cdrom/msc_app.c
+    if(USB_MSC)
+        # USB mass storage glue + FatFs, shared by the CD-ROM emulation and PGDFS.
+        # FF_CODE_PAGE is #ifndef-guarded in fatfs/source/ffconf.h, so the OEM code
+        # page FatFs uses to convert long file names for DOS follows FATFS_CODE_PAGE.
+        target_compile_definitions(${TARGET_NAME} PRIVATE
+            USB_MSC=1
+            FF_CODE_PAGE=${FATFS_CODE_PAGE}
         )
-        target_compile_definitions(${TARGET_NAME} PRIVATE CDROM=1)
         target_sources(${TARGET_NAME} PRIVATE
+            usb_msc/msc_app.c
             ${CMAKE_CURRENT_LIST_DIR}/fatfs/source/ff.c
             ${CMAKE_CURRENT_LIST_DIR}/fatfs/source/ffsystem.c
             ${CMAKE_CURRENT_LIST_DIR}/fatfs/source/ffunicode.c
         )
         target_include_directories(${TARGET_NAME} PRIVATE
             ${CMAKE_CURRENT_LIST_DIR}/fatfs/source/
+            ${CMAKE_CURRENT_LIST_DIR}/usb_msc/
         )
+        if(PGDFS)
+            # PGDFS: DOS file system redirector service for the USB drive.
+            # DFS_MAX_PAYLOAD (bytes per frame, excluding the 4-byte header) can be
+            # overridden per firmware in the build_* functions.
+            if(NOT DFS_MAX_PAYLOAD)
+                set(DFS_MAX_PAYLOAD 4096)
+            endif()
+            target_link_libraries(${TARGET_NAME} dfs)
+            target_compile_definitions(${TARGET_NAME} PRIVATE
+                PGDFS=1
+                DFS_MAX_PAYLOAD=${DFS_MAX_PAYLOAD}
+            )
+        endif()
+    endif()
+    if(CDROM)
+        target_link_libraries(${TARGET_NAME} cdrom)
+        target_sources(${TARGET_NAME} PRIVATE mke/mke.c)
+        target_compile_definitions(${TARGET_NAME} PRIVATE CDROM=1)
     endif()
 
     target_sources(${TARGET_NAME} PRIVATE
@@ -271,6 +306,7 @@ add_subdirectory(rp2040-psram)
 add_subdirectory(opl)
 add_subdirectory(ne2000)
 add_subdirectory(cdrom)
+add_subdirectory(dfs)
 add_subdirectory(resampler)
 
 ################################################################################
@@ -278,6 +314,7 @@ add_subdirectory(resampler)
 function(build_gus TARGET_NAME MULTIFW)
     set(USB_JOYSTICK TRUE)
     set(SOUND_MPU TRUE)
+    set(DFS_MAX_PAYLOAD 4096)
     config_target(${TARGET_NAME} ${MULTIFW})
     pico_set_program_name(${TARGET_NAME} "picogus-gus")
     target_sources(${TARGET_NAME} PRIVATE
@@ -318,6 +355,7 @@ function(build_sb_8950 TARGET_NAME MULTIFW)
     set(SOUND_MPU TRUE)
     set(SOUND_OPL TRUE)
     set(CDROM TRUE)
+    set(DFS_MAX_PAYLOAD 4096)
     config_target(${TARGET_NAME} ${MULTIFW})
     pico_set_program_name(${TARGET_NAME} "picogus-sb")
     target_sources(${TARGET_NAME} PRIVATE
@@ -352,6 +390,7 @@ function(build_sb_ymf262 TARGET_NAME MULTIFW)
     set(SOUND_MPU TRUE)
     set(SOUND_OPL TRUE)
     set(CDROM TRUE)
+    set(DFS_MAX_PAYLOAD 4096)
     config_target(${TARGET_NAME} ${MULTIFW})
     pico_set_program_name(${TARGET_NAME} "picogus-sb-ymf262")
     target_sources(${TARGET_NAME} PRIVATE
@@ -381,6 +420,7 @@ function(build_sb_dbopl3 TARGET_NAME MULTIFW)
     set(SOUND_MPU TRUE)
     set(SOUND_OPL TRUE)
     set(CDROM TRUE)
+    set(DFS_MAX_PAYLOAD 4096)
     config_target(${TARGET_NAME} ${MULTIFW})
     pico_set_program_name(${TARGET_NAME} "picogus-sb-dbopl3")
     target_sources(${TARGET_NAME} PRIVATE
@@ -412,6 +452,7 @@ function(build_adlib TARGET_NAME MULTIFW)
     set(USB_MOUSE TRUE)
     set(SOUND_MPU TRUE)
     set(SOUND_OPL TRUE)
+    set(DFS_MAX_PAYLOAD 4096)
     config_target(${TARGET_NAME} ${MULTIFW})
     pico_set_program_name(${TARGET_NAME} "picogus-adlib")
     target_sources(${TARGET_NAME} PRIVATE
@@ -430,6 +471,7 @@ function(build_adlib_ymf262 TARGET_NAME MULTIFW)
     set(USB_MOUSE TRUE)
     set(SOUND_MPU TRUE)
     set(SOUND_OPL TRUE)
+    set(DFS_MAX_PAYLOAD 4096)
     config_target(${TARGET_NAME} ${MULTIFW})
     pico_set_program_name(${TARGET_NAME} "picogus-adlib-ymf262")
     target_sources(${TARGET_NAME} PRIVATE
@@ -448,6 +490,7 @@ function(build_adlib_dbopl3 TARGET_NAME MULTIFW)
     set(USB_MOUSE TRUE)
     set(SOUND_MPU TRUE)
     set(SOUND_OPL TRUE)
+    set(DFS_MAX_PAYLOAD 4096)
     config_target(${TARGET_NAME} ${MULTIFW})
     pico_set_program_name(${TARGET_NAME} "picogus-adlib-dbopl3")
     target_sources(${TARGET_NAME} PRIVATE
@@ -466,6 +509,7 @@ function(build_adlib_ym3812 TARGET_NAME MULTIFW)
     set(USB_MOUSE TRUE)
     set(SOUND_MPU TRUE)
     set(SOUND_OPL TRUE)
+    set(DFS_MAX_PAYLOAD 4096)
     config_target(${TARGET_NAME} ${MULTIFW})
     pico_set_program_name(${TARGET_NAME} "picogus-adlib-ym3812")
     target_sources(${TARGET_NAME} PRIVATE
@@ -484,6 +528,7 @@ function(build_sb_ym3812 TARGET_NAME MULTIFW)
     set(SOUND_MPU TRUE)
     set(SOUND_OPL TRUE)
     set(CDROM TRUE)
+    set(DFS_MAX_PAYLOAD 4096)
     config_target(${TARGET_NAME} ${MULTIFW})
     pico_set_program_name(${TARGET_NAME} "picogus-sb-ym3812")
     target_sources(${TARGET_NAME} PRIVATE
@@ -510,6 +555,7 @@ endfunction()
 function(build_mpu TARGET_NAME MULTIFW)
     set(USB_JOYSTICK TRUE)
     set(SOUND_MPU TRUE)
+    set(DFS_MAX_PAYLOAD 4096)
     config_target(${TARGET_NAME} ${MULTIFW})
     pico_set_program_name(${TARGET_NAME} "picogus-mpu401")
     target_compile_definitions(${TARGET_NAME} PRIVATE
@@ -527,6 +573,7 @@ function(build_psg TARGET_NAME MULTIFW)
     set(USB_JOYSTICK TRUE)
     set(USB_MOUSE TRUE)
     set(SOUND_MPU TRUE)
+    set(DFS_MAX_PAYLOAD 4096)
     config_target(${TARGET_NAME} ${MULTIFW})
     pico_set_program_name(${TARGET_NAME} "picogus-psg")
     target_compile_definitions(${TARGET_NAME} PRIVATE
@@ -548,6 +595,7 @@ function(build_usb TARGET_NAME MULTIFW)
     set(USB_MOUSE TRUE)
     set(SOUND_MPU TRUE)
     set(CDROM TRUE)
+    set(DFS_MAX_PAYLOAD 4096)
     config_target(${TARGET_NAME} ${MULTIFW})
     pico_set_program_name(${TARGET_NAME} "picogus-usb")
     target_compile_definitions(${TARGET_NAME} PRIVATE

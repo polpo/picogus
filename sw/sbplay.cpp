@@ -62,6 +62,12 @@ extern cms_buffer_t opl_cmd_buffer;
 #ifdef USB_STACK
 #include "tusb.h"
 #endif
+#ifdef PGDFS
+#include "dfs/dfs.h"
+#endif
+#ifdef USB_MSC
+#include "usb_msc/msc_app.h"
+#endif // USB_MSC
 #ifdef USB_MOUSE
 #include "mouse/8250uart.h"
 #include "mouse/sermouse.h"
@@ -339,6 +345,12 @@ void play_adlib() {
 #endif
 #ifdef CDROM
         cdrom_tasks(&cdrom);
+#endif
+#ifdef USB_MSC
+        msc_app_task();   // mount/unmount the USB drive outside of FatFs calls
+#endif // USB_MSC
+#ifdef PGDFS
+        dfs_tasks();
 #endif
     }
 }

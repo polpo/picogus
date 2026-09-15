@@ -93,6 +93,9 @@ static void usage(card_mode_t mode, bool print_all)
     pageprintf("   /mpuport x    - set the base port of the MPU-401. Default: 330, 0 to disable\n");
     pageprintf("   /mpudelay 1|0 - delay SYSEX (for rev.0 Roland MT-32)\n");
     pageprintf("   /mpufake 1|0  - fake all notes off (for Roland RA-50)\n");
+    //         "...............................................................................\n"
+    pageprintf("PGDFS (USB drive as a DOS drive letter) settings:\n");
+    pageprintf("   /dfsport x    - set the PGDFS data port (even). Default: 1D4, 0 to disable\n");
     if (mode == GUS_MODE || print_all) {
         //         "...............................................................................\n"
         pageprintf("GUS settings:\n");
@@ -887,6 +890,68 @@ static bool cmdSendPort(const char* arg, const int cmd, const int cmd2, const in
     return ctrlSendUint16(arg, cmd, 0, 0x3FF, 16);
 }
 
+// PGDFS data port: a two-port window at an even base (100h-3FEh, clear of the
+// control ports 1D0h-1D3h), or 0 to disable PGDFS. The card rejects bad values
+// and keeps the old one, so read the register back and report that.
+static uint16_t ctrlGetUint16(int cmd); // defined with the status helpers below
+
+static bool cmdSendDFSPort(const char* arg, const int cmd, const int cmd2, const int cmd3)
+{
+    char *endptr;
+    unsigned long val = strtoul(arg, &endptr, 16);
+    uint16_t readback;
+
+    if (*endptr != '\0' || val > 0x3FF) {
+        usage(gMode, false);
+        return false;
+    }
+    if (val != 0 && (val < 0x100 || (val & 1) || (val >= CONTROL_PORT && val <= CONTROL_PORT + 3))) {
+        fprintf(stderr, "Error: the PGDFS data port must be an even port from 100 to 3FE outside 1D0-1D3,\n");
+        fprintf(stderr, "or 0 to disable PGDFS. Example: /dfsport 1D4\n");
+        return false;
+    }
+    // The other emulated devices are decoded before the PGDFS window, so a window
+    // inside one of their port ranges is dead in the modes where that device is
+    // active. Warn using the port settings the card holds for every device.
+    if (val != 0) {
+        static const struct { const char *name; uint8_t cmd; uint16_t width; } devs[] = {
+            {"GUS", CMD_GUSPORT, 16}, {"Sound Blaster", CMD_SBPORT, 16}, {"AdLib/OPL", CMD_OPLPORT, 4},
+            {"MPU-401", CMD_MPUPORT, 2}, {"CD-ROM", CMD_CDPORT, 16}, {"CMS", CMD_CMSPORT, 16},
+            {"Tandy", CMD_TANDYPORT, 1}, {"mouse", CMD_MOUSEPORT, 8}, {"NE2000", CMD_NE2KPORT, 32},
+        };
+        outp(CONTROL_PORT, 0xCC); // Knock on the door...
+        for (int i = 0; i < (int)(sizeof(devs) / sizeof(devs[0])); ++i) {
+            uint16_t base = ctrlGetUint16(devs[i].cmd);
+            if (base == 0 || base == 0xFFFF) {
+                continue;
+            }
+            base &= ~(uint16_t)(devs[i].width - 1);
+            if (val + 1 >= base && val < base + devs[i].width) {
+                fprintf(stderr, "Warning: PGDFS data port %lX falls inside the %s port range %X-%X;\n",
+                        val, devs[i].name, base, base + devs[i].width - 1);
+                fprintf(stderr, "in modes where that device is active it takes precedence and PGDFS will not work.\n");
+            }
+        }
+    }
+    outp(CONTROL_PORT, 0xCC); // Knock on the door...
+    uint16_t previous = ctrlGetUint16(cmd);
+    outp(CONTROL_PORT, cmd);
+    outpw(DATA_PORT_LOW, (uint16_t)val);
+    outp(CONTROL_PORT, cmd);
+    readback = inpw(DATA_PORT_LOW);
+    outp(CONTROL_PORT, 0xCC); // Knock again in case this firmware has no PGDFS (unknown register)
+    if (readback != (uint16_t)val) {
+        fprintf(stderr, "Error: the PicoGUS did not accept PGDFS data port %lX (it reads back %X).\n", val, readback);
+        fprintf(stderr, "Does this firmware have PGDFS support?\n");
+        return false;
+    }
+    if (previous != (uint16_t)val) {
+        printf("PGDFS data port set to %lX. A resident PGUSDFS.EXE keeps the port it read at install:\n", val);
+        printf("unload and reload it (PGUSDFS /U, then PGUSDFS E:).\n");
+    }
+    return true;
+}
+
 static bool cmdDefaults(const char* arg, const int cmd, const int cmd2, const int cmd3)
 {
     outp(CONTROL_PORT, CMD_DEFAULTS);
@@ -1073,6 +1138,7 @@ ParseCommand parseCommands[] = {
     {"/cdload", cmdCDLoad, CMD_CDLOAD, ARG_REQUIRE},
     {"/cdauto", cmdSendBool, CMD_CDAUTOADV, ARG_REQUIRE, "true"},
     {"/cdloadname", cmdCDLoadName, CMD_CDNAME, ARG_REQUIRE},
+    {"/dfsport", cmdSendDFSPort, CMD_DFSPORT, ARG_REQUIRE, "1D4"},
     {"/mainvol", cmdSetVol, CMD_MAINVOL, ARG_REQUIRE, "100"},
     {"/oplvol", cmdSetVol, CMD_OPLVOL, ARG_REQUIRE, "100"},
     {"/sbvol", cmdSetVol, CMD_SBVOL, ARG_REQUIRE, "100"},
@@ -1275,6 +1341,63 @@ static void printMultiMode()
     }
 }
 
+static void printPGDFSStatus()
+{
+    // Only firmware with PGDFS answers CMD_DFSMAXLEN with a sane value (0 when
+    // PGDFS is disabled with /dfsport 0, which also makes CMD_DFSPORT read 0)
+    uint16_t maxlen = ctrlGetUint16(CMD_DFSMAXLEN);
+    uint16_t port = ctrlGetUint16(CMD_DFSPORT);
+    // Firmware without PGDFS deactivates the control port on an unknown register:
+    // knock again so the settings writes that follow are not ignored
+    outp(CONTROL_PORT, 0xCC);
+    if (port == 0 && maxlen == 0) {
+        printf("PGDFS disabled (pgusinit /dfsport 1D4 to enable)\n");
+        return;
+    }
+    if (maxlen < 128 || maxlen > 32768u) {
+        return;
+    }
+    if (port == 0) {
+        printf("PGDFS disabled (pgusinit /dfsport 1D4 to enable)\n");
+        return;
+    }
+    if (port < 0x100 || port > 0x3FE) {
+        // PGDFS firmware that predates the configurable data port answers FF00
+        printf("PGDFS firmware is older than the configurable data port; update the firmware\n");
+        return;
+    }
+    printf("PGDFS data port %X, ", port);
+    char info[256] = {0};
+    outp(CONTROL_PORT, CMD_DFSINFO);
+    for (uint8_t i = 0; i < 255; ++i) {
+        info[i] = inp(DATA_PORT_HIGH);
+        if (!info[i]) {
+            break;
+        }
+    }
+    if (!info[0]) {
+        printf("USB drive: none inserted\n");
+        return;
+    }
+    // "LABEL|FS|<size MB>|<serial hex>", label may be empty
+    char *label = info, *fs = "", *mb = "";
+    char *p = strchr(info, '|');
+    if (p) {
+        *p++ = 0;
+        fs = p;
+        p = strchr(p, '|');
+    }
+    if (p) {
+        *p++ = 0;
+        mb = p;
+        p = strchr(p, '|');
+        if (p) {
+            *p = 0;
+        }
+    }
+    printf("USB drive: %s, %s, %s MB\n", label[0] ? label : "(no label)", fs, mb);
+}
+
 static void printVolume()
 {
     printf("Volume: ");
@@ -1414,6 +1537,7 @@ int main(int argc, char* argv[]) {
         break;
     }
     printMultiMode();
+    printPGDFSStatus();
     printf("PicoGUS initialized!\n");
 
     if (permanent) {
