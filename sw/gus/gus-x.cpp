@@ -339,7 +339,19 @@ class GUSChannels {
             return addr_part;
         }
 
+        /* A voice playing >= 16 bytes per frame misses the cache on every frame, reading
+         * 16 bytes (and an occasional prefetch) only to use a few of those bytes. In this
+         * case it's best to just bypass the cache and fetch directly
+         * An interpolation pair straddling a 1KB PSRAM page still goes through the cache
+         * so we can prefetch across the page boundary. Not ideal but should amortize out */
         INLINE int16_t_pair LoadSamples8(const uint32_t addr/*memory address without fractional bits*/) const {
+            if ((WaveAdd >> WAVE_FRACT) >= 16u && (addr & 0x3ffu) != 0x3ffu) {
+                const uint32_t pair = psram_read16(&psram_spi, addr);
+                return (union int16_t_pair){ .data16 = {
+                    (int16_t)(uint16_t)(pair << 8),
+                    (int16_t)(uint16_t)(pair & 0xff00u)
+                }};
+            }
             const size_t addr_part = prime_cache(addr, 0xfu);
             return (union int16_t_pair){ .data16 = {
                 (int16_t)((uint16_t)sample_cache.data[addr_part] << 8),
@@ -349,6 +361,9 @@ class GUSChannels {
 
         INLINE int16_t_pair LoadSamples16(const uint32_t addr/*memory address without fractional bits*/) const {
             const uint32_t adjaddr = (addr & 0xC0000u/*256KB bank*/) | ((addr & 0x1FFFFu) << 1u/*16-bit sample value within bank*/);
+            if ((WaveAdd >> WAVE_FRACT) >= 8u && (adjaddr & 0x3feu) != 0x3feu) {
+                return (union int16_t_pair){ .data32 = psram_read32(&psram_spi, adjaddr) };
+            }
             const size_t addr_part = prime_cache(adjaddr, 0xeu);
             return (union int16_t_pair){ .data16 = {
                 (int16_t)*(uint16_t*)(sample_cache.data + addr_part),
