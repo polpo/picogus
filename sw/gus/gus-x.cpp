@@ -86,8 +86,16 @@ using namespace std;
 #define GUS_RAM_SIZE            (1024u*128u)
 #endif
 
-// fixed panning table (avx)
-static uint16_t const pantablePDF[16] = { 0, 13, 26, 41, 57, 72, 94, 116, 141, 169, 203, 244, 297, 372, 500, 4095 };
+// Pan attenuation derived from nukeykt's LPC-GUS gf1.v:
+// The pan_atten ROM entries in gf1.v are 9-bit two's-complement negatives, so this subtracts
+// (0x200 - pan_atten) << 4 from the current volume and clamps to 0 on borrow:
+//
+//   pan:         0    1    2    3    4    5    6    7    8    9    a    b    c    d    e    f
+//   pan_atten: 000  1fe  1fc  1fa  1f8  1f7  1f4  1f2  1f0  1eb  1e7  1e2  1da  1d2  1c0    -
+//   result:      0   32   64   96  128  144  192  224  256  336  400  480  608  736 1024 mute
+//
+// pan == 0xf is muted directly in gf1.v, but we set 4096 here so it always clamps to 0 in UpdateVolumes().
+static uint16_t const pantableGF1[16] = { 0, 32, 64, 96, 128, 144, 192, 224, 256, 336, 400, 480, 608, 736, 1024, 4096 };
 static bool gus_fixed_table = false;
 
 static uint16_t const sample_rates[32] = {
@@ -1824,9 +1832,9 @@ static void MakeTables(void) {
      *      mono. */
     if (gus_fixed_table) {
         for (i=0;i < 16;i++)
-            pantable[i] = pantablePDF[i] * 2048u;
+            pantable[i] = (uint32_t)pantableGF1[i] << RAMP_FRACT;
 
-        LOG_MSG("GUS: using accurate (fixed) pantable");
+        LOG_MSG("GUS: using GF1 pan ROM pantable");
     }
     else {
         for (i=0;i < 8;i++)
