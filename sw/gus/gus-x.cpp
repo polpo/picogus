@@ -982,8 +982,9 @@ __force_inline static void CheckVoiceIrq_unlocked(void) {
         return;
     }
 
-    if (myGUS.RampIRQ) myGUS.IRQStatus|=0x40;
-    if (myGUS.WaveIRQ) myGUS.IRQStatus|=0x20;
+    // Only active channels can raise IRQ
+    if (myGUS.RampIRQ & myGUS.ActiveMask) myGUS.IRQStatus|=0x40;
+    if (myGUS.WaveIRQ & myGUS.ActiveMask) myGUS.IRQStatus|=0x20;
     // mega hack
     // PIC_DeActivateIRQ();
     GUS_CheckIRQ();
