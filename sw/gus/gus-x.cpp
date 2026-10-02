@@ -182,6 +182,9 @@ struct GFGus {
     uint8_t ActiveChannelsUser; // unclamped value read back from reg 0x8E
     uint8_t gRegControl;
     uint32_t basefreq;
+    uint32_t frame;       // GF1 frame counter, the ramp rate divider clock (gf1.v ramp_cnt)
+    uint32_t frame_accum; // fixed 44.1 kHz mode: GF1 frames accumulate at sample_rates[] per output frame
+    bool frame_tick;      // a GF1 frame began on this output frame; ramps only advance on these
 
     struct GusTimer {
         uint32_t delay;
@@ -495,26 +498,9 @@ class GUSChannels {
         }
         __force_inline void WriteRampRate(uint8_t val) {
             RampRate = val;
-            /* NTS: Note RAMP_FRACT == 10, shift = 10 - (3*(val>>6)).
-             * From the upper two bits, the possible shift values for 0, 1, 2, 3 are: 10, 7, 4, 1 */
-            RampAdd = ((uint32_t)(RampRate & 63)) << ((uint32_t)(RAMP_FRACT - (3*(val >> 6))));
-#if 0//SET TO 1 TO CHECK YOUR MATH!
-            double frameadd = (double)(RampRate & 63)/(double)(1 << (3*(val >> 6)));
-            double realadd = frameadd * (double)(1 << RAMP_FRACT);
-            uint32_t checkadd = (uint32_t)realadd;
-            signed long error = (signed long)checkadd - (signed long)RampAdd;
-
-            if (error < -1L || error > 1L)
-                LOG_MSG("RampAdd nonfixed error %ld (%lu != %lu)",error,(unsigned long)checkadd,(unsigned long)RampAdd);
-#endif
-            if (myGUS.fixed_44k_output) {
-#ifdef FORCE_28CH_27CH
-                if (myGUS.ActiveChannels == 28) {
-                    RampAdd = RampAdd * 22050ul / 22866ul;
-                }
-#endif
-                RampAdd = ((RampAdd * sample_rates[myGUS.ActiveChannels - 1]) + (44100 >> 1)) / 44100;
-            }
+            /* The GF1 adds the whole 6-bit increment to the 12-bit volume, but only on the frames based on
+             * the rate divider. */
+            RampAdd = ((uint32_t)(val & 63)) << RAMP_FRACT;
         }
         INLINE void WaveUpdate(void) {
             bool endcondition;
@@ -602,20 +588,46 @@ class GUSChannels {
             VolLeft=scale_sample(vol16bit[templeft >> RAMP_FRACT], volume.gus, false);
             VolRight=scale_sample(vol16bit[tempright >> RAMP_FRACT], volume.gus, false);
         }
-        INLINE void RampUpdate(void) {
-            if (RampCtrl & 0x3) return; /* if the ramping is turned off, then don't change the ramp */
-
-            int32_t RampLeft;
+        /* gf1.v w368: the ramp rate divider compares the frame counter against the inverted voice
+         * number, selecting one frame in every 1/8/64/512 for rate 0/1/2/3:
+         *   rate 1: ~v[2:0] == cnt[2:0]
+         *   rate 2: ~v[4:0] == cnt[4:0] & cnt[5]
+         *   rate 3: ~v[4:0] == cnt[4:0] & cnt[8:5] == 0xf
+         * which is (cnt ^ ~v) & ((1 << 3*rate) - 1) == 0 since ~v's upper bits are all ones.
+         * On every other frame nothing happens to the ramp. */
+        __force_inline bool RampDividerFrame(void) const {
+            return ((myGUS.frame ^ ~(uint32_t)channum) & ((1u << (3 * (RampRate >> 6))) - 1)) == 0;
+        }
+        /* gf1.v: ramp_end_reach = (current + increment) > end (or (current - increment) < start)
+         * Returns the new volume in next. */
+        __force_inline bool RampEndReached(int32_t &next) const {
             if (RampCtrl & 0x40) {
-                RampVol-=RampAdd;
-                if ((int32_t)RampVol < (int32_t)0) RampVol=0;
-                RampLeft=(int32_t)RampStart-(int32_t)RampVol;
+                next = (int32_t)RampVol - (int32_t)RampAdd;
+                return next < (int32_t)RampStart;
             } else {
-                RampVol+=RampAdd;
-                if (RampVol > ((4096 << RAMP_FRACT)-1)) RampVol=((4096 << RAMP_FRACT)-1);
-                RampLeft=(int32_t)RampVol-(int32_t)RampEnd;
+                next = (int32_t)RampVol + (int32_t)RampAdd;
+                return next > (int32_t)RampEnd;
             }
-            if (RampLeft<0) {
+        }
+        INLINE void RampUpdate(void) {
+            int32_t next;
+            if (RampCtrl & 0x3) {
+                /* if the ramping is turned off, then don't change the ramp, but like a stopped voice,
+                 * a stopped ramp with IRQ enabled keeps re-arming its IRQ. Unlike the wave side this
+                 * only happens on divider frames. */
+                if (!(RampCtrl & 0x20)) return;
+                if (!RampDividerFrame()) return;
+                if (RampEndReached(next)) {
+                    critical_section_enter_blocking(&gus_crit);
+                    myGUS.RampIRQ |= irqmask;
+                    critical_section_exit(&gus_crit);
+                }
+                return;
+            }
+
+            if (!RampDividerFrame()) return;
+            if (!RampEndReached(next)) {
+                RampVol = (uint32_t)next;
                 UpdateVolumes();
                 return;
             }
@@ -628,9 +640,11 @@ class GUSChannels {
             }
             /* Check for looping */
             if (RampCtrl & 0x08) {
+                // RampLeft = amount of overshoot past the boundary */
+                int32_t RampLeft = (RampCtrl & 0x40) ? ((int32_t)RampStart - next) : (next - (int32_t)RampEnd);
                 /* Bi-directional looping */
                 if (RampCtrl & 0x10) RampCtrl^=0x40;
-                RampVol = (RampCtrl & 0x40) ? (uint32_t)((int32_t)RampEnd-(int32_t)RampLeft) : (uint32_t)((int32_t)RampStart+(int32_t)RampLeft);
+                RampVol = (RampCtrl & 0x40) ? (uint32_t)((int32_t)RampEnd - RampLeft) : (uint32_t)((int32_t)RampStart + RampLeft);
             } else {
                 RampCtrl|=1;    //Stop the channel
                 RampVol = (RampCtrl & 0x40) ? RampStart : RampEnd;
@@ -665,7 +679,7 @@ class GUSChannels {
                 stream[0] += tmpsamp * VolLeft;
                 stream[1] += tmpsamp * VolRight;
                 WaveUpdate();
-                RampUpdate();
+                if (myGUS.frame_tick) RampUpdate();  // ramps advance per GF1 frame
             // }
         }
 #if 0
@@ -855,6 +869,9 @@ static void GUSReset(void) {
         myGUS.RampIRQ = 0;
         myGUS.WaveIRQ = 0;
         myGUS.IRQChan = 0;
+        myGUS.frame = 0;
+        myGUS.frame_accum = 0;
+        myGUS.frame_tick = false;
 
         myGUS.timers[0].delay = 80;
         myGUS.timers[1].delay = 320;
@@ -1691,6 +1708,22 @@ __force_inline void GUS_StartDMA() {
 }
 
 
+// Tick the GF1 frame counter. In normal mode one output frame is one GF1 frame. In fixed 44.1khz
+// mode the GF1 would be running at sample_rates[myGUS.ActiveChannels - 1], so accumulate that
+// against the output rate and only tick when a GF1 frame begins.
+static __force_inline void GUS_FrameTick(void) {
+    uint32_t gf1_rate = sample_rates[myGUS.ActiveChannels - 1];
+#ifdef FORCE_28CH_27CH
+    if (myGUS.ActiveChannels == 28) gf1_rate = 22050;
+#endif
+    myGUS.frame_accum += gf1_rate;
+    myGUS.frame_tick = myGUS.frame_accum >= myGUS.basefreq;
+    if (myGUS.frame_tick) {
+        myGUS.frame_accum -= myGUS.basefreq;
+        myGUS.frame++;
+    }
+}
+
 //extern uint32_t __scratch_x("my_sub_section") (GUS_CallBack)(Bitu max_len, int16_t* play_buffer) {  // did not compile/link multifw with this.. scratch?? check.
 extern uint32_t GUS_CallBack(Bitu max_len, int16_t* play_buffer) {
     static int32_t accum[2];
@@ -1703,6 +1736,7 @@ extern uint32_t GUS_CallBack(Bitu max_len, int16_t* play_buffer) {
         while (s < buffer_size) {
             accum[0] = accum[1] = 0;
             uint32_t cur_rate = myGUS.basefreq;
+            GUS_FrameTick();
             for (Bitu c = 0; c < myGUS.ActiveChannels; ++c) {
                 guschan[c]->generateSample(accum);
             }
@@ -1798,6 +1832,7 @@ extern uint32_t GUS_sample_stereo(void) {
         return 0;
     }
     int32_t accum[2] = {0, 0};
+    GUS_FrameTick();
     for (Bitu c = 0; c < myGUS.ActiveChannels; ++c) {
         guschan[c]->generateSample(accum);
     }
