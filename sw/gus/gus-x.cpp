@@ -1807,12 +1807,10 @@ extern uint32_t GUS_sample_stereo(void) {
 // Generate logarithmic to linear volume conversion tables
 static void MakeTables(void) {
     int i;
-    double out = (double)(1 << 13);
-    for (i=4095;i>=0;i--) {
-        vol16bit[i]=(uint16_t)((int16_t)out);
-        out/=1.002709201;       /* 0.0235 dB Steps */
-        //Original amplification routine in the hardware
-        //vol16bit[i] = ((256 + i & 0xff) << VOL_SHIFT) / (1 << (24 - (i >> 8)));
+    // Fix original DOSBox "Original amplification routine in the hardware" code by fixing a precendence
+    // bug and shifting by 13 instead of VOL_SHIFT (14)
+    for (i=0;i<4096;i++) {
+        vol16bit[i] = ((256 + (i & 0xff)) << 13) / (1 << (24 - (i >> 8)));
     }
     /* FIX: DOSBox 0.74 had code here that produced a pantable which
      *      had nothing to do with actual panning control variables.
