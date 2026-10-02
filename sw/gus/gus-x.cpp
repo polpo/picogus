@@ -1661,20 +1661,22 @@ __force_inline void GUS_StartDMA() {
     // 10:6 μs–7 μs
     // 11:13 μs–14 μs
     // From ULTRAWRD: it's 650KHz with a divisor...
+    // From LPC-GUS gf1.v dram_dma_tick: it's 1 transfer per DRAM refresh slot (one voice slot, ~1.6us) with a divisor.
+    // Note the "out of order" divisor. gf1.v agrees with it and reading ULTRAWRD closely agrees.
     if (myGUS.dmaIntervalOverride) {
         myGUS.dmaInterval = myGUS.dmaIntervalOverride;
     } else {
         switch ((myGUS.DMAControl >> 3u) & 3u) {
-        case 0b00:
+        case 0b00: // /1
             myGUS.dmaInterval = 1;
             break;
-        case 0b01:
-            myGUS.dmaInterval = 3;
-            break;
-        case 0b10:
+        case 0b01: // /4
             myGUS.dmaInterval = 6;
             break;
-        case 0b11:
+        case 0b10: // /2
+            myGUS.dmaInterval = 3;
+            break;
+        case 0b11: // /8
             myGUS.dmaInterval = 12;
             break;
         }
