@@ -1099,20 +1099,19 @@ __force_inline static uint16_t ExecuteReadRegister(void) {
 
 static uint32_t GUS_TimerEventHandler(Bitu val) {
     // putchar('-');
+    if (!myGUS.timers[val].running) {
+        // If the timer has been set to no longer run, stop the timer before IRQs can be raised
+        return 0;  // Stop timer
+    }
     critical_section_enter_blocking(&gus_crit);
     if (!myGUS.timers[val].masked) myGUS.timers[val].reached=true;
     if (myGUS.timers[val].raiseirq) {
         myGUS.IRQStatus|=0x4 << val;
         GUS_CheckIRQ();
     }
-    if (myGUS.timers[val].running) {
-        critical_section_exit(&gus_crit);
-        // putchar('.');
-        return myGUS.timers[val].delay;  // Keep timer running
-    }
     critical_section_exit(&gus_crit);
     // putchar('.');
-    return 0;  // Stop timer
+    return myGUS.timers[val].delay;  // Keep timer running
 }
 
  
