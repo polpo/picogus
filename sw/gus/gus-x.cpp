@@ -851,7 +851,6 @@ static void GUSReset(void) {
         // Reset, holding gus_crit as the render loop and timer callbacks can modify this
         // state
         critical_section_enter_blocking(&gus_crit);
-        adlib_commandreg = 85;
         myGUS.IRQStatus = 0;
         myGUS.RampIRQ = 0;
         myGUS.WaveIRQ = 0;
@@ -1432,7 +1431,9 @@ __force_inline void write_gus(Bitu port, Bitu val) {
         adlib_commandreg = (uint8_t)val;
         break;
     case 0x9:
-//TODO adlib_commandreg should be 4 for this to work else it should just latch the value
+        // Only reach timer control logic when the last 2X8 index was 4 and bit 0 of register 0x45 is clear
+        // (gf1.v: cpu_write & CS1 & cpu_addr_9 & adlib_reg_sel_4[1] & ~timer_ctrl_b0)
+        if (adlib_commandreg != 4 || (myGUS.TimerControl & 0x01)) break;
         critical_section_enter_blocking(&gus_crit);
         if (val & 0x80) {
             myGUS.timers[0].reached=false;
