@@ -21,6 +21,7 @@
 #include <stdint.h>
 
 #include "hardware/pio.h"
+#include "hardware/irq.h"
 
 /*
 #include "psram_spi.h"
@@ -64,6 +65,21 @@ __force_inline extern void DMA_Cancel_Write(dma_inst_t* dma) {
 // xfer_count: number of DMA transfers for each push. DRQ is held high for all transfers
 __force_inline extern void DMA_Multi_Start_Write(dma_inst_t* dma, uint32_t xfer_count) {
     pio_sm_put_blocking(dma->pio, dma->sm, xfer_count - 1);
+}
+
+// Cancel an in flight or queued multi transfer DMA request and reset the SM to idle.
+// Deasserts DRQ immediately, discards stale bytes in the ISR, discards any queued transfer
+// counts, and clears any pending RX IRQ
+__force_inline extern void DMA_Multi_Cancel(dma_inst_t* dma) {
+    pio_sm_set_enabled(dma->pio, dma->sm, false);
+    pio_sm_exec(dma->pio, dma->sm, pio_encode_set(pio_pins, 0));    // deassert DRQ 
+    pio_sm_clear_fifos(dma->pio, dma->sm);                          // drop queued counts and stale pushes
+    pio_sm_restart(dma->pio, dma->sm);                              // clear ISR contents and shift counters
+    pio_sm_exec(dma->pio, dma->sm, pio_encode_pull(false, false));  // force OSR full
+    pio_sm_exec(dma->pio, dma->sm, pio_encode_out(pio_null, 32));   // force OSR empty
+    pio_sm_exec(dma->pio, dma->sm, pio_encode_jmp(dma->offset));    // jmp to PIO restart
+    pio_sm_set_enabled(dma->pio, dma->sm, true);                    // re-enable PIO
+    irq_clear((dma->pio == pio0) ? PIO0_IRQ_0 : PIO1_IRQ_0);        // clear IRQ
 }
 
 // push_thresh: set number of bits for the DMA pio to autopush

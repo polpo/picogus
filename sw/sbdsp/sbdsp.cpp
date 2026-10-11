@@ -42,6 +42,7 @@ SPDX-License-Identifier: MIT
 extern uint LED_PIN;
 
 #include "isa/isa_dma.h"
+#include "hardware/sync.h"
 #ifdef INTERP_SB_LINEAR
 #include "hardware/interp.h"
 #endif
@@ -273,6 +274,7 @@ static inline uint8_t samples_per_transfer() {
 
 static uint8_t mixer_state[256] = { 0 };
 static uint8_t sb_8051_ram[256] = { 0 };
+static uint8_t sb16_dma_mode = 0;   // mode of an in-progress SB16 DMA command (0xBx/0xCx)
 
 // Wavetable volume pass-through state
 static uint8_t *wt_volume_ptr = NULL;
@@ -311,7 +313,6 @@ static __force_inline void sbdsp_dma_disable(bool pause) {
         return;
     }
     sbdsp.dma_enabled = false;
-    sbdsp.rs.dma_pending = false;
     // let ring drain naturally
     if (!pause) {
         sbdsp.adpcm.format = 0;
@@ -413,24 +414,39 @@ static __force_inline void sbdsp_set_dma_interval() {
     // frame per event, so the interval is always one sample period.
 }
 
-static __force_inline void sbdsp_dma_enable() {
+// Stop the DMA PIO and discard any in-flight or queued request
+static void sbdsp_dma_cancel() {
+    uint32_t irq_state = save_and_disable_interrupts();  // prevent ISR from seeing half-cancelled state
+    sbdsp.dma_enabled = false;
+    DMA_Multi_Cancel(&dma_config);
+    sbdsp.rs.dma_pending = false;
+    restore_interrupts(irq_state);
+}
+
+// resume: true only for continue-after-pause, which resumes a transfer in flight. Otherwise we should
+// cancel any transfer state left in the DMA PIO
+static __force_inline void sbdsp_dma_enable(bool resume) {
     if (sbdsp.adc_active) {
         // resume fake ADC
         PIC_AddEvent(&DSP_ADC_event, sbdsp.dma_interval * (sbdsp.dma_block_size + 1), 0);
         return;
     }
-    if (!sbdsp.dma_enabled) {
-        sbdsp.dma_enabled = true;
-        // Set autopush bits to number of bits per audio frame.
-        // 32 will get masked to 0 by this operation which is correct behavior.
-        // Only change threshold if the frame size actually changed as rewriting
-        // shiftctrl on every single-cycle re-arm seems to disturb the PIO state
-        // enough to produce clicks every block
-        static uint8_t last_bytes_per_frame = 0;
-        if (sbdsp.dma_bytes_per_frame != last_bytes_per_frame) {
-            DMA_Multi_Set_Push_Threshold(&dma_config, sbdsp.dma_bytes_per_frame << 3);
-            last_bytes_per_frame = sbdsp.dma_bytes_per_frame;
-        }
+    if (!resume && (sbdsp.dma_enabled || sbdsp.rs.dma_pending)) {
+        sbdsp_dma_cancel();
+    }
+    sbdsp.dma_enabled = true;
+    // Set autopush bits to number of bits per audio frame.
+    // 32 will get masked to 0 by this operation which what the PIO expects.
+    // Only change threshold if the frame size actually changed as rewriting
+    // shiftctrl on every single-cycle re-arm seems to disturb the PIO state
+    // enough to produce clicks every block
+    static uint8_t last_bytes_per_frame = 0;
+    if (sbdsp.dma_bytes_per_frame != last_bytes_per_frame) {
+        DMA_Multi_Set_Push_Threshold(&dma_config, sbdsp.dma_bytes_per_frame << 3);
+        last_bytes_per_frame = sbdsp.dma_bytes_per_frame;
+    }
+    // Only queue a request if none is outstanding and the ring can take it
+    if (!sbdsp.rs.dma_pending && ring_free() >= samples_per_transfer()) {
         sbdsp.rs.dma_pending = true;
         DMA_Multi_Start_Write(&dma_config, sbdsp.dma_bytes_per_frame);
     }
@@ -638,7 +654,7 @@ static void sbdsp_start_adpcm_dma(int autoinit, uint16_t xfer_size, uint8_t form
     sbdsp.dma_xfer_count_left = sbdsp.dma_xfer_count;
     sbdsp_set_dma_interval();
     sbdsp.dma_done = false;
-    sbdsp_dma_enable();
+    sbdsp_dma_enable(false);
 }
 
 // start pre-SB16 PCM DMA transfer
@@ -664,7 +680,7 @@ static void sbdsp_start_pcm_dma(int autoinit, uint16_t xfer_size) {
     sbdsp.dma_xfer_count_left = sbdsp.dma_xfer_count;
     sbdsp_set_dma_interval();
     sbdsp.dma_done = false;
-    sbdsp_dma_enable();
+    sbdsp_dma_enable(false);
 }
 
 void sbdsp_process(void) {
@@ -689,7 +705,7 @@ void sbdsp_process(void) {
         case DSP_CONTINUE_DMA_16:
             sbdsp.current_command = 0;
             sbdsp.dma_done = false;
-            sbdsp_dma_enable();
+            sbdsp_dma_enable(true);
             break;
         case DSP_CONTINUE_AUTOINIT_8:
         case DSP_CONTINUE_AUTOINIT_16:
@@ -961,18 +977,20 @@ void sbdsp_process(void) {
             // SB16 DMA transfer
             if (sbdsp.dav_dsp) {
                 if (sbdsp.current_command_index == 0) { // bCommand + bMode
-                    sbdsp.adpcm.format = 0;  // SB16 commands are always PCM
-                    sbdsp.dma_16bit = (sbdsp.current_command & 0xf0) == 0xb0;
-                    sbdsp.autoinit = sbdsp.current_command & 0x4;
-                    sbdsp.dma_signed = sbdsp.inbox & 0x10;
-                    sbdsp.dma_stereo = sbdsp.inbox & 0x20;
-                    sbdsp.dma_stereo_sbpro = 0;
+                    // Keep the mode byte to be applied once the whole command has arrived
+                    sb16_dma_mode = sbdsp.inbox;
                     sbdsp.dav_dsp = 0;
                 } else if (sbdsp.current_command_index == 1) { // wLength.LowByte
                     sbdsp.dma_sample_count = sbdsp.inbox;
                     sbdsp.dav_dsp = 0;
                 } else if (sbdsp.current_command_index == 2) { // wLength.HighByte
                     sbdsp.dma_sample_count |= (sbdsp.inbox << 8);
+                    sbdsp.adpcm.format = 0;  // SB16 commands are always PCM
+                    sbdsp.dma_16bit = (sbdsp.current_command & 0xf0) == 0xb0;
+                    sbdsp.autoinit = sbdsp.current_command & 0x4;
+                    sbdsp.dma_signed = sb16_dma_mode & 0x10;
+                    sbdsp.dma_stereo = sb16_dma_mode & 0x20;
+                    sbdsp.dma_stereo_sbpro = 0;
                     // HACK: force mono when stereo halving would round the
                     // count to 0 (e.g. count=0 -> 1 sample -> 0 frames).
                     // Miles AIL detection triggers this: 16-bit signed
@@ -1005,7 +1023,7 @@ void sbdsp_process(void) {
                         sbdsp.dma_xfer_count_left = sbdsp.dma_xfer_count;
                         sbdsp.speaker_on = true;
                         sbdsp.dma_done = false;
-                        sbdsp_dma_enable();
+                        sbdsp_dma_enable(false);
                     }
                     sbdsp.current_command = 0;
                 }
@@ -1113,6 +1131,10 @@ void sbdsp_process(void) {
 static uint32_t DSP_Reset_EventHandler(Bitu val) {
     sbdsp.current_command = 0;
     sbdsp.current_command_index = 0;
+
+    // deassert DRQ and discard any partial frame or queued request left in the DMA PIO
+    // by the transfer that was interrupted so the next transfer starts byte-aligned
+    sbdsp_dma_cancel();
 
     sbdsp.dma_block_size = 0x7FF; //default per 2.01
     sbdsp.dma_xfer_count = 0;
