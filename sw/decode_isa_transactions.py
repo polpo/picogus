@@ -2,7 +2,9 @@
 """Decode ISA bus transactions from binary capture files.
 
 Parses binary output from the PicoGUS ISA bus analyzer firmware.
-Supports RLE-compressed ring buffer format.
+Supports RLE-compressed ring buffer format. Each line is prefixed with the
+time in milliseconds since the first event (time of first occurrence for
+repeated transactions).
 """
 
 import struct
@@ -15,6 +17,10 @@ BINARY_MARKER_START = 0x42494E53  # "BINS"
 BINARY_MARKER_END = 0x42494E45    # "BINE"
 RLE_MAGIC = 0xFF000000
 RLE_COUNT_MASK = 0x00FFFFFF
+GAP_MAGIC = 0xFE000000          # gap word: 24-bit microseconds before the next event
+GAP_US_MASK = 0x00FFFFFF
+EVENT_DELTA_SHIFT = 18          # 11-bit microseconds since the previous distinct event
+EVENT_DELTA_MASK = 0x7FF << EVENT_DELTA_SHIFT
 
 
 def read_binary_data(data):
@@ -34,14 +40,21 @@ def read_binary_data(data):
 
 
 def iter_transactions(binary_data):
-    """Iterate over transactions, yielding (value, count) tuples.
+    """Iterate over transactions, yielding (value, count, t_us) tuples.
 
     Uses value-first RLE encoding: value appears first, then optional
-    trailer with repeat count.
+    trailer with repeat count. Each value carries the microseconds since
+    the previous distinct value in its delta field; longer intervals are
+    stored ahead of the value as gap words. t_us is relative to the first
+    event in the capture and refers to the first occurrence of the value.
     """
     i = 0
     pending_value = None
     pending_count = 0
+    pending_t = 0
+    t_us = 0
+    gap_us = 0
+    first = True
 
     while i + 4 <= len(binary_data):
         word, = struct.unpack('<I', binary_data[i:i+4])
@@ -50,14 +63,21 @@ def iter_transactions(binary_data):
         if (word & 0xFF000000) == RLE_MAGIC:
             if pending_value is not None:
                 pending_count += (word & RLE_COUNT_MASK)
+        elif (word & 0xFF000000) == GAP_MAGIC:
+            gap_us += word & GAP_US_MASK
         else:
             if pending_value is not None:
-                yield pending_value, pending_count
-            pending_value = word
+                yield pending_value, pending_count, pending_t
+            if not first:
+                t_us += gap_us + ((word & EVENT_DELTA_MASK) >> EVENT_DELTA_SHIFT)
+            first = False
+            gap_us = 0
+            pending_value = word & ~EVENT_DELTA_MASK
             pending_count = 1
+            pending_t = t_us
 
     if pending_value is not None:
-        yield pending_value, pending_count
+        yield pending_value, pending_count, pending_t
 
 
 class ISATransactionDecoder:
@@ -418,6 +438,7 @@ def main():
 
     last_value = None
     last_decoded = None
+    last_t = 0
     merged_count = 0
     total_transactions = 0
     shown_transactions = 0
@@ -427,12 +448,12 @@ def main():
         if merged_count > 0:
             shown_transactions += merged_count
             if merged_count == 1:
-                print(f"{last_value:08X} -> {last_decoded}")
+                print(f"{last_t/1000:12.3f} {last_value:08X} -> {last_decoded}")
             else:
-                print(f"{last_value:08X} x {merged_count} -> {last_decoded}")
+                print(f"{last_t/1000:12.3f} {last_value:08X} x {merged_count} -> {last_decoded}")
             merged_count = 0
 
-    for value, count in iter_transactions(binary_data):
+    for value, count, t_us in iter_transactions(binary_data):
         total_transactions += count
 
         # Apply port filter
@@ -450,7 +471,7 @@ def main():
             flush_merged()
             for _ in range(count):
                 decoded = decoder.decode(value)
-                print(f"{value:08X} -> {decoded}")
+                print(f"{t_us/1000:12.3f} {value:08X} -> {decoded}")
                 shown_transactions += 1
             last_value = None
         else:
@@ -462,6 +483,7 @@ def main():
                 flush_merged()
                 last_value = value
                 last_decoded = decoded
+                last_t = t_us
                 merged_count = count
 
     flush_merged()

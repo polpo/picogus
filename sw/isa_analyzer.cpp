@@ -45,6 +45,15 @@
 #define RLE_COUNT_MASK  0x00FFFFFF
 #define RLE_MAX_COUNT   0x00FFFFFF  // 16,777,215
 
+// Timing: each stored event carries an 11-bit delta (us) since the first
+// occurrence of the previous distinct event, in bits 28-18. A delta that
+// doesn't fit is stored ahead of the event as a gap word (24-bit us).
+#define EVENT_DELTA_SHIFT 18
+#define EVENT_DELTA_MAX   0x7FF
+#define EVENT_DELTA_MASK  (EVENT_DELTA_MAX << EVENT_DELTA_SHIFT)
+#define GAP_MAGIC         0xFE000000
+#define GAP_US_MASK       0x00FFFFFF
+
 // Binary output markers
 constexpr uint32_t BINARY_MARKER_MAGIC = 0x1DE1DE1D;
 constexpr uint32_t BINARY_MARKER_START = 0x42494E53;  // "BINS"
@@ -55,9 +64,10 @@ static size_t buffer_size = 0;           // Total buffer capacity in 32-bit word
 volatile static size_t write_idx = 0;    // Next write position (monotonically increasing)
 volatile static bool buffer_wrapped = false;
 
-// RLE state
-static uint32_t last_event = 0;
-static uint32_t repeat_count = 0;
+// RLE state (volatile so a debugger snapshot over SWD sees the live values)
+volatile static uint32_t last_event = 0;
+volatile static uint32_t repeat_count = 0;
+volatile static uint32_t last_event_us = 0;   // time of the first occurrence of last_event
 
 // Port filter bitmap: 1024 bits = 128 bytes, one bit per 10-bit address
 static uint8_t port_bitmap[128];
@@ -97,16 +107,23 @@ __force_inline void flush_rle(void) {
 }
 
 __force_inline void record_event(uint32_t event) {
-    if (repeat_count == 0) {
-        last_event = event;
-        repeat_count = 1;
-    } else if (event == last_event && repeat_count < RLE_MAX_COUNT) {
+    if (repeat_count != 0 && event == (last_event & ~EVENT_DELTA_MASK) && repeat_count < RLE_MAX_COUNT) {
         repeat_count++;
-    } else {
-        flush_rle();
-        last_event = event;
-        repeat_count = 1;
+        return;
     }
+    flush_rle();
+    uint32_t now_us = time_us_32();
+    uint32_t delta = now_us - last_event_us;
+    if (delta > EVENT_DELTA_MAX) {
+        while (delta > 0) {
+            uint32_t gap = delta > GAP_US_MASK ? GAP_US_MASK : delta;
+            ring_write(GAP_MAGIC | gap);
+            delta -= gap;
+        }
+    }
+    last_event = event | (delta << EVENT_DELTA_SHIFT);
+    last_event_us = now_us;
+    repeat_count = 1;
 }
 
 // ---- Port filter ----
@@ -345,6 +362,7 @@ int main() {
     memset(port_bitmap, 0, sizeof(port_bitmap));
     add_port_filter(0x3F0, 0x220);  // SB 0x220-0x22F
     add_port_filter(0x3FC, 0x388);  // OPL 0x388-0x38B
+    add_port_filter(0x3FE, 0x330);  // MPU-401 0x330-0x331
     // add_port_filter(0x2F0, 0x240);  // GUS 0x240-0x24F + 0x340-0x34F
     // add_port_filter(0x3F8, 0x530);  // WSS 0x530-0x537
    
@@ -399,6 +417,7 @@ int main() {
                 // Stored event format:
                 //   Bit 31:    Direction (0=IOW, 1=IOR)
                 //   Bit 30:    DMA flag
+                //   Bits 28-18: delta (us) since previous distinct event (added by record_event)
                 //   Bits 17-8: 10-bit I/O address
                 //   Bits 7-0:  8-bit data
                 uint32_t event = (addr << 8) | data;
@@ -493,8 +512,7 @@ check_bootsel:
         // Clear events buffer
         write_idx = 0;
 
-        // Wait until BOOTSEL is released (+ additional debounce delay)
+        // Wait until BOOTSEL is released (the dump above already outlasts any bounce)
         while (!(sio_hw->gpio_hi_in & SIO_GPIO_HI_IN_QSPI_CSN_BITS)) {};
-        delay_ms(50);
     }
 }
