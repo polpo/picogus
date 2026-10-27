@@ -364,6 +364,38 @@ static inline void update_joystate_xinput(uint16_t wButtons, int16_t sThumbLX, i
     /* printf("%04x %04x\n", wButtons, joystate_struct.button_mask); */
 }
 
+// Logitech G920 in its default Xbox (GIP) mode reports as an Xbox One pad but uses its own axis layout.
+// Buttons in bytes 4-5 match the pad, so the driver's decoded wButtons is used as-is.
+static uint8_t g920_dev_addr;
+#define G920_RANGE_DEG 270
+
+static inline bool is_logitech_g920(uint16_t vid, uint16_t pid)
+{
+    return vid == 0x046d && pid == 0xc261;
+}
+
+static inline void process_g920(uint16_t wButtons, uint8_t const* rdata, uint32_t len)
+{
+    // Only GIP input packets carry axes; skip guide button (virtual key) packets
+    if (rdata[0] != 0x20 || len < 13) {
+        return;
+    }
+    // Shift paddles (LB/RB) act as joystick 2 buttons 1/2, alongside X/Y
+    if (wButtons & XINPUT_GAMEPAD_LEFT_SHOULDER) wButtons |= XINPUT_GAMEPAD_X;
+    if (wButtons & XINPUT_GAMEPAD_RIGHT_SHOULDER) wButtons |= XINPUT_GAMEPAD_Y;
+    uint16_t wheel = rdata[7] << 8 | rdata[6]; // 0x0000 full left, 0xffff full right
+    uint8_t gas    = rdata[8];                 // pedals: 0 released, 0xff fully pressed
+    uint8_t brake  = rdata[10];
+    uint8_t clutch = rdata[12];
+    // Wheel turns 900 degrees lock to lock; map only the centre G920_RANGE_DEG to the full axis and saturate
+    // outside it, so the 256 gameport steps are ~1 degree each instead of ~3.5
+    int32_t steer = ((int32_t)wheel - 0x8000) * 900 / G920_RANGE_DEG;
+    if (steer < -32768) steer = -32768;
+    if (steer > 32767) steer = 32767;
+    // Wheel on joy1 X, gas/brake on joy1 Y via the trigger mapping, clutch on joy2 Y (0 released, 255 pressed)
+    update_joystate_xinput(wButtons, (int16_t)steer, 0, 0, 32767 - (clutch << 8), brake, gas);
+}
+
 void tuh_xinput_report_received_cb(uint8_t dev_addr, uint8_t instance, xinputh_interface_t const* xid_itf, uint16_t len)
 {
     const xinput_gamepad_t *p = &xid_itf->pad;
@@ -379,19 +411,49 @@ void tuh_xinput_report_received_cb(uint8_t dev_addr, uint8_t instance, xinputh_i
     }
     */
 
+#ifdef PGDEBUG
+    {
+        // Raw dump for reverse-engineering non-gamepad GIP devices (G920).
+        // Only print on change, ignoring the GIP sequence byte, so the UART doesn't stall tuh_task.
+        static uint8_t last[64];
+        static uint32_t last_len;
+        const uint8_t *rdata = xid_itf->epin_buf;
+        uint32_t n = xid_itf->last_xferred_bytes;
+        if (n > sizeof(last)) n = sizeof(last);
+        bool changed = (n != last_len) || (n > 0 && rdata[0] != last[0]) ||
+                       (n > 1 && rdata[1] != last[1]) || (n > 3 && memcmp(rdata + 3, last + 3, n - 3));
+        if (changed) {
+            memcpy(last, rdata, n);
+            last_len = n;
+            DBG_PRINTF("GIP t%u %2u:", xid_itf->type, (unsigned)xid_itf->last_xferred_bytes);
+            for (uint32_t i = 0; i < n; i++) DBG_PRINTF(" %02x", rdata[i]);
+            DBG_PRINTF("\n");
+        }
+    }
+#endif
+
     if (xid_itf->connected && xid_itf->new_pad_data) {
         /*
         printf("[%02x, %02x], Type: %s, Buttons %04x, LT: %02x RT: %02x, LX: %d, LY: %d, RX: %d, RY: %d\n",
              dev_addr, instance, type_str, p->wButtons, p->bLeftTrigger, p->bRightTrigger, p->sThumbLX, p->sThumbLY, p->sThumbRX, p->sThumbRY);
         */
-        update_joystate_xinput(p->wButtons, p->sThumbLX, p->sThumbLY, p->sThumbRX, p->sThumbRY, p->bLeftTrigger, p->bRightTrigger);
+        if (dev_addr == g920_dev_addr) {
+            process_g920(p->wButtons, xid_itf->epin_buf, xid_itf->last_xferred_bytes);
+        } else {
+            update_joystate_xinput(p->wButtons, p->sThumbLX, p->sThumbLY, p->sThumbRX, p->sThumbRY, p->bLeftTrigger, p->bRightTrigger);
+        }
     }
     tuh_xinput_receive_report(dev_addr, instance);
 }
 
 void tuh_xinput_mount_cb(uint8_t dev_addr, uint8_t instance, const xinputh_interface_t *xinput_itf)
 {
-    DBG_PRINTF("XINPUT MOUNTED %02x %d\n", dev_addr, instance);
+    uint16_t vid, pid;
+    tuh_vid_pid_get(dev_addr, &vid, &pid);
+    DBG_PRINTF("XINPUT MOUNTED %02x %d type %d %04x:%04x\n", dev_addr, instance, xinput_itf->type, vid, pid);
+    if (is_logitech_g920(vid, pid)) {
+        g920_dev_addr = dev_addr;
+    }
     // If this is a Xbox 360 Wireless controller we need to wait for a connection packet
     // on the in pipe before setting LEDs etc. So just start getting data until a controller is connected.
     if (xinput_itf->type == XBOX360_WIRELESS && xinput_itf->connected == false) {
@@ -436,5 +498,8 @@ void tuh_xinput_mount_cb(uint8_t dev_addr, uint8_t instance, const xinputh_inter
 void tuh_xinput_umount_cb(uint8_t dev_addr, uint8_t instance)
 {
     DBG_PRINTF("XINPUT UNMOUNTED %02x %d\n", dev_addr, instance);
+    if (dev_addr == g920_dev_addr) {
+        g920_dev_addr = 0;
+    }
 }
 #endif
