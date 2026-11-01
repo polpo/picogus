@@ -674,7 +674,7 @@ next_event:
 __force_inline static void MPU401_EOIHandlerDispatch(void) {
     if (mpu.state.send_now) {
         mpu.state.eoi_scheduled=true;
-        PIC_AddEvent(&MPU401_EOI, 60, 0); // Possible a bit longer
+        PIC_AddEvent(&MPU401_EOI, 60, 1); // val=1: take mpu_crit, we run from the alarm ISR
     }
     else if (!mpu.state.eoi_scheduled) MPU401_EOIHandler(0);
 }
