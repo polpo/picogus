@@ -58,6 +58,10 @@ void MIDI_Init(bool delaysysex,bool fakeallnotesoff);
 void MIDI_RawOutByte(Bit8u data);
 bool MIDI_Available(void);
 extern volatile bool midi_output_busy;
+/* Act like a real MPU-401: takes 100us on average to move each byte out of the bus
+ * latch, and DRR reads busy during this time. */
+#define MPU401_UART_LATCH_US 100
+static uint32_t uart_latch_busy_until = 0;
 
 static uint32_t MPU401_EventHandler(Bitu val);
 static PIC_TimerEvent MPU401_Event = {
@@ -167,7 +171,8 @@ __force_inline static void ClrQueue(void) {
 __force_inline Bit8u MPU401_ReadStatus(void) { /* SOFTMPU */
     critical_section_enter_blocking(&mpu_crit);
     uint8_t ret=0x3f;   /* Bits 6 and 7 clear */
-    if (mpu.state.cmd_pending || midi_output_busy) ret|=0x40;
+    if (mpu.state.cmd_pending || midi_output_busy ||
+        (mpu.mode==M_UART && (int32_t)(time_us_32() - uart_latch_busy_until) < 0)) ret|=0x40;
     if (!mpu.queue_used) ret|=0x80;
     critical_section_exit(&mpu_crit);
     return ret;
@@ -389,6 +394,7 @@ __force_inline void MPU401_WriteData(Bit8u val, bool crit) { /* SOFTMPU */
     static Bit8u length,cnt,posd; /* SOFTMPU */
     if (mpu.mode==M_UART) {
         MIDI_RawOutByte(val);
+        uart_latch_busy_until = time_us_32() + MPU401_UART_LATCH_US;
         // autodetect when Gateway runs
         if (val == gateway_msg[gateway_pos]) {
             ++gateway_pos;

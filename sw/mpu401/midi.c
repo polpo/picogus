@@ -61,6 +61,10 @@ typedef struct ring_buffer {
 static ring_buffer midi_out_buff = { {0}, 0, 0 };
 
 volatile bool midi_output_busy = false;
+/* Host sees DRR busy once this many bytes are buffered. This threshold is
+ * lowered when fake all notes off is enabled, because one host message can
+ * expand to MAX_TRACKED_NOTES note-off commands */
+static uint32_t midi_busy_threshold = RAWBUF - 2;
 
 uint32_t MIDI_BufferFree(void) {
     uint32_t used = (midi_out_buff.head - midi_out_buff.tail) & RAWBUF_BITS;
@@ -109,6 +113,7 @@ channel tracked_channels[MAX_TRACKED_CHANNELS];
 
 static struct {
     Bit8u status;
+    Bit8u wire_status;  // last channel status byte actually sent, for running status
     Bit8u cmd_len;
     Bit8u cmd_pos;
     Bit8u cmd_buf[8];
@@ -163,7 +168,7 @@ __force_inline static void PlayMsg(Bit8u* msg, Bitu len)
         critical_section_exit(&midi_crit);
     }
     uint32_t used = (midi_out_buff.head - midi_out_buff.tail) & RAWBUF_BITS;
-    midi_output_busy = used >= (RAWBUF - 2);
+    midi_output_busy = used >= midi_busy_threshold;
 }
 
 __force_inline static void send_midi_byte_now(Bit8u byte) {
@@ -187,6 +192,7 @@ __force_inline static void FakeAllNotesOff(Bit8u chan)
         MIDI_note_off[1]=pChan->notes[note];
         PlayMsg(MIDI_note_off,3);
     }
+    if (pChan->used) midi.wire_status=0;    // injected note-offs broke the host's running status
 
     pChan->used=0;
     pChan->next=0;
@@ -206,7 +212,20 @@ void MIDI_RawOutByte(Bit8u data) {
         midi.cmd_pos=0;
         midi.cmd_len=MIDI_evt_len[data];
     }
+    /* PicoGUS: act like a real MPU-401 in UART mode: every byte goes straight to the output buffer.
+     * But still parse messages into cmd_buf to support fake all notes off note tracking */
     if (midi.cmd_len) {
+        if (midi.cmd_pos==0) {
+            midi.wire_status=data;
+        } else if (midi.cmd_pos==1 && midi.wire_status!=midi.status) {
+            /* Host is using running status but the status on the wire differs
+               (fake "All Notes Off" injected note-offs): resend it */
+            midi.rt_buf[0]=midi.status;
+            PlayMsg(midi.rt_buf,1);
+            midi.wire_status=midi.status;
+        }
+        midi.rt_buf[0]=data;
+        PlayMsg(midi.rt_buf,1);
         midi.cmd_buf[midi.cmd_pos++]=data;
         if (midi.cmd_pos >= midi.cmd_len) {
             /*if (CaptureState & CAPTURE_MIDI) {
@@ -225,29 +244,20 @@ void MIDI_RawOutByte(Bit8u data) {
                         if (pChan->next==MAX_TRACKED_NOTES) pChan->next=0;
                         if (pChan->used<MAX_TRACKED_NOTES) pChan->used++;
                     }
-
-                    PlayMsg(midi.cmd_buf,midi.cmd_len);
                 }
-                /* SOFTMPU: Test for "All Notes Off" */
+                /* PicoGUS: Test for "All Notes Off": The message itself has
+                   already been sent, and the explicit note-offs follow it. */
                 else if (((midi.status&0xf0)==0xb0) &&
                         (midi.cmd_buf[1]>=0x7b) &&
                         (midi.cmd_buf[1]<=0x7f))
                 {
                     FakeAllNotesOff(midi.status&0x0f);
                 }
-                else
-                {
-                    PlayMsg(midi.cmd_buf,midi.cmd_len);
-                }
-            }
-            else
-            {
-                PlayMsg(midi.cmd_buf,midi.cmd_len);
             }
             midi.cmd_pos=1;         //Use Running status
         }
     }
-    else 
+    else
     {
         midi.rt_buf[0] = data;
         PlayMsg(midi.rt_buf,1);
@@ -269,7 +279,7 @@ __force_inline static bool send_midi_byte() {
     Bit8u data = midi_out_buff.buffer[midi_out_buff.tail];
     midi_out_buff.tail = (midi_out_buff.tail + 1) & RAWBUF_BITS;
     uint32_t used = (midi_out_buff.head - midi_out_buff.tail) & RAWBUF_BITS;
-    midi_output_busy = used >= (RAWBUF - 2);
+    midi_output_busy = used >= midi_busy_threshold;
     critical_section_exit(&midi_crit);
 
     if (midi.sysex.status==0xf0) { // Start
@@ -357,6 +367,7 @@ void MIDI_Init(bool delaysysex,bool fakeallnotesoff){
     }
 
     midi.status=0x00;
+    midi.wire_status=0x00;
     midi.sysex.status=0x00;
     midi.sysex.delay = 0;
     midi.sysex.start = delaysysex ? time_us_32() : 0; // PicoGUS
@@ -365,6 +376,7 @@ void MIDI_Init(bool delaysysex,bool fakeallnotesoff){
     midi.cmd_pos=0;
     midi.cmd_len=0;
     midi.fakeallnotesoff = fakeallnotesoff;
+    midi_busy_threshold = RAWBUF - 2 - (fakeallnotesoff ? 3 * MAX_TRACKED_NOTES : 0);
     midi.available=true;
 
     midi_out_buff.head = midi_out_buff.tail = 0;
