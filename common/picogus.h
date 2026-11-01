@@ -66,6 +66,7 @@ static const char *modenames[8] = {
 #define CMD_WTVOL      0x20 // Wavetable mixer volume
 #define CMD_MPUDELAY   0x21 // MPU sysex delay
 #define CMD_MPUFAKE    0x22 // MPU fake all notes off
+#define CMD_MPUWAIT    0x23 // MPU wait on busy status reads (fast host workaround)
 
 #define CMD_OPLWAIT    0x30 // Adlib speed sensitive fix
 #define CMD_SBTYPE     0x31 // SB type

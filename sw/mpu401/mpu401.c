@@ -107,6 +107,14 @@ typedef enum MpuDataType MpuDataType; /* SOFTMPU */
 
 static bool config_delaysysex = false;
 static bool config_fakeallnotesoff = false;
+/* If true, busy wait for MPU401_BUSY_STATUS_WAIT_US, which holds IOCHRDY high. This
+ * can be used to work around fast timeouts in some games like A-10 Tank Killer that
+ * give up waiting on DRR after only 256 status reads by making those status reads
+ * take longer and give time for the TX ring to drain. Note that this is a quality
+ * of life improvement as a real MPU-401 would have the same issue with these games
+ * on faster systems. */
+static bool config_waitbusystatus = false;
+#define MPU401_BUSY_STATUS_WAIT_US 2
 
 static struct {
     bool intelligent;
@@ -216,6 +224,7 @@ __force_inline Bit8u MPU401_ReadStatus(void) { /* SOFTMPU */
         (mpu.mode==M_UART && (int32_t)(time_us_32() - uart_latch_busy_until) < 0)) ret|=0x40;
     if (!mpu.queue_used) ret|=0x80;
     critical_section_exit(&mpu_crit);
+    if (config_waitbusystatus && (ret & 0x40)) busy_wait_us(MPU401_BUSY_STATUS_WAIT_US);
     return ret;
 }
 
@@ -878,10 +887,11 @@ __force_inline static void MPU401_Reset(void) {
 
 
 /* HardMPU: Initialisation */
-void MPU401_Init(bool delaysysex, bool fakeallnotesoff)
+void MPU401_Init(bool delaysysex, bool fakeallnotesoff, bool waitbusystatus)
 {
     config_delaysysex = delaysysex;
     config_fakeallnotesoff = fakeallnotesoff;
+    config_waitbusystatus = waitbusystatus;
     if (!critical_section_is_initialized(&mpu_crit)) {
         critical_section_init(&mpu_crit);
     }

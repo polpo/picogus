@@ -50,7 +50,8 @@ static const Settings defaultSettings = {
     .MPU = {
         .basePort = 0x330,
         .delaySysex = false,
-        .fakeAllNotesOff = false
+        .fakeAllNotesOff = false,
+        .waitBusyStatus = false
     },
     .CMS = {
         .basePort = 0x220

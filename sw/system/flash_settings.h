@@ -25,7 +25,7 @@ extern "C" {
 #include <stdbool.h>
 
 #define SETTINGS_MAGIC 0x70677573  // "pgus" in ascii
-#define SETTINGS_VERSION 5
+#define SETTINGS_VERSION 6
 
 // When adding new fields to Settings struct:
 // 1. Increment SETTINGS_VERSION
@@ -60,6 +60,7 @@ typedef struct Settings {
         uint16_t basePort;
         bool delaySysex : 1;
         bool fakeAllNotesOff : 1;
+        bool waitBusyStatus : 1;
     } MPU;
     struct {
         uint16_t basePort;

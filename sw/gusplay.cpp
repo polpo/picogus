@@ -152,7 +152,7 @@ void play_gus() {
 #endif
 
 #ifdef SOUND_MPU
-    MPU401_Init(settings.MPU.delaySysex, settings.MPU.fakeAllNotesOff);
+    MPU401_Init(settings.MPU.delaySysex, settings.MPU.fakeAllNotesOff, settings.MPU.waitBusyStatus);
 #endif
 
     init_audio();

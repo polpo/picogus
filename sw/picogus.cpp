@@ -212,6 +212,7 @@ __force_inline void select_picogus(uint8_t value) {
         break;
     case CMD_MPUDELAY: // MPU sysex delay
     case CMD_MPUFAKE: // MPU fake all notes off
+    case CMD_MPUWAIT: // MPU wait on busy status reads
         break;
     case CMD_OPLWAIT: // Adlib speed sensitive fix
         break;
@@ -357,13 +358,19 @@ __force_inline void write_picogus_high(uint8_t value) {
     case CMD_MPUDELAY: // MPU SYSEX delay
         settings.MPU.delaySysex = value;
 #ifdef SOUND_MPU
-        MPU401_Init(settings.MPU.delaySysex, settings.MPU.fakeAllNotesOff);
+        MPU401_Init(settings.MPU.delaySysex, settings.MPU.fakeAllNotesOff, settings.MPU.waitBusyStatus);
 #endif
         break;
     case CMD_MPUFAKE: // MPU fake all notes off
         settings.MPU.fakeAllNotesOff = value;
 #ifdef SOUND_MPU
-        MPU401_Init(settings.MPU.delaySysex, settings.MPU.fakeAllNotesOff);
+        MPU401_Init(settings.MPU.delaySysex, settings.MPU.fakeAllNotesOff, settings.MPU.waitBusyStatus);
+#endif
+        break;
+    case CMD_MPUWAIT: // MPU wait on busy status reads
+        settings.MPU.waitBusyStatus = value;
+#ifdef SOUND_MPU
+        MPU401_Init(settings.MPU.delaySysex, settings.MPU.fakeAllNotesOff, settings.MPU.waitBusyStatus);
 #endif
         break;
     case CMD_OPLWAIT: // Adlib speed sensitive fix
@@ -595,6 +602,8 @@ __force_inline uint8_t read_picogus_high(void) {
         return settings.MPU.delaySysex;
     case CMD_MPUFAKE: // MPU fake all notes off
         return settings.MPU.fakeAllNotesOff;
+    case CMD_MPUWAIT: // MPU wait on busy status reads
+        return settings.MPU.waitBusyStatus;
     case CMD_OPLWAIT: // Adlib speed sensitive fix
         return settings.SB.oplSpeedSensitive;
     case CMD_MOUSEPORT:  // USB Mouse port (0 - disabled)

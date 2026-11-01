@@ -249,7 +249,7 @@ void play_adlib() {
 #endif
 
 #ifdef SOUND_MPU
-    MPU401_Init(settings.MPU.delaySysex, settings.MPU.fakeAllNotesOff);
+    MPU401_Init(settings.MPU.delaySysex, settings.MPU.fakeAllNotesOff, settings.MPU.waitBusyStatus);
 #endif
 
 #if SOUND_SB

@@ -93,6 +93,7 @@ static void usage(card_mode_t mode, bool print_all)
     pageprintf("   /mpuport x    - set the base port of the MPU-401. Default: 330, 0 to disable\n");
     pageprintf("   /mpudelay 1|0 - delay SYSEX (for rev.0 Roland MT-32)\n");
     pageprintf("   /mpufake 1|0  - fake all notes off (for Roland RA-50)\n");
+    pageprintf("   /mpuwait 1|0  - extra wait on busy status reads (for fast PCs)\n");
     if (mode == GUS_MODE || print_all) {
         //         "...............................................................................\n"
         pageprintf("GUS settings:\n");
@@ -1057,6 +1058,7 @@ ParseCommand parseCommands[] = {
     {"/mpuport", cmdSendPort, CMD_MPUPORT, ARG_REQUIRE, "330"},
     {"/mpudelay", cmdSendBool, CMD_MPUDELAY, ARG_REQUIRE, "false"},
     {"/mpufake", cmdSendBool, CMD_MPUFAKE, ARG_REQUIRE, "false"},
+    {"/mpuwait", cmdSendBool, CMD_MPUWAIT, ARG_REQUIRE, "false"},
     {"/tandyport", cmdSendPort, CMD_TANDYPORT, ARG_REQUIRE, "2c0"},
     {"/cmsport", cmdSendPort, CMD_CMSPORT, ARG_REQUIRE, "220"},
     {"/mousecom", cmdSendMousePort, CMD_MOUSEPORT, ARG_REQUIRE, "0"},
@@ -1155,7 +1157,8 @@ static void printPicoGus()
     uint16_t mpuPort = ctrlGetUint16(CMD_MPUPORT);
     if (mpuPort) {
         printf("MPU-401: port %x; sysex delay: %s, ", mpuPort, ctrlGetUint8(CMD_MPUDELAY) ? "on" : "off");
-        printf("fake all notes off: %s\n", ctrlGetUint8(CMD_MPUFAKE) ? "on" : "off");
+        printf("fake all notes off: %s, ", ctrlGetUint8(CMD_MPUFAKE) ? "on" : "off");
+        printf("extra wait: %s\n", ctrlGetUint8(CMD_MPUWAIT) ? "on" : "off");
     } else {
         printf("MPU-401 disabled\n");
     }
