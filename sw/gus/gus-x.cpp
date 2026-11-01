@@ -900,7 +900,8 @@ static void GUSReset(void) {
         // myGUS.fixed_44k_output = false;
 
         myGUS.DMAControl = 0x00;
-        myGUS.mixControl = 0x0b;    // latches enabled by default LINEs disabled
+        // Start up with line out enabled and ready to go, unlike real GUS
+        myGUS.mixControl = 0x08;
         myGUS.TimerControl = 0x00;
         myGUS.SampControl = 0x00;
         myGUS.ActiveChannels = 14;
@@ -1864,6 +1865,10 @@ extern uint32_t GUS_sample_stereo(void) {
         guschan[c]->generateSample(accum);
     }
     CheckVoiceIrq();
+    // If mixer line output is disabled, mute
+    if (myGUS.mixControl & 0x02) {
+        return 0;
+    }
     int16_t l = clamp16(accum[0]);
     int16_t r = clamp16(accum[1]);
     return ((uint32_t)(uint16_t)l) | ((uint32_t)(uint16_t)r << 16);
