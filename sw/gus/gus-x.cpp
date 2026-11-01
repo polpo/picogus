@@ -650,8 +650,11 @@ class GUSChannels {
                 if (RampCtrl & 0x10) RampCtrl^=0x40;
                 RampVol = (RampCtrl & 0x40) ? (uint32_t)((int32_t)RampEnd - RampLeft) : (uint32_t)((int32_t)RampStart + RampLeft);
             } else {
+                /* a non-looping ramp stops before applying the increment that would make it cross
+                 * its boundary, so stop one step short of the end */
                 RampCtrl|=1;    //Stop the channel
-                RampVol = (RampCtrl & 0x40) ? RampStart : RampEnd;
+                critical_section_exit(&gus_crit);
+                return;
             }
             if ((int32_t)RampVol < (int32_t)0) RampVol=0;
             if (RampVol > ((4096 << RAMP_FRACT)-1)) RampVol=((4096 << RAMP_FRACT)-1);
