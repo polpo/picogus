@@ -129,6 +129,7 @@ static struct {
         Bit8s data_onoff;
         Bitu command_byte,cmd_pending;
         Bit8u tmask,cmask,amask;
+        Bit8u ticks_pending; /* sequencer ticks that arrived while a data request was outstanding */
         Bit16u midi_mask;
         Bit16u req_mask;
         Bit8u channel,old_chan;
@@ -642,14 +643,10 @@ __force_inline static void UpdateConductor(void) {
     mpu.state.req_mask|=(1<<9);
 }
 
-uint32_t MPU401_EventHandler(Bitu val) {
-    /* SOFTMPU */
-    /* putchar('.'); */
+/* sequencer tick: advance the track, conductor, and clock-to-host counters */
+__force_inline static void MPU401_Tick(void) {
     Bit8u i;
-    if (mpu.mode==M_UART) return 0;
-    critical_section_enter_blocking(&mpu_crit);
-    if (mpu.state.irq_pending) goto next_event;
-        if (mpu.state.playing) {
+    if (mpu.state.playing) {
         for (i=0;i<8;i++) { /* Decrease counters */
             if (mpu.state.amask&(1<<i)) {
                 mpu.playbuf[i].counter--;
@@ -668,6 +665,23 @@ uint32_t MPU401_EventHandler(Bitu val) {
             mpu.state.req_mask|=(1<<13);
         }
     }
+}
+
+uint32_t MPU401_EventHandler(Bitu val) {
+    /* PicoGUS */
+    /* putchar('.'); */
+    if (mpu.mode==M_UART) return 0;
+    critical_section_enter_blocking(&mpu_crit);
+    if (mpu.state.irq_pending) {
+      /* An irq for data request is outstanding, but we should still count
+       * sequencer ticks. A real MPU-401 keeps counting ticks in its timer ISR
+       * and the main loop catches up after the request is served. This keeps
+       * tempo correct in games like Gateway which otherwise would run slow.
+       */
+      if (mpu.state.ticks_pending < 255) mpu.state.ticks_pending++;
+      goto next_event;
+    }
+    MPU401_Tick();
     if (!mpu.state.irq_pending && mpu.state.req_mask) MPU401_EOIHandler(0);
 next_event:
     critical_section_exit(&mpu_crit);
@@ -694,6 +708,11 @@ __force_inline uint32_t MPU401_EOIHandler(Bitu val) {
         else UpdateTrack(mpu.state.channel);
     }
     mpu.state.irq_pending=false;
+    /* Catch up on ticks that happend while a data request was outstanding */
+    while (mpu.state.ticks_pending && !mpu.state.req_mask && !mpu.state.send_now) {
+        mpu.state.ticks_pending--;
+        MPU401_Tick();
+    }
     if (!mpu.state.req_mask) {
         if (val) {
             critical_section_exit(&mpu_crit);
@@ -749,6 +768,7 @@ __force_inline static void MPU401_Reset(void) {
     mpu.state.data_onoff=-1;
     mpu.state.command_byte=0;
     mpu.state.block_ack=false;
+    mpu.state.ticks_pending=0;
     mpu.clock.tempo=100;
     mpu.clock.timebase=120;
     mpu.clock.tempo_rel=0x40;
