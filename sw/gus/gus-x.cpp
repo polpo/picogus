@@ -184,6 +184,7 @@ struct GFGus {
     uint32_t basefreq;
     uint32_t frame;       // GF1 frame counter, the ramp rate divider clock (gf1.v ramp_cnt)
     uint32_t frame_accum; // fixed 44.1 kHz mode: GF1 frames accumulate at sample_rates[] per output frame
+    uint32_t irq_relatch_frame; // frame of the last 8F ACK, no new voice IRQ latch until after this frame
     bool frame_tick;      // a GF1 frame began on this output frame; ramps only advance on these
 
     struct GusTimer {
@@ -262,6 +263,7 @@ class GUSChannels {
 
         uint8_t PanPot;
         uint8_t channum;
+        uint32_t irq_hold_frame;
         uint32_t irqmask;
         uint32_t PanLeft;
         uint32_t PanRight;
@@ -299,6 +301,7 @@ class GUSChannels {
             PanLeft = 0;
             PanRight = 0;
             PanPot = 0x7;
+            irq_hold_frame = 0;
             sample_cache = {{0}, -1, -1};
         }
 
@@ -565,7 +568,7 @@ class GUSChannels {
                     critical_section_exit(&gus_crit);
                 }
             }
-            else if (WaveCtrl & WCTRL_IRQENABLED) {
+            else if ((WaveCtrl & WCTRL_IRQENABLED) && (int32_t)(myGUS.frame - irq_hold_frame) > 0) {
                 /* Undocumented behavior observed on real GUS hardware: A stopped voice will still rapid-fire IRQs
                  * if IRQ enabled and current position <= start position OR current position >= end position */
                 if (WaveCtrl & WCTRL_DECREASING/*backwards (direction)*/)
@@ -617,6 +620,7 @@ class GUSChannels {
                  * only happens on divider frames. */
                 if (!(RampCtrl & 0x20)) return;
                 if (!RampDividerFrame()) return;
+                if ((int32_t)(myGUS.frame - irq_hold_frame) <= 0) return;
                 if (RampEndReached(next)) {
                     critical_section_enter_blocking(&gus_crit);
                     myGUS.RampIRQ |= irqmask;
@@ -872,6 +876,7 @@ static void GUSReset(void) {
         myGUS.frame = 0;
         myGUS.frame_accum = 0;
         myGUS.frame_tick = false;
+        myGUS.irq_relatch_frame = 0;
 
         myGUS.timers[0].delay = 80;
         myGUS.timers[1].delay = 320;
@@ -994,36 +999,33 @@ static INLINE void GUS_CheckIRQ(void) {
 // Inner version: caller must already hold gus_crit
 __force_inline static void CheckVoiceIrq_unlocked(void) {
     Bitu totalmask=(myGUS.RampIRQ|myGUS.WaveIRQ) & myGUS.ActiveMask;
-    if (!totalmask) {
+    // gf1.v: the GF1 has global latches for wave IRQ, ramp IRQ, and the responsible voice number.
+    // Once set they're only cleared by an 8F status read, even if the voice control write clears
+    // the voice's own IRQ pending bit. See the comments in the 8F status read handler for more
+    // background regarding irq_relatch_frame.
+    if (!totalmask || (myGUS.IRQStatus & 0x60) || (int32_t)(myGUS.frame - myGUS.irq_relatch_frame) <= 1) {
         GUS_CheckIRQ();
         return;
     }
 
-    // Only active channels can raise IRQ
-    if (myGUS.RampIRQ & myGUS.ActiveMask) myGUS.IRQStatus|=0x40;
-    if (myGUS.WaveIRQ & myGUS.ActiveMask) myGUS.IRQStatus|=0x20;
-    // mega hack
-    // PIC_DeActivateIRQ();
-    GUS_CheckIRQ();
+    uint32_t check;
     for (;;) {
-        uint32_t check=(1u << myGUS.IRQChan);
+        check=(1u << myGUS.IRQChan);
         if (totalmask & check) {
             break;
         }
         myGUS.IRQChan++;
         if (myGUS.IRQChan>=myGUS.ActiveChannels) myGUS.IRQChan=0;
     }
+    if (myGUS.RampIRQ & check) myGUS.IRQStatus|=0x40;
+    if (myGUS.WaveIRQ & check) myGUS.IRQStatus|=0x20;
+    GUS_CheckIRQ();
 }
 
 __force_inline static void CheckVoiceIrq(void) {
     critical_section_enter_blocking(&gus_crit);
     CheckVoiceIrq_unlocked();
     critical_section_exit(&gus_crit);
-}
-
-uint32_t CheckVoiceIrq_async(Bitu val) {
-    CheckVoiceIrq();
-    return 0;
 }
 
 __force_inline static uint16_t ExecuteReadRegister(void) {
@@ -1099,12 +1101,23 @@ __force_inline static uint16_t ExecuteReadRegister(void) {
         tmpreg=myGUS.IRQChan|0x20;
         uint32_t mask;
         mask=1u << myGUS.IRQChan;
-        if (!(myGUS.RampIRQ & mask)) tmpreg|=0x40;
-        if (!(myGUS.WaveIRQ & mask)) tmpreg|=0x80;
-        myGUS.RampIRQ&=~mask;
-        myGUS.WaveIRQ&=~mask;
+        // gf1.v: report and clear the global latched IRQ type(s), not the voice's current pending bits
+        if (myGUS.IRQStatus & 0x40) myGUS.RampIRQ &= ~mask; else tmpreg|=0x40;
+        if (myGUS.IRQStatus & 0x20) myGUS.WaveIRQ &= ~mask; else tmpreg|=0x80;
         myGUS.IRQStatus&=0x9f;
-        CheckVoiceIrq_unlocked();
+        // This is an approximation of the real GF1, where the 8F read clears the global wave/ramp
+        // IRQ latches, and re-latching does not happen until the voice service loop visits the ACKed
+        // voice. This re-triggers the IRQ but only after the delay introduced by the service loop.
+        // Without that delay, titles like Dope could occasionally miss the new IRQ and never ack
+        // it, hanging music playback.
+        // NOTE that a frame delay of 1 is an approximation of the service loop delay, which
+        // depending on which voice in the loop it's on, could be less than 1 frame.
+        if ((tmpreg & 0xc0) != 0xc0) {
+            guschan[myGUS.IRQChan]->irq_hold_frame = myGUS.frame + 1;
+            myGUS.irq_relatch_frame = myGUS.frame;
+            if (++myGUS.IRQChan >= myGUS.ActiveChannels) myGUS.IRQChan = 0;
+        }
+        GUS_CheckIRQ();
         critical_section_exit(&gus_crit);
         return (uint16_t)(tmpreg << 8);
     default:
