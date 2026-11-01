@@ -1079,6 +1079,15 @@ __force_inline static uint16_t ExecuteReadRegister(void) {
         // 10 bit fractional wave address
         if (curchan) return (uint16_t)(curchan->WaveEnd >> 1);
         else return 0x0000;
+    case 0x86: // Channel volume ramp rate register
+        if (curchan) return (uint16_t)(curchan->RampRate << 8);
+        else return 0x0000;
+    case 0x87: // Channel volume ramp start register
+        if (curchan) return (uint16_t)((curchan->RampStart >> (4+RAMP_FRACT)) << 8);
+        else return 0x0000;
+    case 0x88: // Channel volume ramp end register
+        if (curchan) return (uint16_t)((curchan->RampEnd >> (4+RAMP_FRACT)) << 8);
+        else return 0x0000;
     case 0x89: // Channel volume register
         if (curchan) return (uint16_t)((curchan->RampVol >> RAMP_FRACT) << 4);
         else return 0x0000;
@@ -1149,6 +1158,8 @@ static uint32_t GUS_TimerEventHandler(Bitu val) {
 __force_inline static void ExecuteGlobRegister(void) {
     int i;
 //  if (myGUS.gRegSelect|1!=0x44) LOG_MSG("write global register %x with %x", myGUS.gRegSelect, myGUS.gRegData);
+    /* gf1.v:888: voice register writes (select < 0x40, including 0x0E) are dropped while the GF1 is held in reset */
+    if (myGUS.gRegSelect < 0x40 && !(GUS_reset_reg & 1)) return;
     switch(myGUS.gRegSelect) {
     case 0x0:  // Channel voice control register
         // TODO figure out what FillUp even does!!
