@@ -47,11 +47,6 @@ typedef uint16_t Bit16u;
 typedef int32_t Bits;
 typedef int8_t Bit8s;
 
-// autodetect when Gateway runs by watching for it setting this message on the MT-32's LCD
-static const char* gateway_msg = "\xf0\x41\x10\x16\x12\x20\x00\x00       Gateway";
-static uint8_t gateway_pos = 0;
-static uint8_t gateway_len = 22;
-
 #include "system/pico_pic.h"
 
 void MIDI_Init(bool delaysysex,bool fakeallnotesoff);
@@ -87,6 +82,11 @@ static void MPU401_EOIHandlerDispatch(void);
 #define MPU401_QUEUE 32
 #define MPU401_TIMECONSTANT 60000000
 #define MPU401_RESETBUSY 14000
+/* A real MPU-401 delays for ~33ms when reset from UART mode while still
+ * draining the TX. When it's over it re-inits and discards the TX ring.
+ * Short sysex messages sent right before the reset survive and get flushed
+ * during this delay (this happens in Gateway). */
+#define MPU401_RESETBUSY_UART 33000
 
 enum MpuMode { M_UART,M_INTELLIGENT };
 typedef enum MpuMode MpuMode; /* SOFTMPU */
@@ -105,7 +105,6 @@ typedef enum MpuDataType MpuDataType; /* SOFTMPU */
 #define MSG_MPU_CLOCK           0xfd
 #define MSG_MPU_ACK             0xfe
 
-static bool config_versionfix = false;
 static bool config_delaysysex = false;
 static bool config_fakeallnotesoff = false;
 
@@ -284,14 +283,11 @@ __force_inline void MPU401_WriteCommand(Bit8u val, bool crit) { /* SOFTMPU */
             QueueByte(0);
             goto write_command_return;
         case 0xac:      /* Request version */
-            if (config_versionfix) {
-                // Hack for Gateway
-                QueueByte(MPU401_VERSION);
-                QueueByte(MSG_MPU_ACK);
-            } else {
-                QueueByte(MSG_MPU_ACK);
-                QueueByte(MPU401_VERSION);
-            }
+            /* We used to have a workaround for Gateway here, but now that we act
+             * more like a real MPU-401, we don't have to do that to hide the buggy
+             * behavior in Gateway's MIDI driver */
+            QueueByte(MSG_MPU_ACK);
+            QueueByte(MPU401_VERSION);
             goto write_command_return;
         case 0xad:      /* Request revision */
             QueueByte(MSG_MPU_ACK);
@@ -324,13 +320,24 @@ __force_inline void MPU401_WriteCommand(Bit8u val, bool crit) { /* SOFTMPU */
             break;
         case 0xff:      /* Reset MPU-401 */
             /*LOG(LOG_MISC,LOG_NORMAL)("MPU-401:Reset %X",val);*/ /* SOFTMPU */
-            PIC_AddEvent(&MPU401_ResetDone, MPU401_RESETBUSY, 0);
+            PIC_AddEvent(&MPU401_ResetDone, mpu.mode==M_UART ? MPU401_RESETBUSY_UART : MPU401_RESETBUSY, 0);
             mpu.state.reset=true;
-            if (mpu.mode==M_UART) {
+            {
+                /* On a real MPU-401, the bus data latch is in the gate array, not the MCU. This
+                 * means that during reset, a byte presented to the host survives. 
+                 * Gateway unintentionally relies on this because its buggy driver times
+                 * out getting the version, issues a reset, and reads the version again. */
+                bool latched = mpu.queue_used != 0;
+                Bit8u latched_byte = latched ? mpu.queue[mpu.queue_pos >= MPU401_QUEUE ? mpu.queue_pos - MPU401_QUEUE : mpu.queue_pos] : 0;
+                if (mpu.mode==M_UART) {
+                    MPU401_Reset();     // ring flushed later by MPU401_ResetDoneHandler, see MPU401_RESETBUSY_UART
+                    if (latched) QueueByte(latched_byte);
+                    goto write_command_return;      //do not send ack in UART mode
+                }
                 MPU401_Reset();
-                goto write_command_return;      //do not send ack in UART mode
+                MIDI_ClearBuffer();     /* Real MPU-401: intelligent mode reset reinits immediately and clears buffered MIDI output */
+                if (latched) QueueByte(latched_byte);
             }
-            MPU401_Reset();
             break;
         case 0x3f:      /* UART mode */
             /*LOG(LOG_MISC,LOG_NORMAL)("MPU-401:Set UART mode %X",val);*/ /* SOFTMPU */
@@ -395,16 +402,6 @@ __force_inline void MPU401_WriteData(Bit8u val, bool crit) { /* SOFTMPU */
     if (mpu.mode==M_UART) {
         MIDI_RawOutByte(val);
         uart_latch_busy_until = time_us_32() + MPU401_UART_LATCH_US;
-        // autodetect when Gateway runs
-        if (val == gateway_msg[gateway_pos]) {
-            ++gateway_pos;
-            if (gateway_pos == gateway_len) {
-                config_versionfix = true;
-                gateway_pos = 0;
-            }
-        } else {
-            gateway_pos = 0;
-        }
         goto write_return;
     }
     switch (mpu.state.command_byte) {       /* 0xe# command data */
@@ -720,6 +717,7 @@ __force_inline uint32_t MPU401_EOIHandler(Bitu val) {
 static uint32_t  MPU401_ResetDoneHandler(Bitu val) { /* SOFTMPU */
     critical_section_enter_blocking(&mpu_crit);
     mpu.state.reset=false;
+    MIDI_ClearBuffer();
     if (mpu.state.cmd_pending) {
         MPU401_WriteCommand(mpu.state.cmd_pending-1, false);
         mpu.state.cmd_pending=0;
@@ -770,7 +768,6 @@ __force_inline static void MPU401_Reset(void) {
 /* HardMPU: Initialisation */
 void MPU401_Init(bool delaysysex, bool fakeallnotesoff)
 {
-    config_versionfix = false;
     config_delaysysex = delaysysex;
     config_fakeallnotesoff = fakeallnotesoff;
     if (!critical_section_is_initialized(&mpu_crit)) {

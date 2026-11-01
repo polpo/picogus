@@ -264,11 +264,31 @@ void MIDI_RawOutByte(Bit8u data) {
     }
 }
 
+/* Discard buffered MIDI output like a real MPU-401 at reset */
+void MIDI_ClearBuffer(void) {
+    critical_section_enter_blocking(&midi_crit);
+    /* If the sysex delay option is holding output back, what's buffered may be
+     * bytes a real MPU-401 would already have sent, so keep them. */
+    if (!midi.sysex.start || (time_us_32() - midi.sysex.start) >= midi.sysex.delay) {
+        midi_out_buff.tail = midi_out_buff.head;
+        midi_output_busy = false;
+    }
+    critical_section_exit(&midi_crit);
+    midi.status=0;
+    midi.wire_status=0;
+    midi.cmd_pos=0;
+    midi.cmd_len=0;
+}
+
 __force_inline static bool send_midi_byte() {
     if (uart_tx_status()) return false;   // can't send yet
     if (midi_out_buff.head == midi_out_buff.tail) return false; // nothing to send
     /* putchar('s'); */
     critical_section_enter_blocking(&midi_crit);
+    if (midi_out_buff.head == midi_out_buff.tail) { // re-check, MIDI_ClearBuffer may be racing us
+        critical_section_exit(&midi_crit);
+        return false;
+    }
     if (midi.sysex.start) {
         Bit32u passed_ticks = time_us_32() - midi.sysex.start;
         if (passed_ticks < midi.sysex.delay) { // still waiting for sysex delay
@@ -380,6 +400,7 @@ void MIDI_Init(bool delaysysex,bool fakeallnotesoff){
     midi.available=true;
 
     midi_out_buff.head = midi_out_buff.tail = 0;
+    midi_output_busy = false;
         
     /* SOFTMPU: Display welcome message on MT-32 */
     for (i=0;i<30;i++)
