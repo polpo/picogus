@@ -369,6 +369,8 @@ void send_midi_bytes(int maxbytes) {
             break;
         }
     }
+    /* Flush any MPU-401 output that was deferred for lack of buffer room */
+    MPU401_FlushDeferred();
 }
 
 

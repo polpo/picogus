@@ -47,6 +47,7 @@ void send_midi_bytes(int maxbytes);
 uint32_t MIDI_BufferFree(void);
 void MIDI_ClearBuffer(void);
 void MIDI_RawOutByte(Bit8u data);
+void MPU401_FlushDeferred(void);
 
 #ifdef __cplusplus
 }
