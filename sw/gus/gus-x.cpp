@@ -1657,7 +1657,15 @@ GUS_DMA_isr() {
     } else {
         myGUS.dmaAddr = (myGUS.dmaAddr + 1) & 0xFFFFFu; // wrap at 1MB
         /* keep going */
-        PIC_AddEvent(&GUS_DMA_Event, myGUS.dmaInterval, 0);
+        if (myGUS.dmaInterval == 1 && !gpio_get(DACK_PIN)) {
+            // For a DMA interval of one, re-trigger DRQ immediately instead of round tripping
+            // through the alarm pool. This helps keep save two IRQs per DMA byte and prevent
+            // starving the audio sample IRQ. Typical DMA cycle time in single cycle mode is
+            // approximately 1.6us which is just about what ULTRAWRD says anyway.
+            GUS_DMA_EventHandler(0);
+        } else {
+            PIC_AddEvent(&GUS_DMA_Event, myGUS.dmaInterval, 0);
+        }
     }
 }
 irq_handler_t GUS_DMA_isr_pt = GUS_DMA_isr;
