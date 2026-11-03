@@ -1440,7 +1440,11 @@ __force_inline uint8_t read_gus(Bitu port) {
     case 0x107:
         if((myGUS.gDramAddr & myGUS.gDramAddrMask) < myGUS.memsize) {
 #ifdef PSRAM
-            return psram_read8(&psram_spi, myGUS.gDramAddr & myGUS.gDramAddrMask);
+            // This peek on core 0 may happen while core 1 is writing to PSRAM asynchronously (for
+            // example, the GUSDK's gf1_delay() uses peeks, which may be called interleaved with DMA
+            // uploads). Use the cross core version of read8 so they don't stomp on each other.
+            // TODO: need to measure if we hold IOCHRDY for too long here
+            return psram_read8_xcore(&psram_spi, myGUS.gDramAddr & myGUS.gDramAddrMask);
 #else
             return GUSRam[myGUS.gDramAddr & myGUS.gDramAddrMask];
 #endif
@@ -1531,7 +1535,7 @@ __force_inline void write_gus(Bitu port, Bitu val) {
     case 0x107:
         if ((myGUS.gDramAddr & myGUS.gDramAddrMask) < myGUS.memsize) {
 #ifdef PSRAM
-            psram_write8(&psram_spi, myGUS.gDramAddr & myGUS.gDramAddrMask, (uint8_t)val);
+            psram_write8_xcore(&psram_spi, myGUS.gDramAddr & myGUS.gDramAddrMask, (uint8_t)val); // see 3X7 read
             // psram_write8_async(&psram_spi, myGUS.gDramAddr & myGUS.gDramAddrMask, (uint8_t)val);
 #else
             GUSRam[myGUS.gDramAddr & myGUS.gDramAddrMask] = (uint8_t)val;
