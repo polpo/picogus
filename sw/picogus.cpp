@@ -1346,6 +1346,18 @@ int main()
         }
 #endif // TEST_PSRAM
     }
+#ifdef SOUND_GUS
+    // test_psram() leaves a 0..255 sawtooth in every byte. Real GF1 DRAM powers up mostly flat,
+    // and some games play through memory they never loaded: Star Control 2 plays effects
+    // backwards from base+len-1 down to start = end = base with its first sample at address 0,
+    // and the GF1 cannot stop at start 0 (gf1.v compares the wrapped 29-bit address against
+    // start, so "new < 0" never holds), so the voice runs on through 0xFFFFF and plays the top
+    // of DRAM. Clear the 1MB once so that plays silence instead of the test pattern.
+    DBG_PUTS("Clearing GUS DRAM...");
+    for (uint32_t addr = 0; addr < 1024u * 1024u; addr += 4) {
+        psram_write32(&psram_spi, addr, 0);
+    }
+#endif // SOUND_GUS
 #endif // PSRAM
 #endif // PSRAM_CORE0
 

@@ -19,13 +19,13 @@ set(PICO_COPY_TO_RAM 1)
 include(pico_sdk_import.cmake)
 
 project(picogus
-    VERSION "4.1.1"
+    VERSION "4.2.0"
     LANGUAGES C CXX ASM
 )
 
 # Full version string including pre-release suffix (if any).
 # CMake's project(VERSION) only allows numeric components, so the suffix lives here.
-set(PICOGUS_VERSION "${CMAKE_PROJECT_VERSION}")
+set(PICOGUS_VERSION "${CMAKE_PROJECT_VERSION}-beta.0")
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)

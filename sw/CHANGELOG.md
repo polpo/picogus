@@ -1,3 +1,46 @@
+# v4.2.0
+
+## Fixes/improvements
+
+### GUS mode
+
+GUS emulation has received a ton of fixes under the hood, solving a lot of long-outstanding issues and annoyances. Huge thanks to [nukeykt's LPC-GUS](https://github.com/nukeykt/LPC-GUS) `gf1.v`, reverse engineered from a die shot of a GF1 as a reference.
+
+- Hocus Pocus now works with the Ultramid version bundled with it. It polls the DRAM peek command at the same time as it DMAs new sound effect samples, which could hang the rp2040-psram library.
+- Fixes sound stuttering in Hocus Pocus and probably other games that stream audio: when the DMA interval is 1, DRQ is now triggered immediately instead of via alarm which saves IRQ round trips.
+- The line-out disable bit now mutes the output. This fixes hanging notes still playing when paused in CapaMOD.
+- The GF1's voice IRQ latch and its timing is emulated. This fixes music occasionally stopping in the demo Dope (and perhaps others).
+- Volume ramps are now applied once per GF1 frame, which is more accurate and more efficient. A stopped ramp now retriggers IRQs and a finished non-looping ramp stops one increment short of its end value.
+- Pan attenuation now uses the GF1's ROM values from `gf1.v`. Hardware volume goes back to DOSBox's implementation, with fixes.
+- Voices playing back faster than the PSRAM sample cache simply bypass it. Fixes crackles/stutters in _very_ fast playing samples.
+- GF1 timer accuracy: writes to 2X9 are routed to the timers, stopping a timer immediately cancels its IRQ, and the 5us fudge on timer periods is removed.
+- DMA fixes: the DMA rate divider is now in the correct order, DMA address wraps at 1MB, the address advances past the terminal count byte, and unsupported GUS->host DMA requests are ended early instead of getting the ISA DMA state machine stuck.
+- Only active voices set the wave/ramp IRQ status bits.
+- Ramp registers can now be read back, and register writes during reset are dropped.
+- Register 0x8E reads back the active channel count as written, even if we clamp to 14 channels internally.
+- The IRQ line is deasserted when mix control disables the IRQ latches.
+- GUS resets no longer clear the DMA interval override set by pgusinit.
+- Fixes in inter-core synchronization.
+
+### MPU-401
+
+- UART mode and reset now behave like a real MPU-401. Bytes go straight to the MIDI output, DRR reads busy for about 100us after each data write, and a UART mode reset delays about 33ms while the output drains. This fixes Frederik Pohl's Gateway and its buggy driver with no need for workarounds.
+- Sequencer ticks keep counting while a data request is outstanding. This fixes the too-slow tempo in Gateway and probably other Legend Entertainment titles.
+- When the MIDI buffer is full, intelligent mode track output is deferred instead of blocking the ISA bus handler.
+- New `pgusinit /mpuwait 1|0` option. Some games like A-10 Tank Killer give up after only 256 busy status reads. Now that PicoGUS acts even more like a real MPU-401, those titles time out on fast PCs just like with a real card. When mpuwait is enabled, each busy status read raises IOCHRDY an extra 2us to give the MIDI buffer extra time to drain.
+
+### SB mode
+
+- Fixes SB DMA transfers getting out of phase, which caused flipped stereo on SBPro or garbage audio on SB16.
+
+### USB
+
+- Basic (hacky) support for the Logitech G920 wheel as a joystick. A full overhaul of joystick support is coming...
+
+### ISA analyzer
+
+- Captured ISA bus transactions are now timestamped.
+
 # v4.1.1
 
 ## Fixes/improvements
