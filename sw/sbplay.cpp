@@ -293,7 +293,18 @@ void play_adlib() {
     pwm_set_enabled(pwm_slice_num, true);
 #endif
 
+#if OPL_CMD_BUFFER
+    uint8_t opl_led_head = opl_cmd_buffer.head;
+#endif
+
     for (;;) {
+#if OPL_CMD_BUFFER
+        // Toggle LED on OPL activity
+        if (opl_cmd_buffer.head != opl_led_head) {
+            opl_led_head = opl_cmd_buffer.head;
+            gpio_xor_mask(LED_PIN);
+        }
+#endif
 #if CDROM
         cdrom_audio_callback(&cdrom, AUDIO_FIFO_SIZE - STEREO_SAMPLES_PER_SECTOR);
 #endif

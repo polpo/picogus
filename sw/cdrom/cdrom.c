@@ -32,7 +32,10 @@
 #include "cdrom_error_msg.h"
 #include "pico/multicore.h"
 #include "hardware/structs/timer.h"
+#include "hardware/gpio.h"
 #include "audio/volctrl.h"
+
+extern uint LED_PIN;
 
 int32_t cd_audio_volume = (1 << VOLCTRL_FRACT_BITS);
 
@@ -300,6 +303,8 @@ bool cdrom_audio_callback(cdrom_t *dev, uint32_t len) {
                 cdrom_log("CD-ROM %i: Batch read %u sectors at LBA %08X\n", dev->id, sectors_read, dev->seek_pos);
                 dev->seek_pos += sectors_read;
                 dev->audio_staging_sectors = sectors_read;
+                // Toggle LED per CD audio batch read
+                gpio_xor_mask(LED_PIN);
                 dev->audio_staging_index = 0;
                 dev->audio_sector_consumed_pairs = 0;
             } else {
@@ -379,6 +384,8 @@ uint32_t cdrom_audio_callback_simple(cdrom_t *dev, int16_t *buffer, uint32_t len
                 cdrom_log("CD-ROM %i: Batch read %u sectors at LBA %08X\n", dev->id, sectors_read, dev->seek_pos);
                 dev->seek_pos += sectors_read;
                 dev->audio_staging_sectors = sectors_read;
+                // Toggle LED per CD audio batch read
+                gpio_xor_mask(LED_PIN);
                 dev->audio_staging_index = 0;
                 dev->audio_sector_consumed_pairs = 0;
             } else {
@@ -439,6 +446,8 @@ void __inline cdrom_read_data(cdrom_t *dev) {
         // 2048 byte sectors
         dev->ops->read_sector(dev, CD_READ_DATA, dev->data_fifo.data + dev->data_fifo.tail, pos);
         dev->data_fifo.tail = (dev->data_fifo.tail + 2048) & 4095;
+        // Toggle LED per data sector read
+        gpio_xor_mask(LED_PIN);
         dev->req_cur++;
         if(dev->req_cur == dev->req_total) {
             cdrom_output_status(dev);

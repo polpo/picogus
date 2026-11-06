@@ -512,6 +512,8 @@ static void sbdsp_dma_isr(void) {
     // Transfer counting (runs for all cases including reference byte)
     sbdsp.dma_xfer_count_left--;
     if (!sbdsp.dma_xfer_count_left) {
+        // Toggle LED per completed DMA block
+        gpio_xor_mask(LED_PIN);
         sbdsp.dma_done = true;
         if (sbdsp.dma_16bit) {
             sbdsp.irq_16_pending = true;
