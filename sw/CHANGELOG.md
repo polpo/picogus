@@ -21,6 +21,7 @@ GUS emulation has received a ton of fixes under the hood, solving a lot of long-
 - The IRQ line is deasserted when mix control disables the IRQ latches.
 - GUS resets no longer clear the DMA interval override set by pgusinit.
 - Fixes in inter-core synchronization.
+- GUS RAM is cleared at power on. This works around an bug in Star Control II where it plays garbage after the first sample in GUS RAM.
 
 ### MPU-401
 
@@ -46,6 +47,10 @@ GUS emulation has received a ton of fixes under the hood, solving a lot of long-
 ### ISA analyzer
 
 - Captured ISA bus transactions are now timestamped.
+
+### General
+
+Overhauled firmware flashing to be more resilient.
 
 # v4.1.1
 
