@@ -999,7 +999,6 @@ __force_inline void handle_iow(void) {
             pio_sm_put(pio0, IOW_PIO_SM, IO_WAIT);
             // printf("MPU IOW: port: %x value: %x\n", port, iow_read & 0xFF);
             MPU401_WriteData(iow_read & 0xFF, true);
-            gpio_xor_mask(LED_PIN);
             break;
         case 1:
             pio_sm_put(pio0, IOW_PIO_SM, IO_WAIT);

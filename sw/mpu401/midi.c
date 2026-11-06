@@ -38,7 +38,9 @@
 #include <util/delay.h>
 */
 #include "hardware/timer.h"
+#include "hardware/gpio.h"
 #include "pico/critical_section.h"
+extern uint LED_PIN;
 static critical_section_t midi_crit;
 
 /* SOFTMPU: Additional defines, typedefs etc. for C */
@@ -364,10 +366,15 @@ __force_inline static bool send_midi_byte() {
 }
 
 void send_midi_bytes(int maxbytes) {
-    for(int i = 0; i < maxbytes; ++i) {
+    int i;
+    for(i = 0; i < maxbytes; ++i) {
         if (!send_midi_byte()) {
             break;
         }
+    }
+    // Toggle LED once per call that sent MIDI bytes
+    if (i) {
+        gpio_xor_mask(LED_PIN);
     }
     /* Flush any MPU-401 output that was deferred for lack of buffer room */
     MPU401_FlushDeferred();
