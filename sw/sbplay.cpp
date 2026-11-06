@@ -19,6 +19,7 @@
 #include <math.h>
 
 #include "include/pg_debug.h"
+#include "pico/multicore.h"
 
 #if PICO_ON_DEVICE
 
@@ -226,6 +227,10 @@ void audio_sample_handler(void) {
 void play_adlib() {
     DBG_PUTS("starting core 1");
     // flash_safe_execute_core_init();
+#if EMU8950_TLL_FLASH
+    // The emu8950 TLL table lives in flash, so saveSettings() on core 0 must pause this core while it writes flash
+    multicore_lockout_victim_init();
+#endif
     uint32_t start, end;
     set_volume(CMD_OPLVOL);
 

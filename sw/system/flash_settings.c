@@ -23,6 +23,7 @@
 #include "hardware/flash.h"
 #include "hardware/sync.h"
 #include "hardware/clocks.h"
+#include "pico/multicore.h"
 #include "pico/stdlib.h"
 
 static const Settings defaultSettings = {
@@ -202,8 +203,10 @@ void saveSettings(const Settings* settings)
     static_assert(sizeof(Settings) < FLASH_PAGE_SIZE, "Settings struct doesn't fit inside one flash page");
     memcpy(data, settings, sizeof(Settings));
     DBG_PRINTF("doing settings save: ");
-    // No need for flash_safe_execute or stop second core, since it will not touch flash
-    // If the 2nd core will ever touch flash, reconsider this approach!
+    // Pause the 2nd core while flash is busy if it reads flash. Currently only emu8950's TLL table uses flashdata
+    // so firmwares with that enabled register core 1 as a lockout victim.
+    // Time out rather than hang core 0 if core 1 doesn't respond
+    const bool locked_out = multicore_lockout_ready() && multicore_lockout_start_timeout_us(1000);
 
     DBG_PUTCHAR('/');
     uint32_t ints = save_and_disable_interrupts();
@@ -211,6 +214,9 @@ void saveSettings(const Settings* settings)
     DBG_PUTCHAR('/');
     flash_range_program(SETTINGS_SECTOR, data, FLASH_PAGE_SIZE);
     restore_interrupts(ints);
+    if (locked_out) {
+        multicore_lockout_end_blocking();
+    }
     DBG_PRINTF("settings saved");
 }
 
