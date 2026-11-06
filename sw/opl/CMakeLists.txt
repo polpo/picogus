@@ -60,5 +60,7 @@ target_include_directories(opl_dbopl INTERFACE
     ${CMAKE_CURRENT_LIST_DIR}
     ${CMAKE_CURRENT_LIST_DIR}/dbopl
 )
+# DBOPL_WAVE=12 (WAVE_TABLEMUL) uses the faster multiply wave tables instead of the default log-sine
+target_compile_definitions(opl_dbopl INTERFACE DBOPL_WAVE=12)
 target_compile_options(opl_dbopl INTERFACE -O3 -Wno-stringop-overflow)
 target_link_libraries(opl_dbopl INTERFACE pico_audio_i2s hardware_gpio hardware_timer)

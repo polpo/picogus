@@ -24,9 +24,7 @@
 	The generation was based on the MAME implementation but tried to have it use less memory and be faster in general
 	MAME uses much bigger envelope tables and this will be the biggest cause of it sounding different at times
 
-	//TODO Don't delay first operator 1 sample in opl3 mode
 	//TODO Maybe not use class method pointers but a regular function pointers with operator as first parameter
-	//TODO Fix panning for the Percussion channels, would any opl3 player use it and actually really change it though?
 	//TODO Check if having the same accuracy in all frequency multipliers sounds better or not
 
 	//DUNNO Keyon in 4op, switch to 2op without keyoff.
@@ -53,7 +51,8 @@
 namespace DBOPL {
 
 #define OPLRATE		((double)(14318180.0 / 288.0))
-#define TREMOLO_TABLE 52
+//2 chip tremolo periods (105 * 256 samples = 2 * 210 * 64)
+#define TREMOLO_TABLE 105
 
 //Try to use most precision for frequencies
 //Else try to keep different waves in synch
@@ -180,9 +179,10 @@ static const uint16_t WaveMaskTable[8] = {
 };
 
 //Where to start the counter on at keyon
+//Wave 7 starts on its positive peak as on the chip ( 0x400 + 768 = 0x700 )
 static const uint16_t WaveStartTable[8] = {
 	512, 0, 0, 0,
-	0, 512, 512, 256,
+	0, 512, 512, 768,
 };
 #endif
 
@@ -195,10 +195,11 @@ static uint16_t OpOffsetTable[64];
 
 //The lower bits are the shift of the operator vibrato value
 //The highest bit is right shifted to generate -1 or 0 for negation
-//So taking the highest input value of 7 this gives 3, 7, 3, 0, -3, -7, -3, 0
+//So taking the highest input value of 7 this gives 0, 3, 7, 3, 0, -3, -7, -3
+//Same order as the chip (Nuked OPL3 vibpos 0..7)
 static const int8_t VibratoTable[ 8 ] = {	
-	1 - 0x00, 0 - 0x00, 1 - 0x00, 30 - 0x00, 
-	1 - 0x80, 0 - 0x80, 1 - 0x80, 30 - 0x80 
+	30 - 0x00, 1 - 0x00, 0 - 0x00, 1 - 0x00,
+	30 - 0x80, 1 - 0x80, 0 - 0x80, 1 - 0x80
 };
 
 //Shift strength for the ksl value determined by ksl strength
@@ -358,14 +359,16 @@ void Operator::UpdateFrequency(  ) {
 	if ( reg20 & MASK_VIBRATO ) {
 		vibStrength = (uint8_t)(freq >> 7u);
 
+		for ( int i = 0; i < 3; i++ ) {	//The chip shifts the integer ( fnum >> 7 ) by half and shallow
 #ifdef WAVE_PRECISION
-		vibrato = ( (Bitu)vibStrength * freqMul ) >> block;
+			vibrato[i] = ( (Bitu)( vibStrength >> i ) * freqMul ) >> block;
 #else
-		vibrato = ( (Bitu)vibStrength << block ) * freqMul;
+			vibrato[i] = ( (Bitu)( vibStrength >> i ) << block ) * freqMul;
 #endif
+		}
 	} else {
 		vibStrength = 0;
-		vibrato = 0;
+		vibrato[0] = vibrato[1] = vibrato[2] = 0;
 	}
 }
 
@@ -550,7 +553,7 @@ INLINE void Operator::Prepare( const Chip* chip )  {
 	currentLevel = (uint32_t)(totalLevel + (int32_t)(chip->tremoloValue & tremoloMask));
 	waveCurrent = waveAdd;
 	if ( vibStrength >> chip->vibratoShift ) {
-		int32_t add = (int32_t)(vibrato >> chip->vibratoShift);
+		int32_t add = (int32_t)vibrato[ chip->vibratoShift ];	//Shift 0..2 here (vibStrength <= 7)
 		//Sign extend over the shift value
 		int32_t neg = chip->vibratoSign;
 		//Negate the add with -1 or 0
@@ -559,7 +562,13 @@ INLINE void Operator::Prepare( const Chip* chip )  {
 	}
 }
 
-void Operator::KeyOn( uint8_t mask ) {
+//Returns the rate counter phase on the chip's envelope clock, shared by all the operators.
+//The step is half a step ahead and one sample earlier, fitted against Nuked OPL3.
+static inline uint32_t EnvelopePhase( const Chip* chip, uint32_t add ) {
+	return ( ( chip->egSamples - 1u ) * add + ( 1u << 23 ) ) & RATE_MASK;
+}
+
+void Operator::KeyOn( const Chip* chip, uint8_t mask ) {
 	if ( !keyOn ) {
 		//Restart the frequency generator
 #if ( DBOPL_WAVE > WAVE_HANDLER )
@@ -567,17 +576,18 @@ void Operator::KeyOn( uint8_t mask ) {
 #else
 		waveIndex = 0;
 #endif
-		rateIndex = 0;
+		rateIndex = EnvelopePhase( chip, attackAdd );
 		SetState( ATTACK );
 	}
 	keyOn |= mask;
 }
 
-void Operator::KeyOff( uint8_t mask ) {
+void Operator::KeyOff( const Chip* chip, uint8_t mask ) {
 	keyOn &= ~mask;
 	if ( !keyOn ) {
 		if ( state != OFF ) {
 			SetState( RELEASE );
+			rateIndex = EnvelopePhase( chip, releaseAdd );
 		}
 	}
 }
@@ -589,11 +599,12 @@ INLINE Bits Operator::GetWave( Bitu index, Bitu vol ) {
 	return (waveBase[ index & waveMask ] * MulTable[ vol >> ENV_EXTRA ]) >> MUL_SH;
 #elif ( DBOPL_WAVE == WAVE_TABLELOG )
 	int32_t wave = waveBase[ index & waveMask ];
-	uint32_t total = ( wave & 0x7fff ) + vol << ( 3 - ENV_EXTRA );
+	//The sign is applied after the shift as a one's complement, as on the chip
+	uint32_t total = ( wave & 0x7fff ) + ( vol << ( 3 - ENV_EXTRA ) );
 	int32_t sig = ExpTable[ total & 0xff ];
 	uint32_t exp = total >> 8;
 	int32_t neg = wave >> 16;
-	return ((sig ^ neg) - neg) >> exp;
+	return ( sig >> exp ) ^ neg;
 #else
 #error "No valid wave routine"
 #endif
@@ -628,7 +639,7 @@ Operator::Operator() {
     waveBase = nullptr;
     waveMask = 0;
     waveStart = 0;
-    vibrato = 0;
+    vibrato[0] = vibrato[1] = vibrato[2] = 0;
     attackAdd = 0;
     decayAdd = 0;
     rateIndex = 0;
@@ -722,18 +733,18 @@ void Channel::WriteB0( const Chip* chip, uint8_t val ) {
 		return;
 	regB0 = val;
 	if ( val & 0x20 ) {
-		Op(0)->KeyOn( 0x1 );
-		Op(1)->KeyOn( 0x1 );
+		Op(0)->KeyOn( chip, 0x1 );
+		Op(1)->KeyOn( chip, 0x1 );
 		if ( fourOp & 0x3f ) {
-			( this + 1 )->Op(0)->KeyOn( 1 );
-			( this + 1 )->Op(1)->KeyOn( 1 );
+			( this + 1 )->Op(0)->KeyOn( chip, 1 );
+			( this + 1 )->Op(1)->KeyOn( chip, 1 );
 		}
 	} else {
-		Op(0)->KeyOff( 0x1 );
-		Op(1)->KeyOff( 0x1 );
+		Op(0)->KeyOff( chip, 0x1 );
+		Op(1)->KeyOff( chip, 0x1 );
 		if ( fourOp & 0x3f ) {
-			( this + 1 )->Op(0)->KeyOff( 1 );
-			( this + 1 )->Op(1)->KeyOff( 1 );
+			( this + 1 )->Op(0)->KeyOff( chip, 1 );
+			( this + 1 )->Op(1)->KeyOff( chip, 1 );
 		}
 	}
 }
@@ -814,6 +825,7 @@ template< bool opl3Mode>
 /*INLINE*/ void Channel::GeneratePercussion( Chip* chip, int32_t* output ) {
 	Channel* chan = this;
 
+	//Each drum goes to the sides of its channel in the stereo buffer ( OPL3 C0 bits, both in OPL2 mode )
 	//BassDrum
 	int32_t mod = (int32_t)((uint32_t)(old[0] + old[1]) >> feedback);
 	old[0] = old[1];
@@ -823,45 +835,60 @@ template< bool opl3Mode>
 	if ( chan->regC0 & 1 ) {
 		mod = 0;
 	} else {
-		mod = old[0];
+		mod = old[1];	//Modulator output of this sample
 	}
 	int32_t sample = (int32_t)Op(1)->GetSample( mod );
+	int32_t sample7 = 0;	//Hi-Hat + Snare (channel 7)
+	int32_t sample8;		//Tom-tom + Top Cymbal (channel 8)
 
 
-	//Precalculate stuff used by other outputs
-	uint32_t noiseBit = chip->ForwardNoise() & 0x1;
-	uint32_t c2 = (uint32_t)Op(2)->ForwardWave();
-	uint32_t c5 = (uint32_t)Op(5)->ForwardWave();
-	uint32_t phaseBit = (((c2 & 0x88) ^ ((c2<<5) & 0x80)) | ((c5 ^ (c5<<2)) & 0x20)) ? 0x02 : 0x00;
+	//Hi-hat, snare and top cymbal as on the chip (Nuked OPL3). The phases below are chip phases,
+	//read in the tables at phase + waveStart.
+#if ( DBOPL_WAVE > WAVE_HANDLER )
+	const uint32_t hhStart = Op(2)->waveStart >> WAVE_SH, sdStart = Op(3)->waveStart >> WAVE_SH, tcStart = Op(5)->waveStart >> WAVE_SH;
+#else
+	const uint32_t hhStart = 0, sdStart = 0, tcStart = 0;
+#endif
+	uint32_t noise = chip->ForwardNoise();
+	uint32_t hhNoise = ( noise >> 13 ) & 1;	//Noise seen by the hi-hat slot (13)
+	uint32_t sdNoise = ( noise >> 16 ) & 1;	//and by the snare slot (16)
+	uint32_t p2 = ( ( Op(2)->waveIndex >> WAVE_SH ) - hhStart ) & 0x3ff;	//Phases before this sample's step
+	uint32_t p5 = ( ( Op(5)->waveIndex >> WAVE_SH ) - tcStart ) & 0x3ff;
+	Op(2)->ForwardWave();
+	Op(5)->ForwardWave();
+	uint32_t hh2 = ( p2 >> 2 ) & 1, hh3 = ( p2 >> 3 ) & 1, hh7 = ( p2 >> 7 ) & 1, hh8 = ( p2 >> 8 ) & 1;
+	uint32_t tc3 = ( p5 >> 3 ) & 1, tc5 = ( p5 >> 5 ) & 1;
+	uint32_t hhXor = ( hh2 ^ hh7 ) | ( hh3 ^ chip->rmTcBit5 ) | ( chip->rmTcBit3 ^ chip->rmTcBit5 );	//Cymbal bits of the previous sample
+	uint32_t tcXor = ( hh2 ^ hh7 ) | ( hh3 ^ tc5 ) | ( tc3 ^ tc5 );
+	chip->rmTcBit3 = (uint8_t)tc3;
+	chip->rmTcBit5 = (uint8_t)tc5;
 
 	//Hi-Hat
 	uint32_t hhVol = (uint32_t)Op(2)->ForwardVolume();
 	if ( !ENV_SILENT( hhVol ) ) {
-		uint32_t hhIndex = (phaseBit<<8) | (0x34 << ( phaseBit ^ (noiseBit << 1 )));
-		sample += (int32_t)Op(2)->GetWave( hhIndex, hhVol );
+		uint32_t hhPhase = ( hhXor << 9 ) | ( ( hhXor ^ hhNoise ) ? 0xd0 : 0x34 );
+		sample7 += (int32_t)Op(2)->GetWave( hhPhase + hhStart, hhVol );
 	}
 	//Snare Drum
 	uint32_t sdVol = (uint32_t)Op(3)->ForwardVolume();
 	if ( !ENV_SILENT( sdVol ) ) {
-		uint32_t sdIndex = ( 0x100 + (c2 & 0x100) ) ^ ( noiseBit << 8 );
-		sample += (int32_t)Op(3)->GetWave( sdIndex, sdVol );
+		uint32_t sdPhase = ( hh8 << 9 ) | ( ( hh8 ^ sdNoise ) << 8 );
+		sample7 += (int32_t)Op(3)->GetWave( sdPhase + sdStart, sdVol );
 	}
 	//Tom-tom
-	sample += (int32_t)Op(4)->GetSample( 0 );
+	sample8 = (int32_t)Op(4)->GetSample( 0 );
 
 	//Top-Cymbal
 	uint32_t tcVol = (uint32_t)Op(5)->ForwardVolume();
 	if ( !ENV_SILENT( tcVol ) ) {
-		uint32_t tcIndex = (1 + phaseBit) << 8;
-		sample += (int32_t)Op(5)->GetWave( tcIndex, tcVol );
+		uint32_t tcPhase = ( tcXor << 9 ) | 0x80;
+		sample8 += (int32_t)Op(5)->GetWave( tcPhase + tcStart, tcVol );
 	}
 	sample <<= 1;
-	if ( opl3Mode ) {
-		output[0] += sample;
-		output[1] += sample;
-	} else {
-		output[0] += sample;
-	}
+	sample7 <<= 1;
+	sample8 <<= 1;
+	output[0] += ( sample & maskLeft ) + ( sample7 & chan[1].maskLeft ) + ( sample8 & chan[2].maskLeft );
+	output[1] += ( sample & maskRight ) + ( sample7 & chan[1].maskRight ) + ( sample8 & chan[2].maskRight );
 }
 
 template<SynthMode mode>
@@ -922,7 +949,7 @@ Channel* Channel::BlockTemplate( Chip* chip, uint32_t samples, int32_t* output )
 	for ( Bitu i = 0; i < samples; i++ ) {
 		//Early out for percussion handlers
 		if ( mode == sm2Percussion ) {
-			GeneratePercussion<false>( chip, output + i );
+			GeneratePercussion<false>( chip, output + i * 2 );	//Stereo buffer
 			continue;	//Prevent some uninitialized value bitching
 		} else if ( mode == sm3Percussion ) {
 			GeneratePercussion<true>( chip, output + i * 2 );
@@ -934,7 +961,8 @@ Channel* Channel::BlockTemplate( Chip* chip, uint32_t samples, int32_t* output )
 		old[0] = old[1];
 		old[1] = (int32_t)Op(0)->GetSample( mod );
 		int32_t sample;
-		int32_t out0 = old[0];
+		//The carrier uses the modulator output of this sample, as on the chip
+		int32_t out0 = old[1];
 		if ( mode == sm2AM || mode == sm3AM ) {
 			sample = (int32_t)(out0 + Op(1)->GetSample( 0 ));
 		} else if ( mode == sm2FM || mode == sm3FM ) {
@@ -1006,16 +1034,17 @@ Chip::Chip( bool _opl3Mode ) : opl3Mode( _opl3Mode ) {
 	opl3Active = 0;
 }
 
+//Steps the chip's 23 bit noise generator by one sample (36 operator slots). Returns the state at
+//the start of the sample, where bit n is the noise seen by slot n.
 INLINE uint32_t Chip::ForwardNoise() {
-	noiseCounter += noiseAdd;
-	Bitu count = noiseCounter >> LFO_SH;
-	noiseCounter &= ((1<<LFO_SH) - 1);
-	for ( ; count > 0; --count ) {
-		//Noise calculation from mame
-		noiseValue ^= ( 0x800302 ) & ( 0 - (noiseValue & 1 ) );
-		noiseValue >>= 1;
+	uint32_t n = noiseValue;
+	for ( int i = 0; i < 4; i++ ) {
+		uint32_t nb = ( n ^ ( n >> 14 ) ) & 0x1ff;	//Taps 0 and 14, 9 steps at once
+		n = ( n >> 9 ) | ( nb << 14 );
 	}
-	return noiseValue;
+	uint32_t start = noiseValue;
+	noiseValue = n;
+	return start;
 }
 
 INLINE uint32_t Chip::ForwardLFO( uint32_t samples ) {
@@ -1064,47 +1093,47 @@ void Chip::WriteBD( uint8_t val ) {
 		}
 		//Bass Drum
 		if ( val & 0x10 ) {
-			chan[6].op[0].KeyOn( 0x2 );
-			chan[6].op[1].KeyOn( 0x2 );
+			chan[6].op[0].KeyOn( this, 0x2 );
+			chan[6].op[1].KeyOn( this, 0x2 );
 		} else {
-			chan[6].op[0].KeyOff( 0x2 );
-			chan[6].op[1].KeyOff( 0x2 );
+			chan[6].op[0].KeyOff( this, 0x2 );
+			chan[6].op[1].KeyOff( this, 0x2 );
 		}
 		//Hi-Hat
 		if ( val & 0x1 ) {
-			chan[7].op[0].KeyOn( 0x2 );
+			chan[7].op[0].KeyOn( this, 0x2 );
 		} else {
-			chan[7].op[0].KeyOff( 0x2 );
+			chan[7].op[0].KeyOff( this, 0x2 );
 		}
 		//Snare
 		if ( val & 0x8 ) {
-			chan[7].op[1].KeyOn( 0x2 );
+			chan[7].op[1].KeyOn( this, 0x2 );
 		} else {
-			chan[7].op[1].KeyOff( 0x2 );
+			chan[7].op[1].KeyOff( this, 0x2 );
 		}
 		//Tom-Tom
 		if ( val & 0x4 ) {
-			chan[8].op[0].KeyOn( 0x2 );
+			chan[8].op[0].KeyOn( this, 0x2 );
 		} else {
-			chan[8].op[0].KeyOff( 0x2 );
+			chan[8].op[0].KeyOff( this, 0x2 );
 		}
 		//Top Cymbal
 		if ( val & 0x2 ) {
-			chan[8].op[1].KeyOn( 0x2 );
+			chan[8].op[1].KeyOn( this, 0x2 );
 		} else {
-			chan[8].op[1].KeyOff( 0x2 );
+			chan[8].op[1].KeyOff( this, 0x2 );
 		}
 	//Toggle keyoffs when we turn off the percussion
 	} else if ( change & 0x20 ) {
 		//Trigger a reset to setup the original synth handler
 		//This makes it call
 		chan[6].UpdateSynth( this );
-		chan[6].op[0].KeyOff( 0x2 );
-		chan[6].op[1].KeyOff( 0x2 );
-		chan[7].op[0].KeyOff( 0x2 );
-		chan[7].op[1].KeyOff( 0x2 );
-		chan[8].op[0].KeyOff( 0x2 );
-		chan[8].op[1].KeyOff( 0x2 );
+		chan[6].op[0].KeyOff( this, 0x2 );
+		chan[6].op[1].KeyOff( this, 0x2 );
+		chan[7].op[0].KeyOff( this, 0x2 );
+		chan[7].op[1].KeyOff( this, 0x2 );
+		chan[8].op[0].KeyOff( this, 0x2 );
+		chan[8].op[1].KeyOff( this, 0x2 );
 	}
 }
 
@@ -1220,6 +1249,7 @@ void Chip::GenerateBlock2( Bitu total, int32_t* output ) {
 		}
 		total -= samples;
 		output += samples;
+		egSamples += samples;
 	}
 }
 
@@ -1234,6 +1264,7 @@ void Chip::GenerateBlock3( Bitu total, int32_t* output  ) {
 		}
 		total -= samples;
 		output += samples * 2;
+		egSamples += samples;
 	}
 }
 
@@ -1355,8 +1386,13 @@ void Chip::Setup( uint32_t rate ) {
 		//Keep track of the diffs for some debugging
 //		attackDiffs[i] = bestDiff;
 	}
-	for ( uint8_t i = 62; i < 76; i++ ) {
+	//The attack steps on the same envelope clock as the decay on the chip. It uses the exact decay rates.
+	for ( uint8_t i = 0; i < 60; i++ ) {
+		attackRates[i] = linearRates[i];
+	}
+	for ( uint8_t i = 60; i < 76; i++ ) {
 		//This should provide instant volume maximizing
+		//From 60, rate 15 (rate_hi 15 on the chip)
 		attackRates[i] = 8u << RATE_SH;
 	}
 	//Setup the channels with the correct four op flags
@@ -1458,13 +1494,19 @@ void InitTables( void ) {
 	//	|06  |0126|27  |7   |3   |4   |4 5 |5   |
 
 #if (( DBOPL_WAVE == WAVE_TABLELOG ) || ( DBOPL_WAVE == WAVE_TABLEMUL ))
+#if ( DBOPL_WAVE == WAVE_TABLELOG )
+	//The chip outputs 0 in the silent parts (full attenuation, as Nuked OPL3)
+	const int16_t silence = 0x0fff;
+#else
+	const int16_t silence = WaveTable[0];
+#endif
 	for ( int i = 0; i < 256; i++ ) {
 		//Fill silence gaps
-		WaveTable[ 0x400 + i ] = WaveTable[0];
-		WaveTable[ 0x500 + i ] = WaveTable[0];
-		WaveTable[ 0x900 + i ] = WaveTable[0];
-		WaveTable[ 0xc00 + i ] = WaveTable[0];
-		WaveTable[ 0xd00 + i ] = WaveTable[0];
+		WaveTable[ 0x400 + i ] = silence;
+		WaveTable[ 0x500 + i ] = silence;
+		WaveTable[ 0x900 + i ] = silence;
+		WaveTable[ 0xc00 + i ] = silence;
+		WaveTable[ 0xd00 + i ] = silence;
 		//Replicate sines in other pieces
 		WaveTable[ 0x800 + i ] = WaveTable[ 0x200 + i ];
 		//double speed sines
@@ -1488,10 +1530,12 @@ void InitTables( void ) {
 		}
 	}
 	//Create the Tremolo table, just increase and decrease a triangle wave
-	for ( uint8_t i = 0; i < TREMOLO_TABLE / 2; i++ ) {
-		uint8_t val = i << ENV_EXTRA;
-		TremoloTable[i] = val;
-		TremoloTable[TREMOLO_TABLE - 1 - i] = val;
+	//The chip's tremolo (Nuked OPL3) is a 0..105..0 triangle of 210 positions of 64 samples,
+	//shifted by 2 (deep) or 4 (shallow). The LFO steps every 256 samples, so the table holds 2 periods.
+	for ( uint8_t i = 0; i < TREMOLO_TABLE; i++ ) {
+		uint32_t pos = ( i * 4u ) % 210u;
+		uint32_t tri = ( pos < 105u ) ? pos : 210u - pos;
+		TremoloTable[i] = (uint8_t)( ( tri >> 2 ) << ENV_EXTRA );
 	}
 	//Create a table with offsets of the channels from the start of the chip
 	for ( Bitu i = 0; i < 32; i++ ) {

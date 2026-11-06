@@ -30,10 +30,16 @@ typedef int32_t Bits;
 #define WAVE_TABLEMUL	12
 
 //Select the type of wave generator routine
-#define DBOPL_WAVE WAVE_TABLEMUL
+//WAVE_TABLELOG does the chip's log-sine and exponential table arithmetic, with the same output
+//levels as the YMF262. DBOPL_WAVE=12 (TABLEMUL) takes about 40% less DBOPL time.
+#ifndef DBOPL_WAVE
+#define DBOPL_WAVE WAVE_TABLELOG
+#endif
 
 //#define DBOPL_DUMP_TABLES
-#define DBOPL_USE_PRECALCUALTED_TABLES
+#if ( DBOPL_WAVE == WAVE_TABLEMUL )
+#define DBOPL_USE_PRECALCUALTED_TABLES	//The tables.ipp only has the TABLEMUL tables
+#endif
 
 namespace DBOPL {
 
@@ -103,7 +109,7 @@ public:
 
 	uint32_t chanData;			//Frequency/octave and derived data coming from whatever channel controls this
 	uint32_t freqMul;				//Scale channel frequency with this, TODO maybe remove?
-	uint32_t vibrato;				//Scaled up vibrato strength
+	uint32_t vibrato[3];			//Vibrato f-number offset (fnum >> 7) shifted by 0, 1 and 2, as the chip does
 	int32_t sustainLevel;		//When stopping at sustain level stop here
 	int32_t totalLevel;			//totalLevel is added to every generated volume
 	uint32_t currentLevel;		//totalLevel + tremolo
@@ -145,8 +151,8 @@ public:
 	bool Silent() const;
 	void Prepare( const Chip* chip );
 
-	void KeyOn( uint8_t mask);
-	void KeyOff( uint8_t mask);
+	void KeyOn( const Chip* chip, uint8_t mask);
+	void KeyOff( const Chip* chip, uint8_t mask);
 
 	template< State state>
 	Bits TemplateVolume( );
@@ -205,9 +211,14 @@ struct Chip {
 	uint32_t lfoCounter = 0;
 	uint32_t lfoAdd = 0;
 
+	//Samples generated, used as the chip's shared envelope clock
+	uint32_t egSamples = 0;
+
 	uint32_t noiseCounter = 0;
 	uint32_t noiseAdd = 0;
 	uint32_t noiseValue = 0;
+	//Top cymbal phase bits 3 and 5 of the previous sample. The chip computes the hi-hat first.
+	uint8_t rmTcBit3 = 0, rmTcBit5 = 0;
 
 	//Frequency scales for the different multiplications
     uint32_t freqMul[16] = {};

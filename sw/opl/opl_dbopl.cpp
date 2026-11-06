@@ -111,6 +111,11 @@ unsigned int OPL_Pico_PortRead(opl_port_t port)
 
 void OPL_Pico_WriteRegister(unsigned int reg_num, unsigned int value)
 {
+    // Writes to the second register array go to the first array while the OPL3 mode is off,
+    // except for the 0x105 register
+    if ((reg_num & 0x100) && !dbopl3.opl3Active && (reg_num != 0x105))
+        reg_num &= 0xFF;
+
     switch (reg_num)
     {
         case OPL_REG_TIMER1:
