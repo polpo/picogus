@@ -60,6 +60,9 @@ endfunction()
 
 
 option(PGDEBUG "Enable debug printf framework" OFF)
+# Use the first Python on PATH rather than the newest version CMake knows about
+# (older CMakes won't look for newer Pythons)
+set(Python3_FIND_STRATEGY LOCATION)
 find_package(Python3 COMPONENTS Interpreter QUIET)
 
 # Global definitions across all targets
