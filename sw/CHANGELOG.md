@@ -11,7 +11,7 @@ GUS emulation has received a ton of fixes under the hood, solving a lot of long-
 - The line-out disable bit now mutes the output. This fixes hanging notes still playing when paused in CapaMOD.
 - The GF1's voice IRQ latch and its timing is emulated. This fixes music occasionally stopping in the demo Dope (and perhaps others).
 - Volume ramps are now applied once per GF1 frame, which is more accurate and more efficient. A stopped ramp now retriggers IRQs and a finished non-looping ramp stops one increment short of its end value.
-- Pan attenuation now uses the GF1's ROM values from `gf1.v`. Hardware volume goes back to DOSBox's implementation, with fixes.
+- Pan attenuation now uses the GF1's ROM values from `gf1.v`. DOSBox's volume implementation is also fixed and matches GF1.
 - Voices playing back faster than the PSRAM sample cache simply bypass it. Fixes crackles/stutters in _very_ fast playing samples.
 - GF1 timer accuracy: writes to 2X9 are routed to the timers, stopping a timer immediately cancels its IRQ, and the 5us fudge on timer periods is removed.
 - DMA fixes: the DMA rate divider is now in the correct order, DMA address wraps at 1MB, the address advances past the terminal count byte, and unsupported GUS->host DMA requests are ended early instead of getting the ISA DMA state machine stuck.
@@ -32,6 +32,12 @@ GUS emulation has received a ton of fixes under the hood, solving a lot of long-
 ### SB mode
 
 - Fixes SB DMA transfers getting out of phase, which caused flipped stereo on SBPro or garbage audio on SB16.
+- Blinkenlights on SB DSP activity, once per DMA block, and blinkenlights on OPL music is back.
+- Brings in improvements to dbopl3 from [HitoriSensei's PicoMemBlaster fork of PicoMEM](https://github.com/HitoriSensei/ISA-PicoMEM).
+
+### CD-ROM
+
+- Blinkenlights on every sector transfer.
 
 ### USB
 
