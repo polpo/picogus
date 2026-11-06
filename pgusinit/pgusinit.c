@@ -655,7 +655,7 @@ static int write_firmware(const char* fw_filename)
         }
 
         if (i != uf2_buf.uf2.blockNo) {
-            fprintf(stderr, "\nERROR: file %s is not a valid UF2 file - block mismatch\n", fw_filename);
+            fprintf(stderr, "\nERROR: file %s is not a valid UF2 file - block mismatch (block %u of %u)\n", fw_filename, i, numBlocks);
             return 14;
         }
 
@@ -674,12 +674,12 @@ static int write_firmware(const char* fw_filename)
             }
             if (i < (numBlocks - 1) || b < 511) { // If it's not the very last byte
                 if (!wait_for_read(PICO_FIRMWARE_WRITING)) {
-                    fprintf(stderr, "\nERROR: Card is not in firmware writing mode?\n");
+                    fprintf(stderr, "\nERROR: Card is not in firmware writing mode? (block %u of %u)\n", i, numBlocks);
                     return 15;
                 }
             } else if (protocol > 1) {
                 if (!wait_for_read(PICO_FIRMWARE_DONE)) {
-                    fprintf(stderr, "\nERROR: Card has written last firmware byte but is not done\n");
+                    fprintf(stderr, "\nERROR: Card has written last firmware byte but is not done (block %u of %u)\n", i, numBlocks);
                     return 15;
                 }
                 outp(CONTROL_PORT, 0xCC); // Knock on the door...

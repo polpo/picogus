@@ -160,8 +160,6 @@ static bool control_active = false;
 static uint8_t sel_reg = 0;
 static uint32_t cur_read = 0;
 static uint32_t cur_write = 0;
-static bool queueSaveSettings = false;
-static bool queueReboot = false;
 
 Settings settings;
 void processSettings(void);
@@ -278,7 +276,6 @@ __force_inline void select_picogus(uint8_t value) {
     case CMD_HWTYPE: // Hardware version
         break;
     case CMD_FLASH: // Firmware write mode
-        pico_firmware_start();
         break;
     default:
         control_active = false;
@@ -517,7 +514,6 @@ __force_inline void write_picogus_high(uint8_t value) {
         DBG_PRINTF("requesting startup mode: %u\n", value);
         break;
     case CMD_SAVE:
-        queueSaveSettings = true;
         break;
     case CMD_REBOOT:
         watchdog_hw->scratch[3] = settings.startupMode;
@@ -1018,6 +1014,12 @@ __force_inline void handle_iow(void) {
             control_active = true;
         } else if (control_active) {
             select_picogus(iow_read & 0xFF);
+            if (sel_reg == CMD_FLASH) {
+                // Release IOCHRDY then start (or finish) firmware programming
+                pio_sm_put(pio0, IOW_PIO_SM, IO_END);
+                pico_firmware_start();
+                return;
+            }
         }
     } else if (port == DATA_PORT_LOW) {
         pio_sm_put(pio0, IOW_PIO_SM, IO_END);
@@ -1031,14 +1033,16 @@ __force_inline void handle_iow(void) {
         pio_sm_put(pio0, IOW_PIO_SM, IO_WAIT);
         if (control_active) {
             write_picogus_high(iow_read & 0xFF);
+            if (sel_reg == CMD_SAVE) {
+                // Release IOCHRDY then save settings to flash
+                pio_sm_put(pio0, IOW_PIO_SM, IO_END);
+                saveSettings(&settings);
+                return;
+            }
         }
     }
     // Fallthrough if no match, or for slow write, reset PIO
     pio_sm_put(pio0, IOW_PIO_SM, IO_END);
-    if (queueSaveSettings) {
-        saveSettings(&settings);
-        queueSaveSettings = false;
-    }
 }
 
 __force_inline void handle_ior(void) {

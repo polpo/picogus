@@ -20,7 +20,6 @@
 
 #include "flash_settings.h"
 #include "../include/pg_debug.h"
-#include "overclock.h"
 #include "hardware/flash.h"
 #include "hardware/sync.h"
 #include "hardware/clocks.h"
@@ -205,8 +204,6 @@ void saveSettings(const Settings* settings)
     DBG_PRINTF("doing settings save: ");
     // No need for flash_safe_execute or stop second core, since it will not touch flash
     // If the 2nd core will ever touch flash, reconsider this approach!
-    // Clock down the RP2040 so the flash at its default 1/2 clock divider is within spec (<=133MHz)
-    set_sys_clock_khz(240000, true);
 
     DBG_PUTCHAR('/');
     uint32_t ints = save_and_disable_interrupts();
@@ -214,7 +211,6 @@ void saveSettings(const Settings* settings)
     DBG_PUTCHAR('/');
     flash_range_program(SETTINGS_SECTOR, data, FLASH_PAGE_SIZE);
     restore_interrupts(ints);
-    overclock_370mhz();
     DBG_PRINTF("settings saved");
 }
 
