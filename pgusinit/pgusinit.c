@@ -1380,7 +1380,7 @@ int main(int argc, char* argv[]) {
 
     // If mode was set in commands, apply it
     if (newMode) {
-        return reboot_to_firmware(newMode, permanent);
+        reboot_to_firmware(newMode, permanent);
     }
 
     if (wifichg) {
