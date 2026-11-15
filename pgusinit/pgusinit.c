@@ -659,8 +659,6 @@ static int reboot_to_firmware(const uint8_t value, const bool permanent)
         fprintf(stderr, "ERROR: card is not alive after rebooting to new firmware\n");
         return 99;
     }
-    printf("PicoGUS detected: Firmware version: ");
-    print_string(CMD_FWSTRING);
     return 0;
 }
 
@@ -1492,16 +1490,36 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    int commands = 0;
+    // Handle /mode before other commands so they apply to the new firmware after it reboots
     for(int i = 1; i < argc; ++i) {
-        if (!parseCommand(argc, argv, &i, parseCommands)) {
+        if (!stricmp(argv[i], "/save")) {
+            permanent = true;
+        } else if (!stricmp(argv[i], "/mode")) {
+            if (!parseCommand(argc, argv, &i, parseCommands)) {
+                return 1;
+            }
+        }
+    }
+    if (newMode) {
+        int e = reboot_to_firmware(newMode, permanent);
+        if (e) {
+            return e;
+        }
+        // Re-detect the card to pick up the new mode
+        printf("\n");
+        if (initPicoGUS() != INIT_OK) {
             return 1;
         }
     }
 
-    // If mode was set in commands, apply it
-    if (newMode) {
-        return reboot_to_firmware(newMode, permanent);
+    for(int i = 1; i < argc; ++i) {
+        if (!stricmp(argv[i], "/mode")) {
+            ++i; // already handled above; skip it and its argument
+            continue;
+        }
+        if (!parseCommand(argc, argv, &i, parseCommands)) {
+            return 1;
+        }
     }
 
     if (wifichg) {
