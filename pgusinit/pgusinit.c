@@ -928,10 +928,9 @@ static bool cmdSetMode(const char* arg, const int cmd, const int cmd2, const int
 
 static bool ctrlSendUint8(const char *arg, int cmd, int min, int max)
 {
-    char* endptr;
-    uint8_t val = (uint8_t)strtoul(arg, &endptr, 10);
+    uint16_t val;
 
-    if (*endptr != '\0' || val < min || val > max) {
+    if (!parse_num(arg, 10, &val) || val < min || val > max) {
         usage(gMode, false);
         return false;
     }
@@ -942,11 +941,10 @@ static bool ctrlSendUint8(const char *arg, int cmd, int min, int max)
 }
 
 static bool ctrlSendUint8Masked(const char *arg, int cmd, int min, int max, int mask, int shift) {
-    char* endptr;
-    uint8_t val = (uint8_t)strtoul(arg, &endptr, 10);
+    uint16_t val;
     uint8_t oldval = 0;
 
-    if (*endptr != '\0' || val < min || val > max) {
+    if (!parse_num(arg, 10, &val) || val < min || val > max) {
         usage(gMode, false);
         return false;
     }
@@ -963,10 +961,9 @@ static bool cmdSendUint8(const char* arg, const int cmd, const int cmd2, const i
 }
 
 static bool cmdSendSBType(const char* arg, const int cmd, const int cmd2, const int cmd3) {
-    char* endptr;
-    uint8_t val = (uint8_t)strtoul(arg, &endptr, 10);
+    uint16_t val;
 
-    if (*endptr != '\0' || val < 1 || val > 6 || val == 5) {
+    if (!parse_num(arg, 10, &val) || val < 1 || val > 6 || val == 5) {
         usage(gMode, false);
         return false;
     }
@@ -984,10 +981,9 @@ static bool cmdSendUint8Masked(const char* arg, const int cmd, const int cmd2, c
 
 static bool ctrlSendUint16(const char *arg, int cmd, long min, long max, int base)
 {
-    char *endptr;
-    uint16_t val = (uint16_t)strtoul(arg, &endptr, base);
+    uint16_t val;
 
-    if (*endptr != '\0' || val < min || val > max) {
+    if (!parse_num(arg, base, &val) || val < min || val > max) {
         usage(gMode, false);
         return false;
     }
@@ -1021,9 +1017,8 @@ static bool cmdSetVol(const char* arg, const int cmd, const int cmd2, const int 
 
 static bool cmdSendMousePort(const char *arg, const int cmd, const int cmd2, const int cmd3)
 {
-    char* endptr;
-    uint8_t val = (uint8_t)strtoul(arg, &endptr, 10);
-    if (*endptr != '\0' || val > 4) {
+    uint16_t val;
+    if (!parse_num(arg, 10, &val) || val > 4) {
         usage(gMode, false);
         return false;
     }
@@ -1111,15 +1106,14 @@ static bool cmdCDLoad(const char* arg, const int cmd, const int cmd2, const int 
 
 static bool cmdGUSBuffer(const char* arg, const int cmd, const int cmd2, const int cmd3)
 {
-    uint8_t tmp_uint8;
-    uint8_t e = sscanf(arg, "%hhu", &tmp_uint8);
-    if (e != 1 || tmp_uint8 < 1)
+    uint16_t val;
+    if (!parse_num(arg, 10, &val) || val < 1 || val > 256)
     {
         usage(gMode, false);
         return false;
     }
     outp(CONTROL_PORT, cmd);
-    outp(DATA_PORT_HIGH, (unsigned char)(tmp_uint8 - 1));
+    outp(DATA_PORT_HIGH, (unsigned char)(val - 1));
     return true;
 }
 
