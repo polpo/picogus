@@ -638,7 +638,7 @@ __force_inline uint8_t read_picogus_high(void) {
 #ifdef CDROM
     case CMD_CDSTATUS:
         // printf("cdstatus %x\n", cdrom.image_status);
-        return cdrom.image_status;
+        return cdman_image_status(&cdrom);
     case CMD_CDLIST:
         if (cur_read_idx == cdrom.image_count) { // If end of the images
             cur_read_idx = cur_read = 0;

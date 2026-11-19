@@ -624,6 +624,8 @@ static void print_cdemu_status(void)
     uint16_t tmp_uint16 = inpw(DATA_PORT_LOW); // Get port
     printf("CD-ROM emulation on port %x, image auto-advance %s\n", tmp_uint16, tmp_uint8 ? "enabled" : "disabled");
     
+    // The card may be busy after mode change so wait until it's ready
+    wait_for_cd_status();
     print_cdimage_current();
 }
 

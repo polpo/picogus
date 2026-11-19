@@ -8,6 +8,7 @@
 #include "../include/pg_debug.h"
 
 #include "cdrom_error_msg.h"
+#include "msc_app.h"
 
 // Maximum filename length
 #define MAX_FILENAME_LEN 127
@@ -284,7 +285,30 @@ void cdman_reload_image(cdrom_t *dev) {
 }
 
 
+void cdman_init(void) {
+    msc_app_init();
+}
+
+
+// CD image commands wait until the USB drive has been detected after boot
+bool cdman_ready(void) {
+    return msc_usb_settled();
+}
+
+
+cdrom_image_status_t cdman_image_status(cdrom_t *dev) {
+    return msc_usb_settled() ? dev->image_status : CD_STATUS_BUSY;
+}
+
+
 void cdman_set_serial(cdrom_t *dev, uint32_t serial) {
+    if (dev->image_command != CD_COMMAND_NONE) {
+        // A command requested while the drive was being detected takes priority over the default load
+        drive_serial = serial;
+        return;
+    }
+    // Report busy until the default load below completes
+    dev->image_status = CD_STATUS_BUSY;
     if (drive_serial == serial) {
         // If we are re-inserting the same drive, maybe advance the disc image
         DBG_PRINTF("Inserting the same drive...\n");

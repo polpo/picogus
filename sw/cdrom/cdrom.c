@@ -129,15 +129,18 @@ void cdrom_tasks(cdrom_t *dev) {
         cdrom_read_data(dev);
         break;
     case CD_COMMAND_IMAGE_LIST:
+        if (!cdman_ready()) break; // Defer until the USB drive is detected after boot
         cdrom_errorstr_clear();
         dev->image_list = cdman_list_images(&dev->image_count);
         dev->image_command = CD_COMMAND_NONE;
         dev->image_status = dev->image_list ? CD_STATUS_READY : CD_STATUS_ERROR;
         break;
     case CD_COMMAND_IMAGE_LOAD_INDEX:
+        if (!cdman_ready()) break; // Defer until the USB drive is detected after boot
         cdman_load_image_index(dev, dev->image_data);
         break;
     case CD_COMMAND_IMAGE_LOAD:
+        if (!cdman_ready()) break; // Defer until the USB drive is detected after boot
         DBG_PRINTF("loading");
         cdrom_errorstr_clear();
         if (dev->disk_loaded) {
@@ -649,6 +652,7 @@ cdrom_global_init(void)
     cdrom.error_str = cdrom_errorstr_get();
     cdrom.current_sector_samples = (sample_pair*)cdrom.audio_sector_buffer;
     set_volume(CMD_CDVOL);
+    cdman_init();
 }
 
 static void
