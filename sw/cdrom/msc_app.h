@@ -30,6 +30,7 @@
 
 bool msc_app_init(void);
 void msc_app_task(void);
+bool msc_usb_settled(void);
 
 
 #endif

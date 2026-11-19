@@ -460,7 +460,7 @@ __force_inline void write_picogus_high(uint8_t value) {
         if (!value) {
             cur_write = 0;
             cdrom.image_status = CD_STATUS_BUSY;
-            cdrom.image_command = CD_COMMAND_IMAGE_LOAD;
+            cdrom.image_command = CD_COMMAND_IMAGE_LOAD_NAME;
         }
         break;
 #endif
@@ -638,7 +638,7 @@ __force_inline uint8_t read_picogus_high(void) {
 #ifdef CDROM
     case CMD_CDSTATUS:
         // printf("cdstatus %x\n", cdrom.image_status);
-        return cdrom.image_status;
+        return cdman_image_status(&cdrom);
     case CMD_CDLIST:
         if (cur_read_idx == cdrom.image_count) { // If end of the images
             cur_read_idx = cur_read = 0;

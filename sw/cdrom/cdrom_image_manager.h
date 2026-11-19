@@ -17,6 +17,9 @@ void cdman_clear_image(void);
 void cdman_reload_image(cdrom_t *dev);
 void cdman_set_serial(cdrom_t *dev, uint32_t serial);
 void cdman_set_autoadvance(bool setting);
+void cdman_init(void);
+bool cdman_ready(void);
+cdrom_image_status_t cdman_image_status(cdrom_t *dev);
 
 #ifdef __cplusplus
 } // extern "C"

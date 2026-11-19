@@ -8,6 +8,7 @@
 #include "../include/pg_debug.h"
 
 #include "cdrom_error_msg.h"
+#include "msc_app.h"
 
 // Maximum filename length
 #define MAX_FILENAME_LEN 127
@@ -231,7 +232,7 @@ void cdman_load_image_index(cdrom_t *dev, int imageIndex) {
         strncpy(dev->image_path, images[imageIndex - 1], sizeof(dev->image_path) - 1);
         dev->image_path[sizeof(dev->image_path) - 1] = '\0';
         cdman_list_images_free(images, imageCount);
-        dev->image_command = CD_COMMAND_IMAGE_LOAD;
+        dev->image_command = CD_COMMAND_IMAGE_OPEN;
     }
     current_index = last_loaded_index = imageIndex;
 }
@@ -260,7 +261,7 @@ void cdman_set_image_index(cdrom_t *dev) {
 
 void cdman_unload_image(cdrom_t *dev) {
     dev->image_path[0] = 0;
-    dev->image_command = CD_COMMAND_IMAGE_LOAD;
+    dev->image_command = CD_COMMAND_IMAGE_OPEN;
     current_index = 0;
 }
 
@@ -284,7 +285,30 @@ void cdman_reload_image(cdrom_t *dev) {
 }
 
 
+void cdman_init(void) {
+    msc_app_init();
+}
+
+
+// CD image commands wait until the USB drive has been detected after boot
+bool cdman_ready(void) {
+    return msc_usb_settled();
+}
+
+
+cdrom_image_status_t cdman_image_status(cdrom_t *dev) {
+    return msc_usb_settled() ? dev->image_status : CD_STATUS_BUSY;
+}
+
+
 void cdman_set_serial(cdrom_t *dev, uint32_t serial) {
+    if (dev->image_command != CD_COMMAND_NONE) {
+        // A command requested while the drive was being detected takes priority over the default load
+        drive_serial = serial;
+        return;
+    }
+    // Report busy until the default load below completes
+    dev->image_status = CD_STATUS_BUSY;
     if (drive_serial == serial) {
         // If we are re-inserting the same drive, maybe advance the disc image
         DBG_PRINTF("Inserting the same drive...\n");

@@ -25,8 +25,10 @@
 
 #include <ctype.h>
 #include "tusb.h"
+#include "host/hcd.h"
 /* #include "bsp/board_api.h" */
 #include "pico/stdlib.h"
+#include "hardware/sync.h"
 #include "../include/pg_debug.h"
 
 #include "ff.h"
@@ -42,6 +44,12 @@ static volatile bool _disk_busy;
 static volatile bool _disk_error;
 static uint8_t mounted_dev;
 
+// Times to wait for USB drive detection after boot
+#define USB_PORT_CHECK_US 500000  // wait for root port to not be empty
+#define USB_SETTLE_MAX_US 5000000 // wait for a drive to be ready
+static uint32_t init_time;
+static volatile bool usb_settled;
+
 // define the buffer to be place in USB/DMA memory with correct alignment/cache line size
 CFG_TUH_MEM_SECTION static struct {
   TUH_EPBUF_TYPE_DEF(scsi_inquiry_resp_t, inquiry);
@@ -52,6 +60,8 @@ bool msc_app_init(void)
 {
     _disk_busy = false;
     _disk_error = false;
+    init_time = time_us_32();
+    usb_settled = false;
     return true;
 }
 
@@ -61,6 +71,7 @@ static bool inquiry_complete_cb(uint8_t dev_addr, tuh_msc_complete_data_t const 
 
     if (csw->status != 0) {
         // printf("Inquiry failed\r\n");
+        usb_settled = true;
         return false;
     }
 
@@ -77,20 +88,35 @@ static bool inquiry_complete_cb(uint8_t dev_addr, tuh_msc_complete_data_t const 
     // For simplicity: we only mount 1 device
     if (f_mount(&fatfs, "", 1) != FR_OK) {
         ERR_PUTS("mount failed");
+        usb_settled = true;
         return false;
     }
 
     // get the drive serial so we can detect if it is reinserted
     uint32_t serial;
     if (FR_OK != f_getlabel("", NULL, &serial)) {
+        usb_settled = true;
         return false;
     }
     cdman_set_serial(&cdrom, serial);
+    __compiler_memory_barrier();
+    usb_settled = true;
 
     return true;
 }
 
 //------------- IMPLEMENTATION -------------//
+// Called once a non-hub device is fully enumerated. For a USB drive tuh_msc_mount_cb has already run.
+void tuh_mount_cb(uint8_t dev_addr)
+{
+    hcd_devtree_info_t info;
+    hcd_devtree_get_info(dev_addr, &info);
+    if (!mounted_dev && !info.hub_addr) {
+        // A non-drive device (e.g. a joystick) is directly on the root port, so no drive is coming
+        usb_settled = true;
+    }
+}
+
 void tuh_msc_mount_cb(uint8_t dev_addr)
 {
     // printf("A MassStorage device is mounted\r\n");
@@ -118,6 +144,18 @@ void tuh_msc_umount_cb(uint8_t dev_addr)
     f_unmount("");
 
     cdman_unload_image(&cdrom);
+}
+
+
+bool msc_usb_settled(void) {
+    if (!usb_settled) {
+        uint32_t elapsed = time_us_32() - init_time;
+        if (elapsed >= USB_SETTLE_MAX_US ||
+            (elapsed >= USB_PORT_CHECK_US && !hcd_port_connect_status(BOARD_TUH_RHPORT))) {
+            usb_settled = true;
+        }
+    }
+    return usb_settled;
 }
 
 //--------------------------------------------------------------------+
