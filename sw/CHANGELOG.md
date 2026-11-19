@@ -21,7 +21,7 @@ GUS emulation has received a ton of fixes under the hood, solving a lot of long-
 - The IRQ line is deasserted when mix control disables the IRQ latches.
 - GUS resets no longer clear the DMA interval override set by pgusinit.
 - Fixes in inter-core synchronization.
-- GUS RAM is cleared at power on. This works around an bug in Star Control II where it plays garbage after the first sample in GUS RAM.
+- GUS RAM is cleared at power on. This works around a bug in Star Control II where it plays garbage after the first sample in GUS RAM.
 
 ### MPU-401
 
@@ -48,9 +48,11 @@ GUS emulation has received a ton of fixes under the hood, solving a lot of long-
 
 - Captured ISA bus transactions are now timestamped.
 
-### General
+### General/pgusinit
 
-Overhauled firmware flashing to be more resilient.
+- Overhauled firmware flashing to be more resilient.
+- Much better error messaging if the PicoGUS settings don't agree with your ULTRASND or BLASTER environment variable.
+- Changing settings can be combined with `/mode` changes in pgusinit. They'll be applied after the card changes modes.
 
 # v4.1.1
 
