@@ -460,7 +460,7 @@ __force_inline void write_picogus_high(uint8_t value) {
         if (!value) {
             cur_write = 0;
             cdrom.image_status = CD_STATUS_BUSY;
-            cdrom.image_command = CD_COMMAND_IMAGE_LOAD;
+            cdrom.image_command = CD_COMMAND_IMAGE_LOAD_NAME;
         }
         break;
 #endif

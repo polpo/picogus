@@ -139,7 +139,8 @@ void cdrom_tasks(cdrom_t *dev) {
         if (!cdman_ready()) break; // Defer until the USB drive is detected after boot
         cdman_load_image_index(dev, dev->image_data);
         break;
-    case CD_COMMAND_IMAGE_LOAD:
+    case CD_COMMAND_IMAGE_LOAD_NAME: // Look up the index after opened
+    case CD_COMMAND_IMAGE_OPEN: // Index already set by LOAD_INDEX or unload
         if (!cdman_ready()) break; // Defer until the USB drive is detected after boot
         DBG_PRINTF("loading");
         cdrom_errorstr_clear();
@@ -151,14 +152,17 @@ void cdrom_tasks(cdrom_t *dev) {
             cdrom_error(dev, 0x11);   //media changed
         }
         if (dev->image_path[0]) {
-            DBG_PRINTF("Opening %s...",dev->image_path);
-            if (cdrom_image_open(dev,dev->image_path)) {
+            DBG_PRINTF("Opening %s...", dev->image_path);
+            if (cdrom_image_open(dev, dev->image_path) == 0) {
+                if (dev->image_command == CD_COMMAND_IMAGE_LOAD_NAME) {
+                    // If we loaded directly by name, set the index
+                    cdman_set_image_index(dev);
+                }
+            } else {
                 dev->image_command = CD_COMMAND_NONE;
                 dev->image_status = CD_STATUS_ERROR;
                 cdman_clear_image();
                 break;
-            } else {
-                cdman_set_image_index(dev);
             }
             DBG_PRINTF("Done.\n");
             dev->disk_loaded = 1;

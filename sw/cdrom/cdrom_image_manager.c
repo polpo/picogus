@@ -232,7 +232,7 @@ void cdman_load_image_index(cdrom_t *dev, int imageIndex) {
         strncpy(dev->image_path, images[imageIndex - 1], sizeof(dev->image_path) - 1);
         dev->image_path[sizeof(dev->image_path) - 1] = '\0';
         cdman_list_images_free(images, imageCount);
-        dev->image_command = CD_COMMAND_IMAGE_LOAD;
+        dev->image_command = CD_COMMAND_IMAGE_OPEN;
     }
     current_index = last_loaded_index = imageIndex;
 }
@@ -261,7 +261,7 @@ void cdman_set_image_index(cdrom_t *dev) {
 
 void cdman_unload_image(cdrom_t *dev) {
     dev->image_path[0] = 0;
-    dev->image_command = CD_COMMAND_IMAGE_LOAD;
+    dev->image_command = CD_COMMAND_IMAGE_OPEN;
     current_index = 0;
 }
 
