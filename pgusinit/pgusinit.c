@@ -1059,7 +1059,7 @@ static bool cmdSendMouseRate(const char* arg, const int cmd, const int cmd2, con
 
 static bool cmdSendSBLockMixer(const char* arg, const int cmd, const int cmd2, const int cmd3)
 {
-    return ctrlSendUint8Masked(arg, cmd, 0, 2, (2 << 1), 1);
+    return ctrlSendUint8Masked(arg, cmd, 0, 2, (3 << 1), 1);
 }
 
 static bool cmdWifiStatus(const char* arg, const int cmd, const int cmd2, const int cmd3)
