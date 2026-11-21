@@ -533,8 +533,8 @@ static void sbdsp_dma_isr(void) {
                 // Unpack in the flipped sbpro order as it can be done branchless, with the other
                 // channel data pushed off by the shifts
                 sample = (dma_data << 8) | ((dma_data >> 24) << 8);
-                // rotate based on dma_stereo_rot (this should get compiled a single ror instruction)
-                sample = (sample >> sbdsp.dma_stereo_rot) | (sample << ((32 - sbdsp.dma_stereo_rot) & 31));
+                // rotate right by dma_stereo_rot
+                pico_default_asm ("rors %0, %1" : "+l" (sample) : "l" ((uint32_t)sbdsp.dma_stereo_rot) : "cc");
             }
         } else {
             // 16-bit mono: sample at [31:16]
