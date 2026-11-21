@@ -121,6 +121,7 @@ static void usage(card_mode_t mode, bool print_all)
         pageprintf("   /sbfixtc 1|0   - fix SB time constant to match common rates. Default: 0\n");
         pageprintf("   /sblockmixer n - lock SB mixer settings. Default: 0 (no lock)\n");
         pageprintf("          0 - no lock, 1 - lock all but Voice Volume, 2 - lock all\n");
+        pageprintf("   /sbswapstereo 1|0 - reverse SB Pro stereo channels. Default: 0\n");
     }
     if (mode == SB_MODE || mode == ADLIB_MODE || print_all) {
         pageprintf("AdLib settings:\n");
@@ -1168,6 +1169,7 @@ ParseCommand parseCommands[] = {
     {"/sbtype", cmdSendSBType, CMD_SBTYPE, ARG_REQUIRE, "6"},
     {"/sbfixtc", cmdSendBoolMasked, CMD_SBOPTS, ARG_REQUIRE, "0", (1 << 0), 0},
     {"/sblockmixer", cmdSendSBLockMixer, CMD_SBOPTS, ARG_REQUIRE, "0"},
+    {"/sbswapstereo", cmdSendBoolMasked, CMD_SBOPTS, ARG_REQUIRE, "0", (1 << 3), 3},
     {"/oplport", cmdSendPort, CMD_OPLPORT, ARG_REQUIRE, "388"},
     {"/oplwait", cmdSendBool, CMD_OPLWAIT, ARG_REQUIRE, "false"},
     {"/mpuport", cmdSendPort, CMD_MPUPORT, ARG_REQUIRE, "330"},
@@ -1337,9 +1339,10 @@ static void printSBMode()
         ctrlGetUint8(CMD_SBDMA)
     );
     uint8_t tmp_uint8 = ctrlGetUint8(CMD_SBOPTS);
-    printf("SB Time Constant fix: %s, SB mixer: %s\n",
+    printf("SB Time Constant fix: %s, SB mixer: %s, SB Pro stereo swap: %s\n",
         (tmp_uint8 >> 0) & 1 ? "enabled" : "disabled",
-        strLockMixerMode[(tmp_uint8 >> 1) & 3]
+        strLockMixerMode[(tmp_uint8 >> 1) & 3],
+        (tmp_uint8 >> 3) & 1 ? "enabled" : "disabled"
     );
     uint16_t tmp_uint16 = ctrlGetUint16(CMD_OPLPORT);
     if (tmp_uint16) {

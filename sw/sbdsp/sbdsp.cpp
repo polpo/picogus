@@ -341,7 +341,7 @@ uint32_t sbdsp_generate_sample() {
         uint8_t samples_per_xfer = samples_per_transfer();
         if (ring_free() >= samples_per_xfer) {
             sbdsp.rs.dma_pending = true;
-            DMA_Multi_Start_Write(&dma_config, sbdsp.dma_bytes_per_frame);
+            DMA_Multi_Start_Write(&dma_config, sbdsp.dma_req_bytes);
         }
     }
 
@@ -420,7 +420,20 @@ static void sbdsp_dma_cancel() {
     sbdsp.dma_enabled = false;
     DMA_Multi_Cancel(&dma_config);
     sbdsp.rs.dma_pending = false;
+    if (sbdsp.dma_carry) {
+        // drop the byte carried from an odd-length data transfer on sbpro. A real card would
+        // have already played it by now, so toggle the flip flop
+        sbdsp.dma_carry = false;
+        sbdsp.sbpro_ff_right = !sbdsp.sbpro_ff_right;
+    }
     restore_interrupts(irq_state);
+}
+
+// update amount to rotate incoming sample data when playing sbpro stereo data
+static __force_inline void sbdsp_update_stereo_rot() {
+    sbdsp.dma_stereo_rot = (sbdsp.dma_stereo_sbpro &&
+                            (((sbdsp.dsp_version.major == 3) && sbdsp.sbpro_ff_right)
+                             ^ sbdsp.options.swapStereo)) ? 0 : 16;
 }
 
 // resume: true only for continue-after-pause, which resumes a transfer in flight. Otherwise we should
@@ -431,9 +444,12 @@ static __force_inline void sbdsp_dma_enable(bool resume) {
         PIC_AddEvent(&DSP_ADC_event, sbdsp.dma_interval * (sbdsp.dma_block_size + 1), 0);
         return;
     }
-    if (!resume && (sbdsp.dma_enabled || sbdsp.rs.dma_pending)) {
+    // cancel DMA if it's enabled or if we have leftover bytes carried over from odd-length sbpro stereo transfers
+    if (!resume && (sbdsp.dma_enabled || sbdsp.rs.dma_pending || (sbdsp.dma_carry && !sbdsp.dma_stereo_sbpro))) {
         sbdsp_dma_cancel();
     }
+    if (!sbdsp.dma_stereo_sbpro) sbdsp.dma_req_bytes = sbdsp.dma_bytes_per_frame;
+    sbdsp_update_stereo_rot();  // after the cancel, which may toggle the flip-flop
     sbdsp.dma_enabled = true;
     // Set autopush bits to number of bits per audio frame.
     // 32 will get masked to 0 by this operation which what the PIO expects.
@@ -448,8 +464,28 @@ static __force_inline void sbdsp_dma_enable(bool resume) {
     // Only queue a request if none is outstanding and the ring can take it
     if (!sbdsp.rs.dma_pending && ring_free() >= samples_per_transfer()) {
         sbdsp.rs.dma_pending = true;
-        DMA_Multi_Start_Write(&dma_config, sbdsp.dma_bytes_per_frame);
+        DMA_Multi_Start_Write(&dma_config, sbdsp.dma_req_bytes);
     }
+}
+
+// size of the last request of an SBPro stereo block, 3, 2 or 1 bytes, so that it reads the rest
+// of the block and still produces exactly one push (see below). Valid until the block ends, since
+// dma_carry is only updated then.
+static __force_inline uint32_t sbdsp_sbpro_last_req_bytes() {
+    return 2 - sbdsp.dma_carry + ((sbdsp.dma_carry ^ sbdsp.dma_len_bytes) & 1);
+}
+
+// Set up one SBPro stereo DMA block of dma_len_bytes bytes (which may be odd).
+// Each request normally reads 2 bytes. If the previous block had an odd length, its last byte is
+// still in the PIO's input shift register (dma_carry) and becomes the first byte of this block's
+// first frame. The last request is sized (1, 2 or 3 bytes) so that the whole block gets read and
+// every request still produces exactly one 16-bit push. If a byte is left over at the end, it
+// stays in the shift register for the next block. Because of the carry, the frame count of an
+// odd-length block alternates from block to block, so it's recomputed here for every block.
+static __force_inline void sbdsp_sbpro_stereo_block_setup() {
+    sbdsp.dma_xfer_count = (sbdsp.dma_carry + sbdsp.dma_len_bytes) >> 1;
+    sbdsp.dma_xfer_count_left = sbdsp.dma_xfer_count;
+    sbdsp.dma_req_bytes = (sbdsp.dma_xfer_count == 1) ? sbdsp_sbpro_last_req_bytes() : 2;
 }
 
 static void sbdsp_dma_isr(void) {
@@ -494,16 +530,17 @@ static void sbdsp_dma_isr(void) {
                 sample = dma_data;
             } else {
                 // 8-bit stereo: L at [23:16], R at [31:24] to MSB of each 16-bit half
-                sample = (dma_data & 0xFF000000) | ((dma_data >> 8) & 0x0000FF00);
+                // Unpack in the flipped sbpro order as it can be done branchless, with the other
+                // channel data pushed off by the shifts
+                sample = (dma_data << 8) | ((dma_data >> 24) << 8);
+                // rotate based on dma_stereo_rot (this should get compiled a single ror instruction)
+                sample = (sample >> sbdsp.dma_stereo_rot) | (sample << ((32 - sbdsp.dma_stereo_rot) & 31));
             }
         } else {
-            if (sbdsp.dma_16bit) {
-                // 16-bit mono: duplicate upper 16 to both halves
-                sample = (dma_data & 0xFFFF0000) | (dma_data >> 16);
-            } else {
-                // 8-bit mono: byte at [31:24], duplicate to MSB of each half
-                sample = (dma_data & 0xFF000000) | ((dma_data >> 16) & 0x0000FF00);
-            }
+            // 16-bit mono: sample at [31:16]
+            // 8-bit mono: byte at [31:24]
+            // duplicate to each half
+            sample = dma_data | (dma_data >> 16);
         }
         if (!sbdsp.dma_signed) sample ^= 0x80008000;
         ring_push(sample);
@@ -511,21 +548,31 @@ static void sbdsp_dma_isr(void) {
 
     // Transfer counting (runs for all cases including reference byte)
     sbdsp.dma_xfer_count_left--;
-    if (!sbdsp.dma_xfer_count_left) {
-        // Toggle LED per completed DMA block
-        gpio_xor_mask(LED_PIN);
-        sbdsp.dma_done = true;
-        if (sbdsp.dma_16bit) {
-            sbdsp.irq_16_pending = true;
-        } else {
-            sbdsp.irq_8_pending = true;
-        }
-        PIC_ActivateIRQ();
-        if (sbdsp.autoinit) {
-            sbdsp.dma_xfer_count_left = sbdsp.dma_xfer_count;
-        } else {
-            sbdsp.dma_enabled = false;
-            return;
+    if (sbdsp.dma_xfer_count_left <= 1) {  // last frame of the block (1) or block done (0)
+        if (!sbdsp.dma_xfer_count_left) {
+            // Toggle LED per completed DMA block
+            gpio_xor_mask(LED_PIN);
+            sbdsp.dma_done = true;
+            if (sbdsp.dma_16bit) {
+                sbdsp.irq_16_pending = true;
+            } else {
+                sbdsp.irq_8_pending = true;
+            }
+            PIC_ActivateIRQ();
+            // carry into the next block = (carry into this block + block length) & 1
+            if (sbdsp.dma_stereo_sbpro) sbdsp.dma_carry ^= (sbdsp.dma_len_bytes & 1);
+            if (sbdsp.autoinit) {
+                if (sbdsp.dma_stereo_sbpro) {
+                    sbdsp_sbpro_stereo_block_setup();
+                } else {
+                    sbdsp.dma_xfer_count_left = sbdsp.dma_xfer_count;
+                }
+            } else {
+                sbdsp.dma_enabled = false;
+                return;
+            }
+        } else if (sbdsp.dma_stereo_sbpro) {
+            sbdsp.dma_req_bytes = sbdsp_sbpro_last_req_bytes();  // the next request is the block's last
         }
     }
 
@@ -533,7 +580,7 @@ static void sbdsp_dma_isr(void) {
     uint8_t samples_per_xfer = samples_per_transfer();
     if (sbdsp.dma_enabled && ring_free() >= samples_per_xfer) {
         sbdsp.rs.dma_pending = true;
-        DMA_Multi_Start_Write(&dma_config, sbdsp.dma_bytes_per_frame);
+        DMA_Multi_Start_Write(&dma_config, sbdsp.dma_req_bytes);
     }
 }
 
@@ -617,6 +664,7 @@ void sbdsp_init() {
     
     // Reset mixer
     sbmixer_reset();
+    sbdsp.sbpro_ff_right = true;  // SBPro stereo flip-flop power-on state
 
 #ifdef INTERP_SB_LINEAR
     // Configure interp0 blend mode for SB DSP PCM linear interpolation.
@@ -665,9 +713,9 @@ static void sbdsp_start_pcm_dma(int autoinit, uint16_t xfer_size) {
     sbdsp.adpcm.format = 0;  // ensure PCM mode
 
     bool dma_stereo = (mixer_state[0x0E] & 2);
-    if (dma_stereo && ((xfer_size + 1) == 1)) {
+    if (dma_stereo && (xfer_size == 0)) {
         // HACK: many SBPro programs follow Creative's documentation and perform 1 byte single-cycle
-        // DMA transfer to seemingly reset the mixer stereo state, then waiting for IRQ to come.
+        // DMA transfer to trigger the stereo flip flop to un-flip stereo, then wait for IRQ.
         // since the sbdsp.dma_xfer_count calculation divides by 2 for stereo case, it results in
         // xfer_count==0, so the transfer never actually occurs.
         // for those transfers, force mono mode.
@@ -677,9 +725,42 @@ static void sbdsp_start_pcm_dma(int autoinit, uint16_t xfer_size) {
     sbdsp.dma_signed = false;       // always unsigned
     sbdsp.dma_stereo = dma_stereo;
     sbdsp.dma_stereo_sbpro = dma_stereo;
+    // cancel a transfer that is still running now rather than in sbdsp_dma_enable(), because it
+    // can drop a carried byte which sbdsp_sbpro_stereo_block_setup() uses
+    if (sbdsp.dma_enabled || sbdsp.rs.dma_pending) {
+        sbdsp_dma_cancel();
+    }
+    // SBPro stereo handling notes:
+    //
+    // The SBPro DSP has no stereo logic - it simply outputs every byte it reads and a flip
+    // flop in the mixer chip handles sending alternate bytes to the left/right channels.
+    // (see https://github.com/S95Sedan/CT1741_DSP for SBPro DSP firmware disassembly)
+    //
+    // Power on reset and any write to mixer register 0Eh sets the flip flop to output the
+    // next byte to the right channel, the source of the infamous SBPro flipped stereo bug.
+    // Titles try to work around this by transferring a single byte to toggle the flip flop.
+    // The flip flop toggles on every byte the DSP outputs, mono or stereo, so any odd-length
+    // transfer toggles it. That includes the 1-byte stereo transfer above, which we force
+    // play as mono.
+    //
+    // Since we only output whole L/R frames, we need to flip the output if we detect that
+    // the flip flop is in the "right first" state (sbpro_ff_right). We also need to handle
+    // carrying over any half frames left in the PIO FIFO that happen when titles use a DMA
+    // transfers with an odd number of bytes (some STMIK versions do this, the WOWII mod
+    // player does, maybe others)
+    //
+    // Now that we faithfully reverse stereo, some titles have reversed stereo in SBPro mode,
+    // as they would on a real SBPro: Descent, Epic Megagames titles, etc. Descent can be
+    // configured to flip its stereo, but others may not so we also have options.swapStereo.
     sbdsp.dma_bytes_per_frame = sbdsp.dma_stereo ? 2 : 1;
-    sbdsp.dma_xfer_count = (xfer_size + 1) / sbdsp.dma_bytes_per_frame;
-    sbdsp.dma_xfer_count_left = sbdsp.dma_xfer_count;
+    if (dma_stereo) {
+        sbdsp.dma_len_bytes = xfer_size + 1;
+        sbdsp_sbpro_stereo_block_setup();
+    } else {
+        sbdsp.dma_xfer_count = (xfer_size + 1) / sbdsp.dma_bytes_per_frame;
+        sbdsp.dma_xfer_count_left = sbdsp.dma_xfer_count;
+        if ((xfer_size + 1) & 1) sbdsp.sbpro_ff_right = !sbdsp.sbpro_ff_right;
+    }
     sbdsp_set_dma_interval();
     sbdsp.dma_done = false;
     sbdsp_dma_enable(false);
@@ -907,6 +988,9 @@ void sbdsp_process(void) {
                 if (sbdsp.current_command_index == 1) {
                     int16_t s = ((int16_t)(int8_t)(sbdsp.inbox ^ 0x80)) << 8;
                     sbdsp.cur_sample = (uint32_t)(uint16_t)s | ((uint32_t)(uint16_t)s << 16);
+                    // We toggle the flip-flop in direct DAC mode because NT4's sndblst driver uses
+                    // it to flip stereo after writing 0Eh.
+                    sbdsp.sbpro_ff_right = !sbdsp.sbpro_ff_right;
                     sbdsp.dav_dsp = 0;
                     sbdsp.current_command = 0;
                 }
@@ -1334,6 +1418,14 @@ static __force_inline uint8_t sbmixer_read(void) {
 }
 
 static __force_inline void sbmixer_write(uint8_t value) {
+    // Any write to 0Eh resets the flip flop to its default "next byte is right channel" state.
+    // Running playback picks it up on the next frame. If a byte is carried between transfers
+    // (dma_carry), we need to account for it and play that carried byte on the left.
+    if (sbdsp.mixer_command == MIXER_STEREO) {
+        sbdsp.sbpro_ff_right = !sbdsp.dma_carry;
+        sbdsp_update_stereo_rot();
+    }
+
     // mixer locking
     switch(sbdsp.options.lockMixer) {
         case MIXER_LOCK_ALL_BUT_SBP_VOICE:
