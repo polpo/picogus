@@ -18,14 +18,14 @@ set(PICO_COPY_TO_RAM 1)
 # Pull in Raspberry Pi Pico SDK (must be before project)
 include(pico_sdk_import.cmake)
 
+# Full version string including pre-release suffix (if any).
+set(PICOGUS_VERSION "4.2.0-beta.3")
+string(REGEX MATCH "^[0-9]+(\\.[0-9]+)*" PICOGUS_VERSION_NUMERIC "${PICOGUS_VERSION}")
+
 project(picogus
-    VERSION "4.2.0"
+    VERSION "${PICOGUS_VERSION_NUMERIC}"
     LANGUAGES C CXX ASM
 )
-
-# Full version string including pre-release suffix (if any).
-# CMake's project(VERSION) only allows numeric components, so the suffix lives here.
-set(PICOGUS_VERSION "${CMAKE_PROJECT_VERSION}-beta.3")
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
