@@ -19,7 +19,7 @@ set(PICO_COPY_TO_RAM 1)
 include(pico_sdk_import.cmake)
 
 # Full version string including pre-release suffix (if any).
-set(PICOGUS_VERSION "4.2.0-beta.3")
+set(PICOGUS_VERSION "4.2.0")
 string(REGEX MATCH "^[0-9]+(\\.[0-9]+)*" PICOGUS_VERSION_NUMERIC "${PICOGUS_VERSION}")
 
 project(picogus
