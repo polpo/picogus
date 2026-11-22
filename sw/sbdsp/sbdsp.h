@@ -46,9 +46,17 @@ typedef struct sbdsp_t {
 
     uint16_t dac_pause_duration;
     uint8_t dac_pause_duration_low;
+    // rotate applied to 8-bit stereo DMA frames:
+    // 16 = normal order (first byte to the left channel),
+    // 0 = swapped (first byte to the right)
+    uint8_t dma_stereo_rot;
 
     uint16_t dma_block_size;
     uint32_t dma_bytes_per_frame;
+    uint32_t dma_req_bytes;      // bytes in the next DMA request (normally dma_bytes_per_frame)
+    uint32_t dma_len_bytes;      // SBPro stereo block length in bytes (may be odd)
+    bool dma_carry;              // the PIO FIFO holds the last byte of an odd-length SBPro stereo block,
+                                 // to be the first byte of the next block's first frame
     uint16_t dma_sample_count;
     uint32_t dma_xfer_count;
     uint32_t dma_xfer_count_left;
@@ -61,6 +69,7 @@ typedef struct sbdsp_t {
     bool dma_16bit;
     bool dma_stereo;
     bool dma_stereo_sbpro;
+    bool sbpro_ff_right;  // our somewhat simplified model of the SBPro's stereo channel flip flop
     bool dma_signed;
     volatile bool dma_done;
 
@@ -90,6 +99,7 @@ typedef struct sbdsp_t {
         struct {
             uint8_t fixTC      : 1;
             uint8_t lockMixer  : 2;
+            uint8_t swapStereo : 1;
         };
         uint8_t b;
     } options;
