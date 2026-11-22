@@ -33,6 +33,7 @@ GUS emulation has received a ton of fixes under the hood, solving a lot of long-
 ### SB mode
 
 - Fixes SB DMA transfers getting out of phase, which caused flipped stereo on SBPro or garbage audio on SB16.
+- When in SB Pro mode (`pgusinit /sbmode 4`), PicoGUS now properly emulates the SB Pro's flipped stereo. This means that titles that take the flip into account now have proper stereo. A `pgusinit /sbswapstereo` option can "un-flip" SB Pro stereo for titles that *don't* take the flip into account!
 - Blinkenlights on SB DSP activity, once per DMA block, and blinkenlights on OPL music is back.
 - Brings in improvements to dbopl3 from [HitoriSensei's PicoMemBlaster fork of PicoMEM](https://github.com/HitoriSensei/ISA-PicoMEM).
 
